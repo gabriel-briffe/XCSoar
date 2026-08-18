@@ -50,6 +50,10 @@ Version 7.46 - not yet released
   - fix XC Therm preload span to start at the current UTC hour instead
     of the previous one (e.g. at 14:50 with a 6 h span → 14–20 UTC)
 * map
+  - add terrain shading that follows sun and wind lighting without
+    rebuilding the slope image; contour lines stay unshaded (also on
+    older OpenGL ES 2 devices); faster devices use full terrain
+    resolution immediately instead of waiting until the map is idle
   - add a waypoint type Display filter on the map Waypoints settings
     page (SeeYou CUP styles; task and watched waypoints stay visible),
     including a Non-ICAO airports toggle (hide airports whose short
