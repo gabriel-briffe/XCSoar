@@ -8372,12 +8372,6 @@ msgstr "ウェイポイントアイコンサイズ"
 msgid "Size of waypoint symbols on the map as a percentage of the built-in artwork (list dialogs keep a fixed row icon size)."
 msgstr "地図上のウェイポイント記号サイズを内蔵アートワークに対する百分率で指定（一覧ダイアログは固定の行アイコンサイズ）。"
 
-msgid "Altn mode: MANUAL"
-msgstr "代替モード: 手動"
-
-msgid "Altn mode: AUTO"
-msgstr "代替モード: 自動"
-
 msgid ""
 "# Gesture Navigation\n"
 "\n"
@@ -11087,4 +11081,18 @@ msgstr "自動"
 msgctxt "Setting"
 msgid "Manual"
 msgstr "手動"
+
+msgid "Back"
+msgstr ""
+
+#. Alternate Mode: Auto returns a MANUAL slot to the computed
+#. list. Pinning is Select as Alternate, which is always
+#. available and sets MANUAL.
+#, no-c-format
+msgctxt "Button"
+msgid "Alternate Mode: Auto"
+msgstr ""
+
+msgid "Paste"
+msgstr ""
 

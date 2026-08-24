@@ -7996,12 +7996,6 @@ msgstr "航點圖示大小"
 msgid "Size of waypoint symbols on the map as a percentage of the built-in artwork (list dialogs keep a fixed row icon size)."
 msgstr "地圖上航點符號大小，為內建圖稿的百分比（列表對話框保持固定列圖示大小）。"
 
-msgid "Altn mode: MANUAL"
-msgstr "備降模式：手動"
-
-msgid "Altn mode: AUTO"
-msgstr "備降模式：自動"
-
 msgid ""
 "# Gesture Navigation\n"
 "\n"
@@ -10697,4 +10691,18 @@ msgstr "自動"
 msgctxt "Setting"
 msgid "Manual"
 msgstr "手冊"
+
+msgid "Back"
+msgstr ""
+
+#. Alternate Mode: Auto returns a MANUAL slot to the computed
+#. list. Pinning is Select as Alternate, which is always
+#. available and sets MANUAL.
+#, no-c-format
+msgctxt "Button"
+msgid "Alternate Mode: Auto"
+msgstr ""
+
+msgid "Paste"
+msgstr ""
 

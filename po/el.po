@@ -8367,12 +8367,6 @@ msgstr ""
 "Μέγεθος συμβόλων waypoint στον χάρτη ως ποσοστό του ενσωματωμένου γραφικού "
 "(τα παράθυρα λίστας κρατούν σταθερό μέγεθος εικονιδίου γραμμής)."
 
-msgid "Altn mode: MANUAL"
-msgstr "Λειτ. εναλλ.: ΧΕΙΡ."
-
-msgid "Altn mode: AUTO"
-msgstr "Λειτ. εναλλ.: ΑΥΤΟΜ."
-
 msgid ""
 "# Gesture Navigation\n"
 "\n"
@@ -11237,4 +11231,18 @@ msgstr "Αυτόματα"
 msgctxt "Setting"
 msgid "Manual"
 msgstr "Χειροκίνητα"
+
+msgid "Back"
+msgstr ""
+
+#. Alternate Mode: Auto returns a MANUAL slot to the computed
+#. list. Pinning is Select as Alternate, which is always
+#. available and sets MANUAL.
+#, no-c-format
+msgctxt "Button"
+msgid "Alternate Mode: Auto"
+msgstr ""
+
+msgid "Paste"
+msgstr ""
 
