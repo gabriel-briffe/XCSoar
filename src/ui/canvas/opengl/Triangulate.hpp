@@ -33,13 +33,24 @@ PolygonToTriangles(const FloatPoint2D *points, unsigned num_points,
                    GLushort *triangles, float min_distance=1) noexcept;
 
 /**
+ * Worst-case degenerated strip length: every remaining triangle
+ * restarts the strip (+2 redundant indices and 3 new ones).
+ */
+[[gnu::const]]
+constexpr unsigned
+MaxTriangleStripSize(unsigned index_count) noexcept
+{
+  return index_count + 2 * (index_count / 3) + 8;
+}
+
+/**
  * Pack triangle indices into a triangle strip.
  * Empty triangles are inserted to connect individual strips. Thus we always
  * get one "degenerated" triangle strip. The degenerated triangles should
  * be discarded pretty early in the rendering pipeline. This saves a lot of
  * OpenGL API calls.
- * The triangle buffer must hold at least:
- *   3*(triangle_count-2) + 2*(polygon_count-1) indices.
+ * The triangle buffer must hold at least
+ * #MaxTriangleStripSize(index_count) indices.
  *
  * @param triangles triangle indicies, which will be overwriten with the strip
  * @param index_count number of triangle indices. (triangle_count*3)

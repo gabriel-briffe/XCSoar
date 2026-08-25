@@ -360,7 +360,10 @@ XShape::BuildIndices(unsigned thinning_level, ShapeScalar min_distance) noexcept
     // TODO: free memory saved by thinning (use malloc/realloc or some class?)
     return true;
   } else if (type == MS_SHAPE_POLYGON) {
-    index_count[thinning_level] = std::make_unique<GLushort[]>(1 + 3 * (num_points - 2) + 2 * (num_lines - 1));
+    const unsigned max_triangle_indices =
+      num_points > 2 ? 3 * (num_points - 2) : 0;
+    index_count[thinning_level] = std::make_unique<GLushort[]>(
+      1 + MaxTriangleStripSize(max_triangle_indices));
     idx_count = index_count[thinning_level].get();
     indices[thinning_level] = idx = idx_count + 1;
 
