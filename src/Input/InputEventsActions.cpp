@@ -313,6 +313,14 @@ InputEvents::eventChecklist([[maybe_unused]] const char *misc)
   dlgChecklistShowModal();
 }
 
+// Logbook
+// Lists IGC flights from the logs folder with takeoff/landing times.
+void
+InputEvents::eventLogbook([[maybe_unused]] const char *misc)
+{
+  dlgLogbookShowModal();
+}
+
 // WifiList
 // Opens the platform WiFi list / system WiFi settings.
 void
