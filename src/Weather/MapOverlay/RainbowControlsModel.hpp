@@ -5,11 +5,19 @@
 
 #include "ControlsModel.hpp"
 
+#include "util/StaticString.hxx"
+#include "ui/event/Timer.hpp"
+
 namespace WeatherMapOverlay {
 
 class RainbowControlsModel final : public ControlsModel {
+  UI::Timer replay_timer{[this]{ AdvanceTimeReplay(); }};
+  int64_t replay_reference = 0;
+  unsigned replay_step = 0;
+
 public:
   void OnShow() noexcept override;
+  void OnHide() noexcept override;
 
   void FormatPrimaryLabel(StaticString<64> &text) const noexcept override;
   void FormatSecondaryLabel(StaticString<64> &text) const noexcept override;
@@ -38,8 +46,13 @@ public:
   [[nodiscard]]
   SecondaryPickerResult OpenSecondaryPicker() noexcept override;
   void ResumePrimaryAuto() noexcept override;
+  void ReplayPrimary() noexcept override;
 
   void RefreshOverlay() noexcept override;
+
+private:
+  void CancelTimeReplay() noexcept;
+  void AdvanceTimeReplay() noexcept;
 };
 
 } // namespace WeatherMapOverlay

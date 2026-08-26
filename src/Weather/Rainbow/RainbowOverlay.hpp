@@ -70,6 +70,30 @@ DownloadOverlayTiles(CurlGlobal &curl, std::string_view api_key,
                      OverlayPlan plan, ProgressListener &progress);
 
 /**
+ * Download missing tiles for @p plan into the cache only (no UI install).
+ * Used to warm T-1 / T-2 snapshots after the current Auto view is complete.
+ */
+Co::Task<void>
+CacheOverlayTiles(CurlGlobal &curl, std::string_view api_key,
+                  OverlayPlan plan, ProgressListener &progress);
+
+/**
+ * Sequentially cache T-1 and T-2 snapshots for the same viewport.
+ */
+Co::Task<bool>
+PrefetchHistorySnapshots(CurlGlobal &curl, std::string_view api_key,
+                         OverlayPlan base_plan, int64_t reference,
+                         ProgressListener &progress);
+
+/**
+ * Install viewport tiles from the on-disk cache for @p snapshot (UI thread).
+ * @return number of overlay slots filled (0 if any tile is missing)
+ */
+unsigned
+InstallCachedOverlayTiles(const OverlayPlan &plan,
+                          int64_t snapshot) noexcept;
+
+/**
  * Load textures and install overlays.  Must run on the OpenGL/UI thread.
  *
  * @return number of overlay slots filled

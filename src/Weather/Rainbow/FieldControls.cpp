@@ -24,6 +24,7 @@
 #include "LogFile.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <ctime>
 #include <memory>
 #include <vector>
@@ -33,18 +34,31 @@ namespace Rainbow {
 namespace {
 
 std::unique_ptr<UI::CoInjectFunction<std::vector<PreparedTile>>> refresh_job;
+std::unique_ptr<UI::CoInjectFunction<bool>> prefetch_job;
 QuietOperationEnvironment refresh_env;
 GeoBounds last_bounds = GeoBounds::Invalid();
+OverlayPlan last_refresh_plan;
+int64_t prefetch_reference = 0;
+int64_t last_complete_live_epoch = 0;
+std::chrono::steady_clock::time_point last_snapshot_poll{};
 bool overlay_active = false;
 
 /** True while Auto mode is waiting for the OS to report connectivity. */
 bool waiting_for_connectivity = false;
 
 void CancelAutoSchedule() noexcept;
+void CancelPrefetchJob() noexcept;
 void ScheduleAutoAfterSuccess() noexcept;
 void ScheduleAutoAfterFailure() noexcept;
 void ScheduleAutoConnectivityPoll() noexcept;
 void UpdateAutoScheduleAfterAttempt(bool success) noexcept;
+void StartRefresh(bool force_snapshot_poll = false) noexcept;
+
+[[nodiscard]] int64_t AlignSnapshot(int64_t timestamp) noexcept;
+[[nodiscard]] int64_t LatestSnapshotFloor() noexcept;
+[[nodiscard]] bool SnapshotPollDue(bool force) noexcept;
+void RecordSnapshotPollStart() noexcept;
+[[nodiscard]] bool TryRestoreLiveFromCache(int64_t epoch) noexcept;
 
 [[nodiscard]]
 bool
@@ -70,16 +84,66 @@ EnsureJob() noexcept
   if (refresh_job == nullptr && Net::curl != nullptr)
     refresh_job = std::make_unique<UI::CoInjectFunction<std::vector<PreparedTile>>>(
       Net::curl->GetEventLoop());
+  if (prefetch_job == nullptr && Net::curl != nullptr)
+    prefetch_job = std::make_unique<UI::CoInjectFunction<bool>>(
+      Net::curl->GetEventLoop());
 }
 
 void
-StartRefresh() noexcept
+CancelPrefetchJob() noexcept
+{
+  prefetch_reference = 0;
+  if (prefetch_job != nullptr)
+    prefetch_job->Cancel();
+}
+
+void
+StartHistoryPrefetch(int64_t reference) noexcept
+{
+  if (!overlay_active || !IsAutoMode() || reference <= 0 ||
+      !last_refresh_plan.IsValid())
+    return;
+
+  EnsureJob();
+  if (prefetch_job == nullptr || Net::curl == nullptr)
+    return;
+
+  CancelPrefetchJob();
+  prefetch_reference = reference;
+
+  const auto &settings =
+    CommonInterface::GetComputerSettings().weather.rainbow;
+  if (!settings.IsDefined())
+    return;
+
+  prefetch_job->Start(
+    PrefetchHistorySnapshots(*Net::curl, settings.api_key.c_str(),
+                             last_refresh_plan, reference, refresh_env),
+    [](bool) {
+      LogFmt("rainbow: history prefetch complete");
+    },
+    [](std::exception_ptr error) {
+      try {
+        if (error)
+          std::rethrow_exception(error);
+      } catch (const std::exception &e) {
+        LogFmt("rainbow: history prefetch failed: {}", e.what());
+      } catch (...) {
+        LogFmt("rainbow: history prefetch failed");
+      }
+    });
+}
+
+void
+StartRefresh(bool force_snapshot_poll) noexcept
 {
 #ifdef ENABLE_OPENGL
   /* Never install tiles unless ActivatePageOverlay() ran — pan
      suspend must not let Render() steal slots from SkySight/XCTherm. */
   if (!overlay_active)
     return;
+
+  CancelPrefetchJob();
 
   EnsureJob();
   if (refresh_job == nullptr || Net::curl == nullptr)
@@ -108,12 +172,32 @@ StartRefresh() noexcept
   if (map == nullptr)
     return;
 
+  int64_t plan_snapshot = cursor.time;
+  if (IsAutoMode()) {
+    const bool poll_due = SnapshotPollDue(force_snapshot_poll);
+    if (!poll_due) {
+      const int64_t cached_epoch = last_complete_live_epoch;
+      if (cached_epoch > 0 && TryRestoreLiveFromCache(cached_epoch))
+        return;
+
+      if (cached_epoch > 0)
+        plan_snapshot = cached_epoch;
+      else
+        return;
+    } else {
+      plan_snapshot = PageLayout::RAINBOW_TIME_AUTO;
+      RecordSnapshotPollStart();
+    }
+  }
+
   /* Snapshot viewport on the UI thread; downloads run on the network
      thread and must not touch OpenGL Bitmaps / map overlays. */
   const auto plan = BuildOverlayPlan(*map, cursor.satellite, cursor.rain,
-                                     cursor.time);
+                                     plan_snapshot);
   if (!plan.IsValid())
     return;
+
+  last_refresh_plan = plan;
 
   const unsigned expected_tiles = plan.CountPlannedTiles();
 
@@ -148,12 +232,21 @@ StartRefresh() noexcept
       const bool complete =
         expected_tiles > 0 && count >= expected_tiles;
       cursor.tiles_complete = complete;
+      if (complete && IsAutoMode() && cursor.displayed_time > 0)
+        last_complete_live_epoch =
+          AlignSnapshot(cursor.displayed_time);
       LogFmt("rainbow: applied {}/{} tiles (snapshot {}, {})",
              count, expected_tiles, cursor.displayed_time,
              complete ? "complete" : "incomplete");
       WeatherMapOverlay::RefreshControlsLabels();
       ActionInterface::SendUIState(false);
       UpdateAutoScheduleAfterAttempt(complete);
+      if (complete && IsAutoMode()) {
+        const int64_t ref = cursor.displayed_time > 0
+          ? AlignSnapshot(cursor.displayed_time)
+          : LatestSnapshotFloor();
+        StartHistoryPrefetch(ref);
+      }
     },
     [](std::exception_ptr error) {
       try {
@@ -185,7 +278,7 @@ OnAutoRefreshTimer() noexcept
 
   /* Connectivity restored (or scheduled publish / retry window). */
   waiting_for_connectivity = false;
-  StartRefresh();
+  StartRefresh(true);
 }
 
 UI::Timer auto_refresh_timer{[]() noexcept {
@@ -206,6 +299,63 @@ int64_t
 LatestSnapshotFloor() noexcept
 {
   return AlignSnapshot(std::time(nullptr));
+}
+
+[[nodiscard]]
+bool
+SnapshotPollDue(bool force) noexcept
+{
+  if (force)
+    return true;
+
+  if (last_snapshot_poll == std::chrono::steady_clock::time_point{})
+    return true;
+
+  return std::chrono::steady_clock::now() - last_snapshot_poll >=
+    std::chrono::seconds{SNAPSHOT_POLL_MIN_SECONDS};
+}
+
+void
+RecordSnapshotPollStart() noexcept
+{
+  last_snapshot_poll = std::chrono::steady_clock::now();
+}
+
+[[nodiscard]]
+bool
+TryRestoreLiveFromCache(int64_t epoch) noexcept
+{
+  if (epoch <= 0 || !overlay_active)
+    return false;
+
+  auto *map = UIGlobals::GetMapIfActive();
+  if (map == nullptr)
+    return false;
+
+  const auto &cursor =
+    CommonInterface::GetUIState().weather.rainbow_cursor;
+  auto plan = BuildOverlayPlan(*map, cursor.satellite, cursor.rain, epoch);
+  if (!plan.IsValid())
+    return false;
+
+  last_refresh_plan = plan;
+
+  const unsigned expected_tiles = plan.CountPlannedTiles();
+  const unsigned count = InstallCachedOverlayTiles(plan, epoch);
+  if (expected_tiles == 0 || count < expected_tiles)
+    return false;
+
+  auto &mutable_cursor =
+    CommonInterface::SetUIState().weather.rainbow_cursor;
+  mutable_cursor.displayed_time = epoch;
+  mutable_cursor.tiles_complete = true;
+  last_complete_live_epoch = epoch;
+
+  LogFmt("rainbow: restored live cache (snapshot {})", epoch);
+  WeatherMapOverlay::RefreshControlsLabels();
+  ActionInterface::SendUIState(false);
+  UpdateAutoScheduleAfterAttempt(true);
+  return true;
 }
 
 /**
@@ -346,6 +496,7 @@ ClearMapOverlay() noexcept
   overlay_active = false;
   last_bounds = GeoBounds::Invalid();
   CancelAutoSchedule();
+  CancelHistoryPrefetch();
   auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
   cursor.displayed_time = 0;
   cursor.tiles_complete = false;
@@ -414,6 +565,8 @@ StepTime(int delta) noexcept
   else
     cursor.time = current;
 
+  cursor.displayed_time = 0;
+  cursor.tiles_complete = false;
   CommonInterface::SetUIState().weather.rainbow.cursor_initialized =
     cursor.time != PageLayout::RAINBOW_TIME_AUTO;
 
@@ -482,18 +635,22 @@ void
 FormatTimeLabel(StaticString<64> &text) noexcept
 {
   const auto &cursor = CommonInterface::GetUIState().weather.rainbow_cursor;
+  const bool automatic = cursor.time <= 0;
 
-  /* Prefer the snapshot actually installed on the map so Auto (and any
-     provider lag) matches what the user sees. */
-  int64_t stamp = cursor.displayed_time;
-  if (stamp <= 0)
-    stamp = cursor.time > 0 ? cursor.time : LatestSnapshotFloor();
+  /* Manual: show the requested slot.  Auto: show the snapshot on the map
+     (do not reuse a manual replay epoch after returning to Auto). */
+  int64_t stamp = automatic ? cursor.displayed_time : cursor.time;
+  if (stamp <= 0) {
+    text = automatic ? C_("Status", "Auto")
+                     : C_("Status", "Live");
+    return;
+  }
 
   const auto tm = GmTime(std::chrono::system_clock::from_time_t(time_t(stamp)));
   char buffer[32];
   std::strftime(buffer, sizeof(buffer), "%H:%M UTC", &tm);
 
-  if (cursor.time <= 0)
+  if (automatic)
     text.Format("%s %s", C_("Status", "Auto"), buffer);
   else
     text = buffer;
@@ -531,6 +688,105 @@ DiscardInactiveOverlays() noexcept
     return;
 
   ClearOverlays();
+}
+
+bool
+GetTimeAutoAdvance() noexcept
+{
+  return IsAutoMode();
+}
+
+void
+SetTimeAutoAdvance(bool auto_advance, int64_t known_live_epoch) noexcept
+{
+  auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
+  if (auto_advance) {
+    if (IsAutoMode() && known_live_epoch <= 0)
+      return;
+
+    cursor.time = PageLayout::RAINBOW_TIME_AUTO;
+
+    const int64_t restore = known_live_epoch > 0
+      ? AlignSnapshot(known_live_epoch)
+      : last_complete_live_epoch;
+    const bool restored = TryRestoreLiveFromCache(restore);
+    if (!restored) {
+      cursor.displayed_time = 0;
+      cursor.tiles_complete = false;
+    }
+  } else if (IsAutoMode()) {
+    cursor.time = LatestSnapshotFloor();
+    cursor.displayed_time = 0;
+    cursor.tiles_complete = false;
+  } else {
+    return;
+  }
+
+  CommonInterface::SetUIState().weather.rainbow.cursor_initialized =
+    !auto_advance;
+
+  CancelAutoSchedule();
+  CancelPrefetchJob();
+  PersistCursorToPage();
+
+  if (auto_advance) {
+    if (cursor.displayed_time > 0)
+      return;
+
+    StartRefresh(false);
+  } else {
+    StartRefresh(false);
+  }
+}
+
+int64_t
+GetLiveReferenceTime() noexcept
+{
+  const auto &cursor = CommonInterface::GetUIState().weather.rainbow_cursor;
+  if (cursor.displayed_time > 0)
+    return AlignSnapshot(cursor.displayed_time);
+
+  return LatestSnapshotFloor();
+}
+
+bool
+SetPageTime(int64_t time) noexcept
+{
+  auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
+  if (cursor.time == time)
+    return false;
+
+  cursor.time = time;
+  cursor.displayed_time = 0;
+  cursor.tiles_complete = false;
+  CommonInterface::SetUIState().weather.rainbow.cursor_initialized =
+    cursor.time != PageLayout::RAINBOW_TIME_AUTO;
+
+  CancelAutoSchedule();
+  CancelPrefetchJob();
+  PersistCursorToPage();
+  StartRefresh();
+  return true;
+}
+
+void
+CancelHistoryPrefetch() noexcept
+{
+  CancelPrefetchJob();
+}
+
+bool
+CanReplayLiveTime() noexcept
+{
+  if (!IsAutoMode() || !overlay_active)
+    return false;
+
+  const int64_t reference = GetLiveReferenceTime();
+  if (reference <= 0)
+    return false;
+
+  const int64_t oldest = reference - SNAPSHOT_HISTORY_SECONDS;
+  return reference - 2 * SNAPSHOT_INTERVAL_SECONDS >= oldest;
 }
 
 } // namespace Rainbow

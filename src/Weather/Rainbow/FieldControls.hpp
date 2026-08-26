@@ -22,6 +22,9 @@ inline constexpr time_t AUTO_FAIL_RETRY_SECONDS = 120;
 /** Poll interval while Auto is waiting for connectivity (no HTTP). */
 inline constexpr time_t AUTO_CONNECTIVITY_POLL_SECONDS = 30;
 
+/** Minimum interval between Rainbow snapshot API polls in Auto mode. */
+inline constexpr time_t SNAPSHOT_POLL_MIN_SECONDS = 30;
+
 void
 ApplyCursorFromPageLayout(const PageLayout &layout) noexcept;
 
@@ -68,5 +71,22 @@ HasActiveOverlay() noexcept;
  */
 void
 DiscardInactiveOverlays() noexcept;
+
+[[nodiscard]] bool GetTimeAutoAdvance() noexcept;
+
+void SetTimeAutoAdvance(bool auto_advance,
+                        int64_t known_live_epoch = 0) noexcept;
+
+/** Live Auto reference instant (map cursor, else latest floor). */
+[[nodiscard]] int64_t GetLiveReferenceTime() noexcept;
+
+/** Set cursor time and refresh the overlay (not Auto). */
+[[nodiscard]] bool SetPageTime(int64_t time) noexcept;
+
+/** Auto + enough history for a two-step replay. */
+[[nodiscard]] bool CanReplayLiveTime() noexcept;
+
+void
+CancelHistoryPrefetch() noexcept;
 
 } // namespace Rainbow

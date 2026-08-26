@@ -2,6 +2,8 @@
 // Copyright The XCSoar Project
 
 #include "RainbowOverlay.hpp"
+#include "FieldControls.hpp"
+#include "RainbowAPI.hpp"
 #include "MapWindow/GlueMapWindow.hpp"
 #include "MapWindow/OverlayBitmap.hpp"
 #include "MapWindow/OverlayLimits.hpp"
@@ -11,6 +13,7 @@
 #include "Weather/SkySight/LiveTileUtils.hpp"
 #include "ui/canvas/Bitmap.hpp"
 #include "LogFile.hpp"
+#include "system/FileUtil.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -196,6 +199,153 @@ DownloadOverlayTiles(CurlGlobal &curl, std::string_view api_key,
                                 slots_per_layer, prepared, progress);
 
   co_return prepared;
+#endif
+}
+
+Co::Task<void>
+CacheOverlayTiles(CurlGlobal &curl, std::string_view api_key,
+                  OverlayPlan plan, ProgressListener &progress)
+{
+#ifndef ENABLE_OPENGL
+  (void)curl;
+  (void)api_key;
+  (void)plan;
+  (void)progress;
+  co_return;
+#else
+  if (!plan.IsValid())
+    co_return;
+
+  const auto cache_dir = MakeCacheDirectory();
+  const unsigned layer_count =
+    (plan.satellite ? 1u : 0u) + (plan.rain ? 1u : 0u);
+  const unsigned slots_per_layer =
+    MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count;
+
+  if (plan.satellite) {
+    int64_t snapshot = plan.snapshot_time;
+    if (snapshot <= 0)
+      snapshot = co_await FetchSnapshot(curl, api_key,
+                                      LAYER_SATELLITE.api_layer, progress);
+
+    unsigned filled = 0;
+    for (const auto &tile : plan.satellite_tiles) {
+      if (filled >= slots_per_layer)
+        break;
+      try {
+        (void)co_await EnsureTile(curl, api_key, cache_dir, LAYER_SATELLITE,
+                                  snapshot, tile, progress);
+      } catch (...) {
+      }
+      ++filled;
+    }
+  }
+
+  if (plan.rain) {
+    int64_t snapshot = plan.snapshot_time;
+    if (snapshot <= 0)
+      snapshot = co_await FetchSnapshot(curl, api_key,
+                                      LAYER_RAIN.api_layer, progress);
+
+    unsigned filled = 0;
+    for (const auto &tile : plan.rain_tiles) {
+      if (filled >= slots_per_layer)
+        break;
+      try {
+        (void)co_await EnsureTile(curl, api_key, cache_dir, LAYER_RAIN,
+                                  snapshot, tile, progress);
+      } catch (...) {
+      }
+      ++filled;
+    }
+  }
+#endif
+}
+
+Co::Task<bool>
+PrefetchHistorySnapshots(CurlGlobal &curl, std::string_view api_key,
+                         OverlayPlan base_plan, int64_t reference,
+                         ProgressListener &progress)
+{
+#ifndef ENABLE_OPENGL
+  (void)curl;
+  (void)api_key;
+  (void)base_plan;
+  (void)reference;
+  (void)progress;
+  co_return false;
+#else
+  static constexpr unsigned PREFETCH_STEPS = 2;
+
+  for (unsigned step = 1; step <= PREFETCH_STEPS; ++step) {
+    const int64_t snapshot =
+      reference - int64_t(step) * SNAPSHOT_INTERVAL_SECONDS;
+    if (snapshot <= 0 ||
+        reference - snapshot > SNAPSHOT_HISTORY_SECONDS)
+      continue;
+
+    auto plan = base_plan;
+    plan.snapshot_time = snapshot;
+    co_await CacheOverlayTiles(curl, api_key, std::move(plan), progress);
+  }
+
+  co_return true;
+#endif
+}
+
+unsigned
+InstallCachedOverlayTiles(const OverlayPlan &plan,
+                          int64_t snapshot) noexcept
+{
+#ifndef ENABLE_OPENGL
+  (void)plan;
+  (void)snapshot;
+  return 0;
+#else
+  if (snapshot <= 0 || !plan.IsValid())
+    return 0;
+
+  const auto cache_dir = MakeCacheDirectory();
+  const unsigned layer_count =
+    (plan.satellite ? 1u : 0u) + (plan.rain ? 1u : 0u);
+  const unsigned slots_per_layer =
+    MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count;
+
+  std::vector<PreparedTile> prepared;
+  prepared.reserve(MapWindowOverlay::MAX_MAP_OVERLAYS);
+
+  const auto collect = [&](const LayerSpec &layer,
+                           const std::vector<GeoBitmap::TileData> &tiles)
+    -> bool
+  {
+    unsigned filled = 0;
+    for (const auto &tile : tiles) {
+      if (filled >= slots_per_layer)
+        break;
+
+      auto path = MakeTilePath(cache_dir, layer, snapshot, tile);
+      if (!File::ExistsAny(path))
+        return false;
+
+      prepared.push_back(PreparedTile{
+        std::move(path),
+        layer.id,
+        tile,
+        snapshot,
+      });
+      ++filled;
+    }
+    return true;
+  };
+
+  if (plan.satellite &&
+      !collect(LAYER_SATELLITE, plan.satellite_tiles))
+    return 0;
+  if (plan.rain &&
+      !collect(LAYER_RAIN, plan.rain_tiles))
+    return 0;
+
+  return InstallPreparedOverlays(std::move(prepared));
 #endif
 }
 
