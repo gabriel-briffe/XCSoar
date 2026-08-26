@@ -29,6 +29,9 @@ Version 7.46 - not yet released
     convex pieces, and draw weaker |climb| bands before stronger ones
   - draw XCTherm polygons with float screen coordinates (no integer
     snap before triangulation) to reduce zoom flicker
+  - rework the XC Therm weather dialog: multi-select altitude layers,
+    preload/download queue, remember selected layers in the profile,
+    and Delete clears all cached forecast data
   - fix the weather cursor bar keeping light colours in dark mode,
     and unreadable labels on Windows
   - fix SkySight re-downloading forecast metadata when stepping
@@ -36,6 +39,8 @@ Version 7.46 - not yet released
     limit #2867
   - fix choosing SkySight as a page overlay with no layers available
     silently switching back to None
+  - fix XC Therm preload span to start at the current UTC hour instead
+    of the previous one (e.g. at 14:50 with a 6 h span → 14–20 UTC)
 * map
   - add a waypoint type Display filter on the map Waypoints settings
     page (SeeYou CUP styles; task and watched waypoints stay visible),
