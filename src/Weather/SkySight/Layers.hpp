@@ -142,6 +142,11 @@ struct Layer {
     return live_layer && tile_layer;
   }
 
+  /** Synthetic Satellite+Rain composite (not a provider tile id). */
+  [[nodiscard]] bool IsSatRainComposite() const noexcept {
+    return id == "sat_rain";
+  }
+
   [[nodiscard]] bool HasKnownLiveTimestamp() const noexcept {
     return SupportsLiveTiles() && last_update > 0;
   }

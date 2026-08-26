@@ -4,8 +4,10 @@
 #include "SkySightControlsModel.hpp"
 
 #include "DataGlobals.hpp"
+#include "Interface.hpp"
 #include "PageActions.hpp"
 #include "Language/Language.hpp"
+#include "UIState.hpp"
 #include "Weather/SkySight/FieldControls.hpp"
 #include "Weather/SkySight/SkySightClient.hpp"
 #include <chrono>
@@ -59,8 +61,12 @@ SkySightControlsModel::FormatPrimaryLabel(StaticString<64> &text) const noexcept
   SkySight::FormatTimeLabelForPage(text, PageActions::GetCurrentLayout());
   if (const auto *layer = GetLayer();
       layer != nullptr && layer->SupportsLiveTiles() &&
-      skysight->IsLiveViewUpdating(layer->id))
-    text = C_("Status", "Live (updating...)");
+      skysight->IsLiveViewUpdating(layer->id)) {
+    const auto displayed =
+      CommonInterface::GetUIState().weather.skysight_cursor.displayed_time;
+    if (displayed <= 0)
+      text = C_("Status", "Live (updating...)");
+  }
 }
 
 void
@@ -144,9 +150,14 @@ SkySightControlsModel::GetPrimaryLabelAction() const noexcept
 {
   if (!SkySight::HasSelectedLayer())
     return PrimaryLabelAction::OPEN_SETUP;
-  return SkySight::IsTimeSelectable()
-    ? PrimaryLabelAction::OPEN_PICKER
-    : PrimaryLabelAction::NONE;
+  if (!SkySight::IsTimeSelectable())
+    return PrimaryLabelAction::NONE;
+  /* Live satellite/rain: tapping while manual resumes Auto (Rainbow-like). */
+  if (const auto *layer = GetLayer();
+      layer != nullptr && layer->SupportsLiveTiles() &&
+      !SkySight::GetTimeAutoAdvance())
+    return PrimaryLabelAction::RESUME_AUTO;
+  return PrimaryLabelAction::OPEN_PICKER;
 }
 
 SecondaryLabelAction

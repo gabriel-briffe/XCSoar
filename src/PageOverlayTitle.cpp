@@ -18,8 +18,10 @@
 #ifdef HAVE_HTTP
 #include "DataGlobals.hpp"
 #include "Interface.hpp"
+#include "UIState.hpp"
 #include "Weather/SkySight/SkySightClient.hpp"
 #include "Weather/xctherm/XCThermCatalog.hpp"
+#include "time/Convert.hxx"
 #endif
 
 void
@@ -101,6 +103,23 @@ AppendOverlayTitle(BasicStringBuilder<char> &builder,
       builder.Append(": ");
       builder.Append(label);
     }
+#ifdef HAVE_HTTP
+    {
+      /* Live satellite/rain only: last shown UTC + F/P fill. */
+      const auto &cursor =
+        CommonInterface::GetUIState().weather.skysight_cursor;
+      if (cursor.displayed_time > 0) {
+        const auto tm = GmTime(
+          std::chrono::system_clock::from_time_t(
+            time_t(cursor.displayed_time)));
+        char time_buf[8];
+        std::strftime(time_buf, sizeof(time_buf), "%H:%M", &tm);
+        builder.Append(' ');
+        builder.Append(time_buf);
+        builder.Append(cursor.tiles_complete ? "F" : "P");
+      }
+    }
+#endif
     break;
 
   case PageLayout::Overlay::MAX:

@@ -150,6 +150,21 @@ struct WeatherUIState {
 
   OverlaySession xctherm;
   OverlaySession skysight;
+
+  /**
+   * Live SkySight satellite/rain tile status for the page title
+   * (last shown epoch + full/partial fill).  Unused for forecast layers.
+   */
+  struct SkySightCursorState {
+    int64_t displayed_time = 0;
+    bool tiles_complete = false;
+
+    void Clear() noexcept {
+      displayed_time = 0;
+      tiles_complete = false;
+    }
+  } skysight_cursor;
+
   struct XCThermCursorState {
     unsigned layer = 0;
     unsigned forecast_utc_hour = 12;
@@ -172,6 +187,7 @@ struct WeatherUIState {
     edl.Clear();
     xctherm.Clear();
     skysight.Clear();
+    skysight_cursor.Clear();
     xctherm_cursor.Clear();
   }
 

@@ -71,9 +71,9 @@ struct PageLayout
   StaticString<64> skysight_overlay;
 
   /**
-   * Per-page SkySight forecast timestamp.  Zero follows the provider's
-   * automatic/default forecast; positive values select a fixed step.
-   * Live layers always use automatic time.
+   * Per-page SkySight timestamp.  Zero follows the provider (latest live
+   * product, or automatic forecast).  Positive values select a fixed
+   * 10-minute live satellite/rain step, or a fixed forecast step.
    */
   static constexpr int64_t SKYSIGHT_TIME_AUTO = 0;
 

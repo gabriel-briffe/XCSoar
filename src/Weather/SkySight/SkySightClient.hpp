@@ -132,7 +132,10 @@ private:
   [[nodiscard]] bool CleanupFiles() noexcept;
   void ResetTiles() noexcept;
   bool UpdateActiveLayer(unsigned index, Path path,
-                         const GeoBitmap::TileData &tile);
+                         const GeoBitmap::TileData &tile,
+                         const SkySight::Layer &source);
   bool DisplayForecastLayer();
   bool DisplayTileLayer();
+  /** Satellite underlay + rain overlay with split map slots. */
+  bool DisplaySatRainTileLayer();
 };

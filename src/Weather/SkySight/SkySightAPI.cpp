@@ -440,6 +440,10 @@ SkySightAPI::InitialiseLayers(std::vector<SkySight::Layer> &new_layers)
   new_layers.emplace_back("rain", C_("Weather layer", "Rain"),
                           _("Live SkySight precipitation tiles"),
                           true, true, true, 1, 8, 0.7f);
+
+  new_layers.emplace_back("sat_rain", C_("Weather layer", "Sat+Rain"),
+                          _("Live SkySight satellite with rain overlay"),
+                          true, true, true, 1, 8, 1.0f);
 }
 
 void
@@ -1155,6 +1159,31 @@ SkySightAPI::PollLastUpdates() noexcept
     : GetLayer(active_layer_id);
   if (active_layer == nullptr || !active_layer->SupportsLiveTiles())
     return;
+
+  /* Composite Sat+Rain has no provider metadata; poll the satellite
+     pseudo-layer (and rain) for timestamps instead. */
+  if (active_layer->IsSatRainComposite()) {
+    auto *satellite = GetLayer("satellite");
+    auto *rain = GetLayer("rain");
+    try {
+      if (satellite != nullptr &&
+          satellite->IsLiveMetadataPollDue(now,
+                                           INITIAL_LAST_UPDATE_POLL_SECONDS,
+                                           LAST_UPDATE_POLL_SECONDS) &&
+          request->RequestLastUpdates(region, satellite->id))
+        satellite->last_update_request = now;
+      if (rain != nullptr &&
+          rain->IsLiveMetadataPollDue(now,
+                                      INITIAL_LAST_UPDATE_POLL_SECONDS,
+                                      LAST_UPDATE_POLL_SECONDS) &&
+          request->RequestLastUpdates(region, rain->id))
+        rain->last_update_request = now;
+    } catch (...) {
+      LogError(std::current_exception(),
+               "SkySight last-updated polling failed");
+    }
+    return;
+  }
 
   if (!active_layer->IsLiveMetadataPollDue(now,
                                            INITIAL_LAST_UPDATE_POLL_SECONDS,
