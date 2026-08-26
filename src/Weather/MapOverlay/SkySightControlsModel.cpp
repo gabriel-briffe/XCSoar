@@ -9,6 +9,7 @@
 #include "Language/Language.hpp"
 #include "UIState.hpp"
 #include "Weather/SkySight/FieldControls.hpp"
+#include "Weather/SkySight/LiveTileUtils.hpp"
 #include "Weather/SkySight/SkySightClient.hpp"
 #include <chrono>
 
@@ -29,6 +30,10 @@ void
 SkySightControlsModel::OnHide() noexcept
 {
   countdown_timer.Cancel();
+  const bool replaying = replay_step > 0;
+  CancelTimeReplay();
+  if (replaying)
+    SetPrimaryAutoAdvance(true);
   dynamic_status_visible = false;
 }
 
@@ -96,6 +101,7 @@ SkySightControlsModel::HasSecondaryData() const noexcept
 bool
 SkySightControlsModel::StepPrimary(int delta) noexcept
 {
+  CancelTimeReplay();
   return SkySight::StepTime(delta);
 }
 
@@ -152,11 +158,15 @@ SkySightControlsModel::GetPrimaryLabelAction() const noexcept
     return PrimaryLabelAction::OPEN_SETUP;
   if (!SkySight::IsTimeSelectable())
     return PrimaryLabelAction::NONE;
-  /* Live satellite/rain: tapping while manual resumes Auto (Rainbow-like). */
+
   if (const auto *layer = GetLayer();
-      layer != nullptr && layer->SupportsLiveTiles() &&
-      !SkySight::GetTimeAutoAdvance())
-    return PrimaryLabelAction::RESUME_AUTO;
+      layer != nullptr && layer->SupportsLiveTiles()) {
+    if (!SkySight::GetTimeAutoAdvance())
+      return PrimaryLabelAction::RESUME_AUTO;
+    if (SkySight::CanReplayLiveTime())
+      return PrimaryLabelAction::REPLAY;
+  }
+
   return PrimaryLabelAction::OPEN_PICKER;
 }
 
@@ -184,11 +194,67 @@ SkySightControlsModel::OpenSecondaryPicker() noexcept
 void
 SkySightControlsModel::ResumePrimaryAuto() noexcept
 {
+  CancelTimeReplay();
+
   if (GetPrimaryAutoAdvance())
     return;
 
   SetPrimaryAutoAdvance(true);
   Notify(ControlsUpdate::OVERLAY);
+}
+
+void
+SkySightControlsModel::CancelTimeReplay() noexcept
+{
+  replay_timer.Cancel();
+  replay_step = 0;
+  replay_reference = 0;
+}
+
+void
+SkySightControlsModel::AdvanceTimeReplay() noexcept
+{
+  if (replay_reference <= 0)
+    return;
+
+  if (replay_step == 1) {
+    if (SkySight::SetPageTime(int64_t(replay_reference -
+                                    SkySight::LIVE_TILE_INTERVAL_SECONDS)))
+      Notify(ControlsUpdate::OVERLAY);
+    replay_step = 2;
+    replay_timer.Schedule(std::chrono::milliseconds{500});
+    return;
+  }
+
+  if (replay_step == 2) {
+    CancelTimeReplay();
+    SetPrimaryAutoAdvance(true);
+    Notify(ControlsUpdate::OVERLAY);
+  }
+}
+
+void
+SkySightControlsModel::ReplayPrimary() noexcept
+{
+  if (replay_timer.IsPending())
+    return;
+
+  if (!SkySight::CanReplayLiveTime()) {
+    OpenPrimaryPicker();
+    return;
+  }
+
+  replay_reference = SkySight::GetLiveReferenceTime(
+    PageActions::GetCurrentLayout());
+  if (replay_reference <= 0)
+    return;
+
+  if (SkySight::SetPageTime(int64_t(replay_reference -
+                                    2 * SkySight::LIVE_TILE_INTERVAL_SECONDS)))
+    Notify(ControlsUpdate::OVERLAY);
+
+  replay_step = 1;
+  replay_timer.Schedule(std::chrono::milliseconds{500});
 }
 
 void

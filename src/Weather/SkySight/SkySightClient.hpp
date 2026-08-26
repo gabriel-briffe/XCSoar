@@ -41,6 +41,7 @@ class SkySightClient final {
   bool throttle_notification_active = false;
   bool manual_update_requested = false;
   bool planned_live_timestamp_known = false;
+  bool planned_live_current_complete = false;
   time_t planned_live_timestamp = 0;
   GeoBounds planned_live_bounds = GeoBounds::Invalid();
   std::vector<GeoBitmap::TileData> planned_live_tiles;

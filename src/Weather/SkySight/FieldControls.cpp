@@ -544,4 +544,57 @@ EnableTimeAutoFromInput() noexcept
   ApplyAutoAdvanceTime();
 }
 
+time_t
+GetLiveReferenceTime(const PageLayout &page) noexcept
+{
+  const auto *layer = GetLayer(page);
+  if (layer == nullptr || !layer->SupportsLiveTiles())
+    return 0;
+
+  const auto &cursor =
+    CommonInterface::GetUIState().weather.skysight_cursor;
+  if (cursor.displayed_time > 0)
+    return AlignLiveTime(time_t(cursor.displayed_time));
+
+  return LatestLiveFloor(*layer);
+}
+
+bool
+SetPageTime(int64_t time) noexcept
+{
+  const unsigned page_index =
+    CommonInterface::GetUIState().pages.current_index;
+  if (!WeatherMapOverlay::MutateOverlayPage(
+        page_index, PageLayout::Overlay::SKYSIGHT,
+        [time](PageLayout &page) noexcept {
+          if (page.skysight_time == time)
+            return false;
+          page.skysight_time = time;
+          return true;
+        }))
+    return false;
+
+  AfterLiveChange(CommonInterface::GetUISettings().pages.pages[page_index]);
+  return true;
+}
+
+bool
+CanReplayLiveTime() noexcept
+{
+  const auto *page = GetCurrentPage();
+  if (page == nullptr || !GetTimeAutoAdvance())
+    return false;
+
+  const auto *layer = GetLayer(*page);
+  if (layer == nullptr || !layer->SupportsLiveTiles())
+    return false;
+
+  const time_t reference = GetLiveReferenceTime(*page);
+  if (reference <= 0)
+    return false;
+
+  const time_t oldest = reference - LIVE_HISTORY_SECONDS;
+  return reference - 2 * LIVE_TILE_INTERVAL_SECONDS >= oldest;
+}
+
 } // namespace SkySight

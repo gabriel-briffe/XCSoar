@@ -165,6 +165,62 @@ struct DisplayLiveTile {
   std::string path;
 };
 
+/** Auto prefetch steps after the current slot is complete (T-1, T-2). */
+static constexpr unsigned LIVE_AUTO_PREFETCH_STEPS = 2;
+
+struct LiveTileDownloadRequest {
+  SkySight::Layer *layer;
+  time_t timestamp;
+  GeoBitmap::TileData tile;
+};
+
+static void
+AppendMissingLiveTileDownloads(
+  LiveTileCacheIndex &cache,
+  SkySight::Layer &layer,
+  time_t timestamp,
+  const std::vector<GeoBitmap::TileData> &tiles,
+  std::set<std::string, std::less<>> &desired_keys,
+  std::vector<LiveTileDownloadRequest> &missing)
+{
+  for (const auto &tile : tiles) {
+    const auto &exact = cache.Find(tile, timestamp);
+    desired_keys.emplace(exact.path.c_str());
+    if (!exact.exists)
+      missing.push_back({&layer, timestamp, tile});
+  }
+}
+
+static void
+AppendAutoPrefetchDownloads(
+  LiveTileCacheIndex &cache,
+  SkySight::Layer &layer,
+  time_t refresh_time,
+  const std::vector<GeoBitmap::TileData> &visible_tiles,
+  std::set<std::string, std::less<>> &desired_keys,
+  std::vector<LiveTileDownloadRequest> &missing)
+{
+  for (unsigned step = 1; step <= LIVE_AUTO_PREFETCH_STEPS; ++step) {
+    const time_t prefetch_time =
+      refresh_time - time_t(step) * SkySight::LIVE_TILE_INTERVAL_SECONDS;
+    if (!SkySight::IsRecentLiveTileTimestamp(prefetch_time, refresh_time))
+      continue;
+
+    AppendMissingLiveTileDownloads(cache, layer, prefetch_time,
+                                   visible_tiles, desired_keys, missing);
+  }
+}
+
+static void
+MaybeClearStaleLiveDownloads(SkySightAPI &api,
+                             bool slot_changed,
+                             bool manual_live_time,
+                             bool download_allowed) noexcept
+{
+  if (slot_changed && !manual_live_time && download_allowed)
+    api.ReconcileTileDownloads({});
+}
+
 void
 AppendUniqueLiveTile(std::vector<DisplayLiveTile> &items,
                      const DisplayLiveTile &candidate)
@@ -790,6 +846,7 @@ SkySightClient::ResetTiles() noexcept
 
   forecast_image_dirty = true;
   planned_live_timestamp_known = false;
+  planned_live_current_complete = false;
   planned_live_timestamp = 0;
   planned_live_bounds.SetInvalid();
   planned_live_tiles.clear();
@@ -1208,19 +1265,6 @@ SkySightClient::DisplayTileLayer()
   const auto visible_tiles = CollectVisibleLiveTiles(
     map_bounds, base_tile, region_bounds, LIVE_TILE_RANGE_OFFSET);
 
-  if (!planned_live_tiles.empty() &&
-      planned_live_timestamp_known == has_known_timestamp &&
-      planned_live_timestamp == refresh_time &&
-      IsSameBounds(planned_live_bounds, map_bounds) &&
-      IsSameTileSequence(planned_live_tiles, visible_tiles)) {
-    return !visible_tiles.empty();
-  }
-
-  planned_live_timestamp_known = has_known_timestamp;
-  planned_live_timestamp = refresh_time;
-  planned_live_bounds = map_bounds;
-  planned_live_tiles = visible_tiles;
-
   LiveTileCacheIndex cache{*api, *active_layer};
   std::vector<TargetLiveTile> target_tiles;
   target_tiles.reserve(visible_tiles.size());
@@ -1230,6 +1274,35 @@ SkySightClient::DisplayTileLayer()
       cache.Find(visible, refresh_time).exists,
     });
   }
+
+  const bool target_view_complete = !target_tiles.empty() &&
+    std::all_of(target_tiles.begin(), target_tiles.end(),
+                [](const auto &target) {
+                  return target.exact_refresh_available;
+                });
+
+  const bool slot_changed =
+    planned_live_timestamp != refresh_time ||
+    planned_live_timestamp_known != has_known_timestamp ||
+    planned_live_current_complete != target_view_complete;
+
+  if (!planned_live_tiles.empty() &&
+      !slot_changed &&
+      IsSameBounds(planned_live_bounds, map_bounds) &&
+      IsSameTileSequence(planned_live_tiles, visible_tiles)) {
+    return !visible_tiles.empty();
+  }
+
+  const bool download_allowed = IsAutoUpdateEnabled() ||
+    manual_update_requested;
+  MaybeClearStaleLiveDownloads(*api, slot_changed, manual_live_time,
+                               download_allowed);
+
+  planned_live_timestamp_known = has_known_timestamp;
+  planned_live_timestamp = refresh_time;
+  planned_live_current_complete = target_view_complete;
+  planned_live_bounds = map_bounds;
+  planned_live_tiles = visible_tiles;
 
   /* Auto and manual both display only refresh_time — never older steps. */
   const time_t display_timestamp = refresh_time;
@@ -1267,12 +1340,6 @@ SkySightClient::DisplayTileLayer()
                        fallback_tiles.end());
   display_tiles.insert(display_tiles.end(), target_zoom_tiles.begin(),
                        target_zoom_tiles.end());
-
-  const bool target_view_complete = !target_tiles.empty() &&
-    std::all_of(target_tiles.begin(), target_tiles.end(),
-                [](const auto &target) {
-                  return target.exact_refresh_available;
-                });
 
   if (display_timestamp > 0) {
     auto &cursor = CommonInterface::SetUIState().weather.skysight_cursor;
@@ -1338,18 +1405,21 @@ SkySightClient::DisplayTileLayer()
   }
 
   std::set<std::string, std::less<>> desired_keys;
-  std::vector<GeoBitmap::TileData> missing_target_tiles;
-  missing_target_tiles.reserve(target_tiles.size());
-  const bool download_allowed = IsAutoUpdateEnabled() ||
-    manual_update_requested;
+  std::vector<LiveTileDownloadRequest> missing;
+  missing.reserve(target_tiles.size() *
+                  (1 + LIVE_AUTO_PREFETCH_STEPS));
 
   if (download_allowed && has_known_timestamp) {
     for (const auto &target : target_tiles) {
       const auto &exact = cache.Find(target.tile, refresh_time);
       desired_keys.emplace(exact.path.c_str());
       if (!target.exact_refresh_available)
-        missing_target_tiles.push_back(target.tile);
+        missing.push_back({active_layer, refresh_time, target.tile});
     }
+
+    if (!manual_live_time && target_view_complete)
+      AppendAutoPrefetchDownloads(cache, *active_layer, refresh_time,
+                                  visible_tiles, desired_keys, missing);
   }
 
   if (download_allowed && !has_known_timestamp && !target_tiles.empty()) {
@@ -1364,11 +1434,11 @@ SkySightClient::DisplayTileLayer()
       active_layer->live_timestamp_from_probe = true;
       api->OnLiveTileProbeSucceeded(active_layer->id, refresh_time);
     } else {
-      missing_target_tiles.push_back(probe_tile);
+      missing.push_back({active_layer, refresh_time, probe_tile});
     }
   }
 
-  const auto missing_count = unsigned(missing_target_tiles.size());
+  const auto missing_count = unsigned(missing.size());
   if (missing_count > logged_live_tile_count) {
     LogFmt("SkySight live tiles: requesting {} tiles for '{}'", missing_count,
            active_layer->id);
@@ -1380,8 +1450,8 @@ SkySightClient::DisplayTileLayer()
   }
 
   api->ReconcileTileDownloads(desired_keys);
-  for (const auto &tile : missing_target_tiles)
-    api->EnsureTile(*active_layer, refresh_time, tile);
+  for (const auto &item : missing)
+    api->EnsureTile(*item.layer, item.timestamp, item.tile);
 
   if (manual_update_requested && target_view_complete)
     manual_update_requested = false;
@@ -1459,19 +1529,6 @@ SkySightClient::DisplaySatRainTileLayer()
   const auto visible_tiles = CollectVisibleLiveTiles(
     map_bounds, base_tile, region_bounds, LIVE_TILE_RANGE_OFFSET);
 
-  if (!planned_live_tiles.empty() &&
-      planned_live_timestamp_known == has_known_timestamp &&
-      planned_live_timestamp == refresh_time &&
-      IsSameBounds(planned_live_bounds, map_bounds) &&
-      IsSameTileSequence(planned_live_tiles, visible_tiles)) {
-    return !visible_tiles.empty();
-  }
-
-  planned_live_timestamp_known = has_known_timestamp;
-  planned_live_timestamp = refresh_time;
-  planned_live_bounds = map_bounds;
-  planned_live_tiles = visible_tiles;
-
   const unsigned slots_per_layer =
     unsigned(tile_filenames.size()) / 2u;
   if (slots_per_layer == 0)
@@ -1492,6 +1549,41 @@ SkySightClient::DisplaySatRainTileLayer()
     });
   }
 
+  const bool sat_complete = !sat_targets.empty() &&
+    std::all_of(sat_targets.begin(), sat_targets.end(),
+                [](const auto &t) {
+                  return t.exact_refresh_available;
+                });
+  const bool rain_complete = !rain_targets.empty() &&
+    std::all_of(rain_targets.begin(), rain_targets.end(),
+                [](const auto &t) {
+                  return t.exact_refresh_available;
+                });
+  const bool target_view_complete = sat_complete && rain_complete;
+
+  const bool slot_changed =
+    planned_live_timestamp != refresh_time ||
+    planned_live_timestamp_known != has_known_timestamp ||
+    planned_live_current_complete != target_view_complete;
+
+  if (!planned_live_tiles.empty() &&
+      !slot_changed &&
+      IsSameBounds(planned_live_bounds, map_bounds) &&
+      IsSameTileSequence(planned_live_tiles, visible_tiles)) {
+    return !visible_tiles.empty();
+  }
+
+  const bool download_allowed = IsAutoUpdateEnabled() ||
+    manual_update_requested;
+  MaybeClearStaleLiveDownloads(*api, slot_changed, manual_live_time,
+                               download_allowed);
+
+  planned_live_timestamp_known = has_known_timestamp;
+  planned_live_timestamp = refresh_time;
+  planned_live_current_complete = target_view_complete;
+  planned_live_bounds = map_bounds;
+  planned_live_tiles = visible_tiles;
+
   /* One shared display time for both layers — never older steps. */
   const time_t display_timestamp = refresh_time;
 
@@ -1499,7 +1591,7 @@ SkySightClient::DisplaySatRainTileLayer()
     [&](LiveTileCacheIndex &cache,
         const SkySight::Layer &layer,
         const std::vector<TargetLiveTile> &targets)
-      -> std::pair<std::vector<DisplayLiveTile>, bool> {
+      -> std::vector<DisplayLiveTile> {
       std::vector<DisplayLiveTile> fallback_tiles;
       std::vector<DisplayLiveTile> target_zoom_tiles;
       for (const auto &target : targets) {
@@ -1528,21 +1620,11 @@ SkySightClient::DisplaySatRainTileLayer()
                            fallback_tiles.end());
       display_tiles.insert(display_tiles.end(), target_zoom_tiles.begin(),
                            target_zoom_tiles.end());
-
-      const bool complete = !targets.empty() &&
-        std::all_of(targets.begin(), targets.end(),
-                    [](const auto &t) {
-                      return t.exact_refresh_available;
-                    });
-      return {std::move(display_tiles), complete};
+      return display_tiles;
     };
 
-  auto [sat_display, sat_complete] =
-    build_display(sat_cache, *satellite, sat_targets);
-  auto [rain_display, rain_complete] =
-    build_display(rain_cache, *rain, rain_targets);
-
-  const bool target_view_complete = sat_complete && rain_complete;
+  const auto sat_display = build_display(sat_cache, *satellite, sat_targets);
+  const auto rain_display = build_display(rain_cache, *rain, rain_targets);
 
   if (display_timestamp > 0) {
     auto &cursor = CommonInterface::SetUIState().weather.skysight_cursor;
@@ -1611,11 +1693,9 @@ SkySightClient::DisplaySatRainTileLayer()
   }
 
   std::set<std::string, std::less<>> desired_keys;
-  std::vector<std::pair<SkySight::Layer *, GeoBitmap::TileData>> missing;
-  const bool download_allowed = IsAutoUpdateEnabled() ||
-    manual_update_requested;
+  std::vector<LiveTileDownloadRequest> missing;
 
-  auto queue_missing =
+  auto queue_current =
     [&](LiveTileCacheIndex &cache, SkySight::Layer &layer,
         const std::vector<TargetLiveTile> &targets) {
       unsigned queued = 0;
@@ -1625,14 +1705,28 @@ SkySightClient::DisplaySatRainTileLayer()
         const auto &exact = cache.Find(target.tile, refresh_time);
         desired_keys.emplace(exact.path.c_str());
         if (!target.exact_refresh_available)
-          missing.emplace_back(&layer, target.tile);
+          missing.push_back({&layer, refresh_time, target.tile});
         ++queued;
       }
     };
 
   if (download_allowed && has_known_timestamp) {
-    queue_missing(sat_cache, *satellite, sat_targets);
-    queue_missing(rain_cache, *rain, rain_targets);
+    queue_current(sat_cache, *satellite, sat_targets);
+    queue_current(rain_cache, *rain, rain_targets);
+
+    if (!manual_live_time && target_view_complete) {
+      for (unsigned step = 1; step <= LIVE_AUTO_PREFETCH_STEPS; ++step) {
+        const time_t prefetch_time =
+          refresh_time - time_t(step) * SkySight::LIVE_TILE_INTERVAL_SECONDS;
+        if (!SkySight::IsRecentLiveTileTimestamp(prefetch_time, refresh_time))
+          continue;
+
+        AppendMissingLiveTileDownloads(sat_cache, *satellite, prefetch_time,
+                                       visible_tiles, desired_keys, missing);
+        AppendMissingLiveTileDownloads(rain_cache, *rain, prefetch_time,
+                                       visible_tiles, desired_keys, missing);
+      }
+    }
   }
 
   if (download_allowed && !has_known_timestamp && !sat_targets.empty()) {
@@ -1644,13 +1738,13 @@ SkySightClient::DisplaySatRainTileLayer()
       satellite->live_timestamp_from_probe = true;
       api->OnLiveTileProbeSucceeded(satellite->id, refresh_time);
     } else {
-      missing.emplace_back(satellite, probe_tile);
+      missing.push_back({satellite, refresh_time, probe_tile});
     }
   }
 
   api->ReconcileTileDownloads(desired_keys);
-  for (const auto &[layer, tile] : missing)
-    api->EnsureTile(*layer, refresh_time, tile);
+  for (const auto &item : missing)
+    api->EnsureTile(*item.layer, item.timestamp, item.tile);
 
   if (manual_update_requested && target_view_complete)
     manual_update_requested = false;

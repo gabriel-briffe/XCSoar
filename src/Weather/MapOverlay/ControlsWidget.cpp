@@ -149,6 +149,10 @@ ControlsWidget::OnPrimaryLabelClick() noexcept
       model->ResumePrimaryAuto();
     break;
 
+  case PrimaryLabelAction::REPLAY:
+    model->ReplayPrimary();
+    break;
+
   case PrimaryLabelAction::OPEN_SETUP:
     /* May destroy this — return immediately after. */
     ShowWeatherSetupDialog();

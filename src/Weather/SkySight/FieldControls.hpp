@@ -45,4 +45,13 @@ void SetTimeAutoAdvance(bool auto_advance) noexcept;
 void ApplyAutoAdvanceTime() noexcept;
 void EnableTimeAutoFromInput() noexcept;
 
+/** Live Auto reference instant (map cursor, else latest floor). */
+[[nodiscard]] time_t GetLiveReferenceTime(const PageLayout &page) noexcept;
+
+/** Set page time and refresh the live overlay (not Auto). */
+[[nodiscard]] bool SetPageTime(int64_t time) noexcept;
+
+/** Auto + live layer with two steppable slots in history. */
+[[nodiscard]] bool CanReplayLiveTime() noexcept;
+
 } // namespace SkySight

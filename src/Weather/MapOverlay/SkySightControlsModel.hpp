@@ -7,6 +7,7 @@
 
 #include "util/StaticString.hxx"
 #include "ui/event/PeriodicTimer.hpp"
+#include "ui/event/Timer.hpp"
 
 #include <chrono>
 #include <memory>
@@ -58,6 +59,7 @@ public:
   [[nodiscard]]
   SecondaryPickerResult OpenSecondaryPicker() noexcept override;
   void ResumePrimaryAuto() noexcept override;
+  void ReplayPrimary() noexcept override;
 
   void RefreshOverlay() noexcept override;
 
@@ -65,6 +67,12 @@ private:
   [[nodiscard]]
   const SkySight::Layer *GetLayer() const noexcept;
   void UpdateCountdownLabel() noexcept;
+  void CancelTimeReplay() noexcept;
+  void AdvanceTimeReplay() noexcept;
+
+  UI::Timer replay_timer{[this]{ AdvanceTimeReplay(); }};
+  time_t replay_reference = 0;
+  unsigned replay_step = 0;
 };
 
 } // namespace WeatherMapOverlay

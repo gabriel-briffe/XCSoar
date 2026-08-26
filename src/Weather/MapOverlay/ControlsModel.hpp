@@ -60,6 +60,7 @@ HandleSecondaryFieldPicker(FieldPickerResult result,
 enum class PrimaryLabelAction : uint8_t {
   NONE,
   RESUME_AUTO,
+  REPLAY,
   OPEN_PICKER,
   OPEN_SETUP,
 };
@@ -148,6 +149,9 @@ public:
   }
 
   virtual void OpenPrimaryPicker() noexcept {}
+
+  /** Brief history preview (SkySight live Auto). */
+  virtual void ReplayPrimary() noexcept {}
 
   [[nodiscard]]
   virtual SecondaryLabelAction GetSecondaryLabelAction() const noexcept {
