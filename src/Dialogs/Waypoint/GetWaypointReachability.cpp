@@ -7,11 +7,16 @@
 #include "BackendComponents.hpp"
 #include "Components.hpp"
 #include "Interface.hpp"
+#include "Renderer/WaypointRendererSettings.hpp"
 
 WaypointReachability
 GetWaypointReachability(const Waypoint &waypoint) noexcept
 {
   if (!waypoint.IsLandable() && !waypoint.flags.watched)
+    return WaypointReachability::INVALID;
+
+  if (waypoint.IsLandable() &&
+      !CommonInterface::GetMapSettings().waypoint.IsLandableReachDecorated())
     return WaypointReachability::INVALID;
 
   const auto *glide_computer = backend_components != nullptr

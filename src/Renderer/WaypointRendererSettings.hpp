@@ -48,7 +48,19 @@ struct WaypointRendererSettings {
     PURPLE_CIRCLE,
     BW,
     TRAFFIC_LIGHTS,
+    /** Purple circle without reach calc or reach paint. */
+    PURPLE_CIRCLE_ONLY,
   } landable_style;
+
+  /**
+   * False for #LandableStyle::PURPLE_CIRCLE_ONLY — skip landable reach
+   * calculation and reach decoration regardless of Reach/route mode.
+   */
+  [[nodiscard]] [[gnu::pure]]
+  constexpr bool
+  IsLandableReachDecorated() const noexcept {
+    return landable_style != LandableStyle::PURPLE_CIRCLE_ONLY;
+  }
 
   bool vector_landable_rendering;
 

@@ -49,6 +49,7 @@ WaypointLook::Reinitialise(const WaypointRendererSettings &settings)
 {
   switch (settings.landable_style) {
   case WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE:
+  case WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE_ONLY:
     airport_reachable_icon.LoadResource(IDB_REACHABLE_ALL);
     airport_marginal_icon.LoadResource(IDB_MARGINAL_ALL);
     airport_unreachable_icon.LoadResource(IDB_LANDABLE_ALL);

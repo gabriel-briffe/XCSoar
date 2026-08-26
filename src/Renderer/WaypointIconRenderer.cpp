@@ -136,7 +136,11 @@ WaypointIconRenderer::DrawLandable(const Waypoint &waypoint,
   if (!settings.vector_landable_rendering) {
     const MaskedIcon *icon;
 
-    if (reachable == WaypointReachability::TERRAIN)
+    if (!settings.IsLandableReachDecorated())
+      icon = waypoint.IsAirport()
+        ? &look.airport_unreachable_icon
+        : &look.field_unreachable_icon;
+    else if (reachable == WaypointReachability::TERRAIN)
       icon = waypoint.IsAirport()
         ? &look.airport_reachable_icon
         : &look.field_reachable_icon;
@@ -190,6 +194,10 @@ WaypointIconRenderer::DrawLandable(const Waypoint &waypoint,
                     : look.terrain_unreachable_brush);
       DrawLandableBase(canvas, point, waypoint.IsAirport(), 1.5 * radius);
     }
+    canvas.Select(look.magenta_brush);
+    break;
+
+  case WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE_ONLY:
     canvas.Select(look.magenta_brush);
     break;
 

@@ -165,12 +165,16 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
       N_("Traffic lights"),
       N_("Airports and outlanding fields are displayed in the colors of a traffic light. "
           "Green if reachable, Orange if blocked by mountain and red if not reachable at all.") },
+    { WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE_ONLY,
+      N_("Purple circle only"),
+      N_("Airports and outlanding fields are displayed as purple circles only. "
+          "Reachability is not calculated or shown for landables.") },
     nullptr
   };
   AddEnum(_("Landable symbols"),
-          _("Three styles are available: Purple circles (WinPilot style), a high "
-              "contrast (monochrome) style, or orange. The rendering differs for landable "
-              "field and airport. All styles mark the waypoints within reach green."),
+          _("Purple circles (WinPilot style), high-contrast monochrome, traffic lights, "
+              "or purple circles without reach marking. The first three styles mark "
+              "waypoints within reach green."),
           wp_style_list, (unsigned)settings.landable_style);
 
   AddInteger(_("Waypoint icon size"),

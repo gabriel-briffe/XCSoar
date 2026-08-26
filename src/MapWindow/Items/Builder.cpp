@@ -10,6 +10,7 @@
 #include "Engine/Task/Ordered/Points/OrderedTaskPoint.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Renderer/WaypointReachability.hpp"
+#include "Renderer/WaypointRendererSettings.hpp"
 #include "Computer/Settings.hpp"
 #include "NMEA/Aircraft.hpp"
 #include "Task/ProtectedTaskManager.hpp"
@@ -77,7 +78,8 @@ MapItemListBuilder::AddWaypoints(const Waypoints &waypoints,
                                  const ProtectedRoutePlanner *route_planner,
                                  const MoreData &basic,
                                  const DerivedInfo &calculated,
-                                 const ComputerSettings &settings)
+                                 const ComputerSettings &settings,
+                                 const WaypointRendererSettings &waypoint_settings)
 {
   waypoints.VisitWithinRange(location, range, [&](const auto &w){
     if (list.full())
@@ -86,10 +88,13 @@ MapItemListBuilder::AddWaypoints(const Waypoints &waypoints,
     /* calculate the reachability the same way the map does, so the
        icon in the dialog matches the one on the map */
     auto reachable = WaypointReachability::INVALID;
-    if (w->IsLandable() || w->flags.watched)
-      reachable = CalculateWaypointReach(*w, route_planner, basic, calculated,
-                                         settings.polar,
-                                         settings.task).reachability;
+    if (w->IsLandable() || w->flags.watched) {
+      if (!w->IsLandable() ||
+          waypoint_settings.IsLandableReachDecorated())
+        reachable = CalculateWaypointReach(*w, route_planner, basic,
+                                           calculated, settings.polar,
+                                           settings.task).reachability;
+    }
 
     list.append(new WaypointMapItem(w, reachable));
   });

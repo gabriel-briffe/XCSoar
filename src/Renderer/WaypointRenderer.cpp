@@ -398,9 +398,11 @@ protected:
 
     auto sc = vwp.point;
     sc.x += 5;
-    if ((vwp.IsReachable() &&
-         settings.landable_style == WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE) ||
-        settings.vector_landable_rendering)
+    if (settings.IsLandableReachDecorated() &&
+        ((vwp.IsReachable() &&
+          settings.landable_style ==
+            WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE) ||
+         settings.vector_landable_rendering))
       // make space for the green circle
       sc.x += 5;
 
@@ -457,6 +459,9 @@ public:
     for (VisibleWaypoint &vwp : waypoints) {
       const Waypoint &way_point = *vwp.waypoint;
 
+      if (way_point.IsLandable() && !settings.IsLandableReachDecorated())
+        continue;
+
       if (way_point.IsLandable() || way_point.flags.watched)
         vwp.CalculateReachability(route_planner, task_behaviour);
     }
@@ -476,6 +481,9 @@ public:
 
     for (VisibleWaypoint &vwp : waypoints) {
       const Waypoint &way_point = *vwp.waypoint;
+
+      if (way_point.IsLandable() && !settings.IsLandableReachDecorated())
+        continue;
 
       if (way_point.IsLandable() || way_point.flags.watched)
         vwp.CalculateReachabilityDirect(basic, calculated.GetWindOrZero(),
