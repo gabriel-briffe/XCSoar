@@ -11,6 +11,7 @@
 #ifdef HAVE_HTTP
 #include "DataGlobals.hpp"
 #include "SkySightControlsModel.hpp"
+#include "RainbowControlsModel.hpp"
 #endif
 #include "XcthermControlsModel.hpp"
 
@@ -34,6 +35,13 @@ CreateControlsModel(const PageLayout &layout) noexcept
 
   case PageLayout::Overlay::XCTHERM:
     return std::make_unique<XcthermControlsModel>();
+
+  case PageLayout::Overlay::RAINBOW:
+#ifdef HAVE_HTTP
+    return std::make_unique<RainbowControlsModel>();
+#else
+    break;
+#endif
 
   case PageLayout::Overlay::SKYSIGHT:
 #ifdef HAVE_HTTP

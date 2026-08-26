@@ -113,6 +113,21 @@ Load(const ProfileMap &map, PageLayout &_pl, const unsigned page)
       pl.skysight_time = PageLayout::SKYSIGHT_TIME_AUTO;
   }
 
+  strcpy(profileKey + prefixLen, "RainbowTime");
+  if (const char *value = map.Get(profileKey); value != nullptr) {
+    if (!ParseIntegerTo(std::string_view{value}, pl.rainbow_time) ||
+        pl.rainbow_time < PageLayout::RAINBOW_TIME_AUTO)
+      pl.rainbow_time = PageLayout::RAINBOW_TIME_AUTO;
+  }
+
+  strcpy(profileKey + prefixLen, "RainbowSatellite");
+  if (!map.Get(profileKey, pl.rainbow_satellite))
+    pl.rainbow_satellite = true;
+
+  strcpy(profileKey + prefixLen, "RainbowRain");
+  if (!map.Get(profileKey, pl.rainbow_rain))
+    pl.rainbow_rain = false;
+
   strcpy(profileKey + prefixLen, "TerrainRamp");
   if (!map.Get(profileKey, pl.terrain_ramp) ||
       pl.terrain_ramp < -1 ||
@@ -194,6 +209,17 @@ Profile::Save(ProfileMap &map, const PageLayout &page, const unsigned i)
   StaticString<32> skysight_time;
   skysight_time.Format("%lld", (long long)page.skysight_time);
   map.Set(profileKey, skysight_time.c_str());
+
+  strcpy(profileKey + prefixLen, "RainbowTime");
+  StaticString<32> rainbow_time;
+  rainbow_time.Format("%lld", (long long)page.rainbow_time);
+  map.Set(profileKey, rainbow_time.c_str());
+
+  strcpy(profileKey + prefixLen, "RainbowSatellite");
+  map.Set(profileKey, page.rainbow_satellite);
+
+  strcpy(profileKey + prefixLen, "RainbowRain");
+  map.Set(profileKey, page.rainbow_rain);
 
   strcpy(profileKey + prefixLen, "TerrainRamp");
   map.Set(profileKey, page.terrain_ramp);

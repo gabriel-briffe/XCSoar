@@ -150,6 +150,7 @@ struct WeatherUIState {
 
   OverlaySession xctherm;
   OverlaySession skysight;
+  OverlaySession rainbow;
 
   /**
    * Live SkySight satellite/rain tile status for the page title
@@ -179,6 +180,35 @@ struct WeatherUIState {
     }
   } xctherm_cursor;
 
+  struct RainbowCursorState {
+    /** Requested time; #PageLayout::RAINBOW_TIME_AUTO follows provider. */
+    int64_t time = 0;
+
+    /**
+     * Snapshot epoch actually shown on the map (from the last successful
+     * tile install).  Used for the cursor-bar label so Auto matches the
+     * tiles.  Zero until the first refresh completes.
+     */
+    int64_t displayed_time = 0;
+
+    /**
+     * True when the last install filled every planned viewport tile
+     * (bottom title shows F); false for a partial fill (P).
+     */
+    bool tiles_complete = false;
+
+    bool satellite = true;
+    bool rain = false;
+
+    void Clear() noexcept {
+      time = 0;
+      displayed_time = 0;
+      tiles_complete = false;
+      satellite = true;
+      rain = false;
+    }
+  } rainbow_cursor;
+
   void Clear() noexcept {
     map = -1;
     time = BrokenTime::Invalid();
@@ -187,8 +217,10 @@ struct WeatherUIState {
     edl.Clear();
     xctherm.Clear();
     skysight.Clear();
+    rainbow.Clear();
     skysight_cursor.Clear();
     xctherm_cursor.Clear();
+    rainbow_cursor.Clear();
   }
 
   /**

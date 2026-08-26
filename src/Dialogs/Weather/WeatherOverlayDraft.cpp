@@ -80,6 +80,11 @@ State::IsDirty() const noexcept
     return draft.xctherm_layer != baseline.xctherm_layer ||
       draft.xctherm_time != baseline.xctherm_time;
 
+  case PageLayout::Overlay::RAINBOW:
+    return draft.rainbow_time != baseline.rainbow_time ||
+      draft.rainbow_satellite != baseline.rainbow_satellite ||
+      draft.rainbow_rain != baseline.rainbow_rain;
+
   case PageLayout::Overlay::SKYSIGHT:
     return draft.skysight_overlay != baseline.skysight_overlay ||
       draft.skysight_time != baseline.skysight_time;
@@ -104,7 +109,9 @@ State::SyncButtons(Button *apply_button, Button *add_button) const noexcept
       draft.overlay != PageLayout::Overlay::NONE &&
       draft.overlay != PageLayout::Overlay::MAX &&
       (draft.overlay != PageLayout::Overlay::SKYSIGHT ||
-       draft.UsesSkySightOverlay());
+       draft.UsesSkySightOverlay()) &&
+      (draft.overlay != PageLayout::Overlay::RAINBOW ||
+       draft.UsesRainbowOverlay());
     add_button->SetEnabled(valid_overlay &&
                            settings.n_pages < PageSettings::MAX_PAGES);
   }

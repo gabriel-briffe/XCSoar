@@ -113,6 +113,7 @@ struct PageLayout
     EDL,
     XCTHERM,
     SKYSIGHT,
+    RAINBOW,
 
     MAX
   } overlay;
@@ -159,6 +160,16 @@ struct PageLayout
   int xctherm_time;
 
   /**
+   * Per-page Rainbow.ai cursor.  Time is a UTC snapshot epoch (10-minute
+   * steps); #RAINBOW_TIME_AUTO follows the latest snapshot.  Satellite
+   * and rain may both be enabled (rain drawn above satellite).
+   */
+  static constexpr int64_t RAINBOW_TIME_AUTO = 0;
+  int64_t rainbow_time;
+  bool rainbow_satellite;
+  bool rainbow_rain;
+
+  /**
    * Per-page terrain color ramp for map pages.  Negative means use the
    * global TerrainRamp from Map Display → Terrain.
    */
@@ -179,6 +190,9 @@ struct PageLayout
      edl_isobar(0),
      xctherm_layer(XCTHERM_LAYER_AUTO),
      xctherm_time(XCTHERM_TIME_AUTO),
+     rainbow_time(RAINBOW_TIME_AUTO),
+     rainbow_satellite(true),
+     rainbow_rain(false),
      terrain_ramp(-1) {}
 
   constexpr PageLayout(InfoBoxConfig _infobox_config)
@@ -194,6 +208,9 @@ struct PageLayout
      edl_isobar(0),
      xctherm_layer(XCTHERM_LAYER_AUTO),
      xctherm_time(XCTHERM_TIME_AUTO),
+     rainbow_time(RAINBOW_TIME_AUTO),
+     rainbow_satellite(true),
+     rainbow_rain(false),
      terrain_ramp(-1) {}
 
   /**
@@ -274,11 +291,20 @@ struct PageLayout
 
   [[gnu::const]]
   constexpr bool
+  UsesRainbowOverlay() const noexcept
+  {
+    return IsMapMain() && overlay == Overlay::RAINBOW &&
+      (rainbow_satellite || rainbow_rain);
+  }
+
+  [[gnu::const]]
+  constexpr bool
   UsesWeatherOverlay() const noexcept
   {
     return IsMapMain() &&
       (overlay == Overlay::EDL || overlay == Overlay::RASP ||
-       overlay == Overlay::XCTHERM || overlay == Overlay::SKYSIGHT);
+       overlay == Overlay::XCTHERM || overlay == Overlay::SKYSIGHT ||
+       overlay == Overlay::RAINBOW);
   }
 
   /**
@@ -357,6 +383,21 @@ struct PageLayout
         xctherm_layer = XCTHERM_LAYER_AUTO;
       if (xctherm_time < XCTHERM_TIME_AUTO || xctherm_time >= 24)
         xctherm_time = XCTHERM_TIME_AUTO;
+    }
+
+    if (overlay != Overlay::RAINBOW) {
+      rainbow_time = RAINBOW_TIME_AUTO;
+      rainbow_satellite = true;
+      rainbow_rain = false;
+    } else {
+      if (rainbow_time < RAINBOW_TIME_AUTO)
+        rainbow_time = RAINBOW_TIME_AUTO;
+      if (!rainbow_satellite && !rainbow_rain) {
+        overlay = Overlay::NONE;
+        rainbow_time = RAINBOW_TIME_AUTO;
+        if (bottom == Bottom::WEATHER_CONTROLS)
+          bottom = Bottom::NOTHING;
+      }
     }
 
     if (terrain_ramp < -1 ||

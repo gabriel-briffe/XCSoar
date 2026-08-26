@@ -26,6 +26,10 @@ ShowWeatherSetupDialog() noexcept
   case PageLayout::Overlay::SKYSIGHT:
     page = "skysight";
     break;
+
+  case PageLayout::Overlay::RAINBOW:
+    page = "rainbow";
+    break;
   case PageLayout::Overlay::NONE:
   case PageLayout::Overlay::MAX:
     break;

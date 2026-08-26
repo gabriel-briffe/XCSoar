@@ -122,6 +122,38 @@ AppendOverlayTitle(BasicStringBuilder<char> &builder,
 #endif
     break;
 
+  case PageLayout::Overlay::RAINBOW:
+    builder.Append(", Rainbow");
+    if (layout.rainbow_time == PageLayout::RAINBOW_TIME_AUTO) {
+      builder.Append(' ');
+      builder.Append(C_("Status", "Auto"));
+    }
+    if (layout.rainbow_satellite) {
+      builder.Append(' ');
+      builder.Append(C_("Weather layer", "Sat"));
+    }
+    if (layout.rainbow_rain) {
+      builder.Append(' ');
+      builder.Append(C_("Weather layer", "Rain"));
+    }
+#ifdef HAVE_HTTP
+    {
+      const auto &cursor =
+        CommonInterface::GetUIState().weather.rainbow_cursor;
+      if (cursor.displayed_time > 0) {
+        const auto tm = GmTime(
+          std::chrono::system_clock::from_time_t(
+            time_t(cursor.displayed_time)));
+        char time_buf[8];
+        std::strftime(time_buf, sizeof(time_buf), "%H:%M", &tm);
+        builder.Append(' ');
+        builder.Append(time_buf);
+        builder.Append(cursor.tiles_complete ? "F" : "P");
+      }
+    }
+#endif
+    break;
+
   case PageLayout::Overlay::MAX:
     gcc_unreachable();
   }

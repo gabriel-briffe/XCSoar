@@ -8,8 +8,10 @@
 #include "Dialogs/Settings/Panels/PCMetConfigPanel.hpp"
 #ifdef HAVE_HTTP
 #include "XCThermDialog.hpp"
+#include "RainbowDialog.hpp"
 #include "WeatherCredentialGateWidget.hpp"
 #include "Dialogs/Settings/Panels/XCThermConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/RainbowConfigPanel.hpp"
 #endif
 #include "Dialogs/Settings/Panels/WeatherConfigPanel.hpp"
 #include "Weather/Features.hpp"
@@ -60,6 +62,18 @@ CreateXCThermTabWidget() noexcept
     },
     CreateXCThermConfigPanel,
     CreateXCThermMainWidget);
+}
+
+static std::unique_ptr<Widget>
+CreateRainbowTabWidget() noexcept
+{
+  return CreateWeatherCredentialGateWidget(
+    []() {
+      return CommonInterface::GetComputerSettings()
+        .weather.rainbow.IsDefined();
+    },
+    CreateRainbowConfigPanel,
+    CreateRainbowWidget);
 }
 #endif
 
@@ -153,6 +167,11 @@ ShowWeatherDialog(const char *page)
     start_page = widget.GetSize();
 
   widget.AddTab(CreateXCThermTabWidget(), "XC Therm");
+
+  if (page != nullptr && StringIsEqual(page, "rainbow"))
+    start_page = widget.GetSize();
+
+  widget.AddTab(CreateRainbowTabWidget(), "Rainbow");
 #endif
 
   if (page != nullptr && StringIsEqual(page, "rasp"))

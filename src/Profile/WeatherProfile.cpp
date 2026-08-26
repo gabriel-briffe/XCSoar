@@ -32,6 +32,13 @@ namespace Profile {
       map.Get(ProfileKeys::LegacySkySightRegion, settings.region);
     map.Get(ProfileKeys::SkySightAutoUpdate, settings.auto_update);
   }
+
+  static void Load(const ProfileMap &map, RainbowSettings &settings) {
+    map.Get(ProfileKeys::RainbowApiKey, settings.api_key);
+    map.Get(ProfileKeys::RainbowDisplaySatellite,
+            settings.display_satellite);
+    map.Get(ProfileKeys::RainbowDisplayRain, settings.display_rain);
+  }
 }
 
 #endif
@@ -91,5 +98,6 @@ Profile::Load(const ProfileMap &map, WeatherSettings &settings)
 
 #ifdef HAVE_HTTP
   Load(map, settings.skysight);
+  Load(map, settings.rainbow);
 #endif
 }

@@ -18,6 +18,7 @@
 #ifdef HAVE_HTTP
 
 #include "SkySight/Settings.hpp"
+#include "Rainbow/Settings.hpp"
 
 #endif
 
@@ -113,6 +114,7 @@ struct WeatherSettings {
 
 #ifdef HAVE_HTTP
   SkySightSettings skysight;
+  RainbowSettings rainbow;
 #endif
 
 #ifdef HAVE_HTTP
@@ -140,6 +142,7 @@ struct WeatherSettings {
 
 #ifdef HAVE_HTTP
     skysight.SetDefaults();
+    rainbow.SetDefaults();
 #endif
 
 #ifdef HAVE_HTTP

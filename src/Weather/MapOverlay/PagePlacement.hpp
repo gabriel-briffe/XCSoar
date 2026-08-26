@@ -49,6 +49,12 @@ CopyWeatherOverlayCursors(PageLayout &dest,
     dest.skysight_time = src.skysight_time;
     break;
 
+  case PageLayout::Overlay::RAINBOW:
+    dest.rainbow_time = src.rainbow_time;
+    dest.rainbow_satellite = src.rainbow_satellite;
+    dest.rainbow_rain = src.rainbow_rain;
+    break;
+
   case PageLayout::Overlay::NONE:
   case PageLayout::Overlay::MAX:
     break;
@@ -89,6 +95,11 @@ ApplyWeatherOverlayToLayout(PageLayout &layout,
   else
     layout.skysight_overlay.clear();
   layout.skysight_time = PageLayout::SKYSIGHT_TIME_AUTO;
+  if (overlay != PageLayout::Overlay::RAINBOW) {
+    layout.rainbow_time = PageLayout::RAINBOW_TIME_AUTO;
+    layout.rainbow_satellite = true;
+    layout.rainbow_rain = false;
+  }
   layout.Normalise();
 }
 

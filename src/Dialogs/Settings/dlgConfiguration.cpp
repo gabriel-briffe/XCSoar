@@ -72,6 +72,7 @@
 #endif
 #ifdef HAVE_HTTP
 #include "Panels/XCThermConfigPanel.hpp"
+#include "Panels/RainbowConfigPanel.hpp"
 #endif
 #include "Panels/WeatherControlsConfigPanel.hpp"
 #ifdef HAVE_HTTP
@@ -154,6 +155,7 @@ static constexpr TabMenuPage weather_pages[] = {
   { "Flugwetter (pc_met)", CreatePCMetConfigPanel },
 #endif
 #ifdef HAVE_HTTP
+  { "Rainbow", CreateRainbowConfigPanel },
   { "XC Therm", CreateXCThermConfigPanel },
 #endif
   { N_("Controls"), CreateWeatherControlsConfigPanel },

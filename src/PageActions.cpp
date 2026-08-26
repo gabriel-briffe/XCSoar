@@ -37,6 +37,7 @@
 #include "Weather/SkySight/SkySightClient.hpp"
 #include "Weather/xctherm/FieldControls.hpp"
 #include "Weather/xctherm/XCThermMapOverlay.hpp"
+#include "Weather/Rainbow/FieldControls.hpp"
 #endif
 
 #if defined(ENABLE_SDL) && defined(main)
@@ -73,6 +74,7 @@ namespace PageActions {
   static void LeaveEdlOverlay() noexcept;
   static void LeaveXcthermOverlay() noexcept;
   static void LeaveSkySightOverlay() noexcept;
+  static void LeaveRainbowOverlay() noexcept;
 
   static void LeaveWeatherOverlayPage(const PageLayout &layout) noexcept;
 
@@ -80,6 +82,7 @@ namespace PageActions {
   static void ApplyEdlOverlay(const PageLayout &layout) noexcept;
   static void ApplyXcthermOverlay(const PageLayout &layout) noexcept;
   static void ApplySkySightOverlay(const PageLayout &layout) noexcept;
+  static void ApplyRainbowOverlay(const PageLayout &layout) noexcept;
 
   static void ApplyPageOverlay(const PageLayout &layout) noexcept;
 };
@@ -167,6 +170,21 @@ PageActions::LeaveSkySightOverlay() noexcept
 }
 
 void
+PageActions::LeaveRainbowOverlay() noexcept
+{
+#ifdef HAVE_HTTP
+  auto &session = CommonInterface::SetUIState().weather.rainbow;
+  if (session.IsSuspendedForPan())
+    return;
+
+  session.LeavePage();
+  /* ClearMapOverlay is a no-op unless Rainbow activated this page
+     (overlay_active) — same self-scoping idea as XCTherm's typed clear. */
+  Rainbow::ClearMapOverlay();
+#endif
+}
+
+void
 PageActions::LeaveWeatherOverlayPage(const PageLayout &layout) noexcept
 {
   if (layout.UsesEdlOverlay())
@@ -177,6 +195,8 @@ PageActions::LeaveWeatherOverlayPage(const PageLayout &layout) noexcept
     LeaveXcthermOverlay();
   else if (layout.UsesSkySightOverlay())
     LeaveSkySightOverlay();
+  else if (layout.UsesRainbowOverlay())
+    LeaveRainbowOverlay();
 }
 
 void
@@ -269,6 +289,23 @@ PageActions::ApplySkySightOverlay(const PageLayout &layout) noexcept
 }
 
 void
+PageActions::ApplyRainbowOverlay(const PageLayout &layout) noexcept
+{
+#ifdef HAVE_HTTP
+  auto &session = CommonInterface::SetUIState().weather.rainbow;
+  session.cursor_initialized =
+    layout.rainbow_time != PageLayout::RAINBOW_TIME_AUTO;
+  session.EnterPage();
+  Rainbow::ApplyCursorFromPageLayout(layout);
+  /* Always refresh: Apply-to-page can change Sat/Rain while the page
+     is already entered (EnterPage returns false on re-apply). */
+  Rainbow::ActivatePageOverlay();
+#else
+  (void)layout;
+#endif
+}
+
+void
 PageActions::SuspendWeatherOverlaysForPan() noexcept
 {
   WeatherUIState &weather = CommonInterface::SetUIState().weather;
@@ -282,6 +319,8 @@ PageActions::SuspendWeatherOverlaysForPan() noexcept
     weather.xctherm.SuspendForPan();
   if (layout.UsesSkySightOverlay())
     weather.skysight.SuspendForPan();
+  if (layout.UsesRainbowOverlay())
+    weather.rainbow.SuspendForPan();
 }
 
 void
@@ -292,6 +331,7 @@ PageActions::ResumeWeatherOverlaysAfterPan() noexcept
   weather.rasp.ResumeAfterPan();
   weather.xctherm.ResumeAfterPan();
   weather.skysight.ResumeAfterPan();
+  weather.rainbow.ResumeAfterPan();
 }
 
 void
@@ -310,6 +350,8 @@ PageActions::ApplyPageOverlay(const PageLayout &layout) noexcept
     LeaveXcthermOverlay();
   if (!layout.UsesSkySightOverlay())
     LeaveSkySightOverlay();
+  if (!layout.UsesRainbowOverlay())
+    LeaveRainbowOverlay();
 
   ClearPageOverlays();
 
@@ -331,6 +373,10 @@ PageActions::ApplyPageOverlay(const PageLayout &layout) noexcept
 
   case PageLayout::Overlay::SKYSIGHT:
     ApplySkySightOverlay(layout);
+    break;
+
+  case PageLayout::Overlay::RAINBOW:
+    ApplyRainbowOverlay(layout);
     break;
 
   case PageLayout::Overlay::MAX:

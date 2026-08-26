@@ -348,6 +348,10 @@ constexpr std::string_view XCThermParameter = "XCThermParameter";
 constexpr std::string_view XCThermWaveHeight = "XCThermWaveHeight";
 constexpr std::string_view XCThermVerticalWindAGL = "XCThermVerticalWindAGL";
 constexpr std::string_view XCThermSelectedLayers = "XCThermSelectedLayers";
+constexpr std::string_view RainbowApiKey = "RainbowApiKey";
+constexpr std::string_view RainbowDisplaySatellite =
+  "RainbowDisplaySatellite";
+constexpr std::string_view RainbowDisplayRain = "RainbowDisplayRain";
 constexpr std::string_view WeatherControlsHeightPercent =
   "WeatherControlsHeightPercent";
 constexpr std::string_view RaspLayerOpacity = "RaspLayerOpacity";

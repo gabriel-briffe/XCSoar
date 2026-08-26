@@ -146,6 +146,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/WeatherControlsConfigPanel.cpp \
 	$(if $(filter y,$(HAVE_HTTP)),$(SRC)/Dialogs/Settings/Panels/PCMetConfigPanel.cpp) \
 	$(if $(filter y,$(HAVE_HTTP)),$(SRC)/Dialogs/Settings/Panels/XCThermConfigPanel.cpp) \
+	$(if $(filter y,$(HAVE_HTTP)),$(SRC)/Dialogs/Settings/Panels/RainbowConfigPanel.cpp) \
 	$(SRC)/Dialogs/Settings/Panels/WeGlideConfigPanel.cpp \
 	\
 	$(SRC)/Dialogs/Task/Widgets/ObservationZoneEditWidget.cpp \
@@ -193,6 +194,7 @@ endif
 ifeq ($(HAVE_HTTP),y)
 DIALOG_SOURCES += \
 	$(SRC)/Dialogs/Weather/XCThermDialog.cpp \
+	$(SRC)/Dialogs/Weather/RainbowDialog.cpp \
 	$(SRC)/Dialogs/Weather/WeatherCredentialGateWidget.cpp \
 	$(SRC)/Dialogs/Weather/PCMetDialog.cpp \
 	$(SRC)/Dialogs/Weather/NOAAList.cpp \
@@ -649,7 +651,11 @@ XCSOAR_SOURCES += \
 	$(SRC)/Weather/SkySight/SkySightClient.cpp \
 	$(SRC)/Weather/SkySight/SkySightCache.cpp \
 	$(SRC)/Weather/SkySight/SkySightAPI.cpp \
-	$(SRC)/Weather/SkySight/SkySightRequest.cpp
+	$(SRC)/Weather/SkySight/SkySightRequest.cpp \
+	$(SRC)/Weather/Rainbow/RainbowAPI.cpp \
+	$(SRC)/Weather/Rainbow/RainbowOverlay.cpp \
+	$(SRC)/Weather/Rainbow/FieldControls.cpp \
+	$(SRC)/Weather/MapOverlay/RainbowControlsModel.cpp
 
 $(call SRC_TO_OBJ,$(SRC)/Weather/SkySight/SkySightFileDecoder.cpp): CPPFLAGS += $(NETCDF_CPPFLAGS)
 endif

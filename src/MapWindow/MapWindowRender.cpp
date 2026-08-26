@@ -10,6 +10,7 @@
 #ifdef HAVE_HTTP
 #include "DataGlobals.hpp"
 #include "Weather/SkySight/SkySightClient.hpp"
+#include "Weather/Rainbow/FieldControls.hpp"
 #endif
 #include "Topography/CachedTopographyRenderer.hpp"
 #include "Renderer/AircraftRenderer.hpp"
@@ -238,6 +239,7 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
 #ifdef HAVE_HTTP
   if (auto skysight = DataGlobals::GetSkySight())
     skysight->Render();
+  Rainbow::Render();
 #endif
 
   draw_sw.Mark("RenderTopography");

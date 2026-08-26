@@ -275,6 +275,7 @@ LookupMacro(std::string_view name, bool &invalid) noexcept
         : C_("Weather control", "Altitude-\n(DOWN)");
 
     case PageLayout::Overlay::SKYSIGHT:
+    case PageLayout::Overlay::RAINBOW:
     case PageLayout::Overlay::RASP:
     case PageLayout::Overlay::NONE:
     case PageLayout::Overlay::MAX:
@@ -295,6 +296,7 @@ LookupMacro(std::string_view name, bool &invalid) noexcept
     case PageLayout::Overlay::SKYSIGHT:
       return "";
 
+    case PageLayout::Overlay::RAINBOW:
     case PageLayout::Overlay::RASP:
     case PageLayout::Overlay::NONE:
     case PageLayout::Overlay::MAX:
@@ -311,6 +313,7 @@ LookupMacro(std::string_view name, bool &invalid) noexcept
       return C_("Weather control", "Altitude\nAuto\n(F3/-)");
 
     case PageLayout::Overlay::SKYSIGHT:
+    case PageLayout::Overlay::RAINBOW:
       return C_("Weather control", "Time\nAuto\n(F3/-)");
 
     case PageLayout::Overlay::RASP:
