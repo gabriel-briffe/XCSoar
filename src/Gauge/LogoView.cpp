@@ -33,11 +33,9 @@ LogoView::LogoView() noexcept try
 #endif
 #ifndef USE_GDI
   font.Load(FontDescription(Layout::FontScale(10)));
-#ifndef NDEBUG
-  FontDescription bold_desc(Layout::FontScale(16));
-  bold_desc.SetBold(true);
-  bold_font.Load(bold_desc);
-#endif
+  FontDescription info_desc(Layout::FontScale(16));
+  info_desc.SetBold(true);
+  info_font.Load(info_desc);
 #endif
 } catch (...) {
   /* ignore Bitmap/Font loader exceptions */
@@ -244,54 +242,28 @@ LogoView::draw(Canvas &canvas, const PixelRect &rc,
   canvas.SetBackgroundTransparent();
   canvas.DrawText({2, 2}, XCSoar_ProductToken);
 
-#ifndef NDEBUG
-  /* Draw debug build warning banner below logo (like "Remove before flight") */
+  /* Build flavour label below the logo (info, not a warning). */
 #ifndef USE_GDI
-  if (bold_font.IsDefined())
-    canvas.Select(bold_font);
+  if (!info_font.IsDefined())
+    return;
+  canvas.Select(info_font);
 #endif
-  
-  const char *warning_text = "DEBUG BUILD - DO NOT FLY!";
-  const auto text_size = canvas.CalcTextSize(warning_text);
-  
-  /* Half character padding (max) */
-  const int padding = text_size.height / 2;
-  const int banner_height = text_size.height + padding * 2;
-  const int banner_width = text_size.width + padding * 2;
-  
-  /* Position banner below the logo/title with some spacing */
+
+  const char *info_text = "Rainbow";
+  const auto text_size = canvas.CalcTextSize(info_text);
+
   int banner_y;
-  if (orientation == LogoViewOrientation::PORTRAIT) {
-    // Below title in portrait mode
+  if (orientation == LogoViewOrientation::PORTRAIT)
     banner_y = title_position.y + title_size.height + spacing / 2;
-  } else if (orientation == LogoViewOrientation::SQUARE) {
-    // Below logo in square mode
+  else if (orientation == LogoViewOrientation::SQUARE)
     banner_y = logo_position.y + logo_size.height + spacing / 2;
-  } else {
-    // Below whichever is lower in landscape mode
+  else
     banner_y = std::max(logo_position.y + logo_size.height,
-                       title_position.y + title_size.height) + spacing / 2;
-  }
-  
-  /* Only draw if banner fits within the visible area */
-  if (banner_y + banner_height <= int(height)) {
-    const PixelRect warning_rect{
-      Center(width, banner_width),
-      banner_y,
-      Center(width, banner_width) + banner_width,
-      banner_y + banner_height
-    };
-    
-    canvas.DrawFilledRectangle(warning_rect, COLOR_RED);
-    canvas.SetTextColor(COLOR_WHITE);
+                        title_position.y + title_size.height) + spacing / 2;
+
+  if (banner_y + int(text_size.height) <= int(height)) {
+    canvas.SetTextColor(dark_mode ? COLOR_WHITE : COLOR_BLACK);
     canvas.SetBackgroundTransparent();
-    
-    const PixelPoint text_pos{
-      warning_rect.left + padding,
-      warning_rect.top + padding
-    };
-    
-    canvas.DrawText(text_pos, warning_text);
+    canvas.DrawText({Center(width, text_size.width), banner_y}, info_text);
   }
-#endif
 }

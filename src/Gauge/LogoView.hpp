@@ -17,9 +17,7 @@ class LogoView {
 
 #ifndef USE_GDI
   Font font;
-#ifndef NDEBUG
-  Font bold_font;
-#endif
+  Font info_font;
 #endif
 
 public:
