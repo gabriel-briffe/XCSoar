@@ -19,24 +19,47 @@
 
 MergeThread::MergeThread(DeviceBlackboard &_device_blackboard,
                          MultipleDevices *_devices,
-                         TraceComputer *_trail_vario_sink) noexcept
-  :WorkerThread("MergeThread",
-#ifdef KOBO
-                /* throttle more on the Kobo, because the EPaper
-                   screen cannot be updated that often */
-                std::chrono::milliseconds{450},
-                std::chrono::milliseconds{100},
-#else
-                std::chrono::milliseconds{50},
-                std::chrono::milliseconds{20},
-#endif
-                std::chrono::milliseconds{10}),
+                         TraceComputer *_trail_vario_sink,
+                         bool slow) noexcept
+  :WorkerThread("MergeThread"),
    device_blackboard(_device_blackboard),
    devices(_devices),
    trail_vario_sink(_trail_vario_sink)
 {
+  SetSlow(slow);
   last_fix.Reset();
   last_any.Reset();
+}
+
+MergeThread::Periods
+MergeThread::MakePeriods(bool slow) noexcept
+{
+  Periods p;
+#ifdef KOBO
+  /* throttle more on the Kobo, because the EPaper screen cannot be
+     updated that often */
+  p.period_min = std::chrono::milliseconds{450};
+  p.idle_min = std::chrono::milliseconds{100};
+#else
+  p.period_min = std::chrono::milliseconds{50};
+  p.idle_min = std::chrono::milliseconds{20};
+#endif
+  p.delay = std::chrono::milliseconds{10};
+
+  if (slow) {
+    p.period_min *= 10;
+    p.idle_min *= 10;
+    p.delay *= 10;
+  }
+
+  return p;
+}
+
+void
+MergeThread::SetSlow(bool slow) noexcept
+{
+  const Periods p = MakePeriods(slow);
+  SetPeriods(p.period_min, p.idle_min, p.delay);
 }
 
 void

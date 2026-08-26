@@ -11,6 +11,8 @@ SystemSettings::SetDefaults()
   for (unsigned i = 0; i < devices.size(); ++i)
     devices[i].Clear();
 
+  slow_merge_thread = false;
+
   if (IsAndroid() || IsApple()) {
     devices[INTERNAL_DEVICE_SLOT].port_type = DeviceConfig::PortType::INTERNAL;
   } else {

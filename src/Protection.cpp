@@ -78,7 +78,8 @@ CreateCalculationThread() noexcept
   backend_components->merge_thread =
     std::make_unique<MergeThread>(*backend_components->device_blackboard,
                                   backend_components->devices.get(),
-                                  &backend_components->glide_computer->GetTraceComputer());
+                                  &backend_components->glide_computer->GetTraceComputer(),
+                                  CommonInterface::GetSystemSettings().slow_merge_thread);
   backend_components->merge_thread->FirstRun();
 
   /* copy the MergeThead::FirstRun() results to the

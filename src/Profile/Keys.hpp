@@ -186,6 +186,7 @@ constexpr std::string_view PEVStartWindow = "PEVStartWindow";
 
 constexpr std::string_view EnableNavBaroAltitude = "EnableNavBaroAltitude";
 
+constexpr std::string_view SlowMergeThread = "SlowMergeThread";
 constexpr std::string_view LoggerTimeStepCruise = "LoggerTimeStepCruise";
 constexpr std::string_view LoggerTimeStepCircling = "LoggerTimeStepCircling";
 

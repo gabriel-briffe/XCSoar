@@ -16,7 +16,7 @@ private:
   Cond trigger_cond;
   bool trigger_flag = false;
 
-  const Duration period_min, idle_min, delay;
+  Duration period_min, idle_min, delay;
 
 public:
   /**
@@ -32,6 +32,22 @@ public:
   WorkerThread(const char *_name,
                Duration period_min={}, Duration idle_min={},
                Duration delay={}) noexcept;
+
+  /**
+   * Change rate-limit parameters (e.g. "slow merge thread").  Takes
+   * effect on the next Tick()/idle cycle.
+   */
+  void SetPeriods(Duration _period_min, Duration _idle_min,
+                  Duration _delay) noexcept {
+    const std::lock_guard lock{mutex};
+    period_min = _period_min;
+    idle_min = _idle_min;
+    delay = _delay;
+  }
+
+  virtual Duration GetPeriodMin() const noexcept {
+    return period_min;
+  }
 
   /**
    * Wakes up the thread to do work, calls tick().
@@ -77,16 +93,6 @@ public:
   }
 
 protected:
-  /**
-   * Rate-limit for the next idle after Tick().  Subclasses may drop
-   * this (e.g. IGC replay on fast hosts) so GPS-driven computers keep
-   * ~1 Hz samples.
-   */
-  [[gnu::pure]]
-  virtual Duration GetPeriodMin() const noexcept {
-    return period_min;
-  }
-
   virtual void Run() noexcept;
 
   /**

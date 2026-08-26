@@ -12,6 +12,12 @@
 struct SystemSettings {
   std::array<DeviceConfig, NUMDEV> devices;
 
+  /**
+   * When true, MergeThread rate limits are multiplied by 10 (saves
+   * CPU/battery; higher latency for vario audio/bar).
+   */
+  bool slow_merge_thread;
+
   void SetDefaults();
 };
 

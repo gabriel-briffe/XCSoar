@@ -40,6 +40,11 @@
 #include "Profile/Profile.hpp"
 #include "Profile/DeviceConfig.hpp"
 #include "Interface.hpp"
+#include "Form/CheckBox.hpp"
+#include "BackendComponents.hpp"
+#include "Components.hpp"
+#include "MergeThread.hpp"
+#include "SystemSettings.hpp"
 
 #ifdef ANDROID
 #include "java/Global.hxx"
@@ -56,6 +61,8 @@ class DeviceListWidget final
   MultipleDevices *const devices;
 
   const DialogLook &look;
+
+  CheckBoxControl slow_merge;
 
   unsigned font_height;
 
@@ -213,6 +220,22 @@ public:
   void CreateButtons(WidgetDialog &dialog);
 
 protected:
+  static PixelRect ListRect(PixelRect rc) noexcept {
+    rc.bottom -= Layout::GetMaximumControlHeight();
+    if (rc.bottom < rc.top)
+      rc.bottom = rc.top;
+    return rc;
+  }
+
+  static PixelRect CheckRect(PixelRect rc) noexcept {
+    rc.top = rc.bottom - Layout::GetMaximumControlHeight();
+    if (rc.top < 0)
+      rc.top = 0;
+    return rc;
+  }
+
+  void OnSlowMerge(bool value) noexcept;
+
   bool RefreshList();
 
   void UpdateButtons();
@@ -230,7 +253,8 @@ public:
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
 
   void Show(const PixelRect &rc) noexcept override {
-    ListWidget::Show(rc);
+    ListWidget::Show(ListRect(rc));
+    slow_merge.MoveAndShow(CheckRect(rc));
 
     if (devices != nullptr)
       devices->AddPortListener(*this);
@@ -241,12 +265,18 @@ public:
   }
 
   void Hide() noexcept override {
+    slow_merge.FastHide();
     ListWidget::Hide();
 
     CommonInterface::GetLiveBlackboard().RemoveListener(*this);
 
     if (devices != nullptr)
       devices->RemovePortListener(*this);
+  }
+
+  void Move(const PixelRect &rc) noexcept override {
+    ListWidget::Move(ListRect(rc));
+    slow_merge.Move(CheckRect(rc));
   }
 
   /* virtual methods from class List::Handler */
@@ -271,13 +301,30 @@ DeviceListWidget::Prepare(ContainerWindow &parent,
   const DialogLook &look = UIGlobals::GetDialogLook();
   const unsigned margin = Layout::GetTextPadding();
   font_height = look.list.font->GetHeight();
-  CreateList(parent, look, rc, 3 * margin + font_height +
+  CreateList(parent, look, ListRect(rc), 3 * margin + font_height +
              look.small_font.GetHeight()).SetLength(NUMDEV);
+
+  slow_merge.CreateInDialogForm(parent, look, _("Slow merge thread"),
+                                CheckRect(rc),
+                                [this](bool value){ OnSlowMerge(value); });
+  slow_merge.SetState(CommonInterface::GetSystemSettings().slow_merge_thread);
 
   for (Item &i : items)
     i.Clear();
 
   UpdateButtons();
+}
+
+void
+DeviceListWidget::OnSlowMerge(bool value) noexcept
+{
+  CommonInterface::SetSystemSettings().slow_merge_thread = value;
+  Profile::Set(ProfileKeys::SlowMergeThread, value);
+  Profile::Save();
+
+  if (backend_components != nullptr &&
+      backend_components->merge_thread != nullptr)
+    backend_components->merge_thread->SetSlow(value);
 }
 
 bool

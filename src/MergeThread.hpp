@@ -45,7 +45,14 @@ class MergeThread final : public WorkerThread {
 public:
   MergeThread(DeviceBlackboard &_device_blackboard,
               MultipleDevices *_devices,
-              TraceComputer *_trail_vario_sink=nullptr) noexcept;
+              TraceComputer *_trail_vario_sink=nullptr,
+              bool slow=false) noexcept;
+
+  /**
+   * Multiply WorkerThread rate limits by 10 (or restore defaults).
+   * Safe to call while the thread is running.
+   */
+  void SetSlow(bool slow) noexcept;
 
   /**
    * This method is called during XCSoar startup, for the initial run
@@ -72,6 +79,13 @@ public:
   }
 
 private:
+  struct Periods {
+    Duration period_min, idle_min, delay;
+  };
+
+  [[gnu::pure]]
+  static Periods MakePeriods(bool slow) noexcept;
+
   void Process() noexcept;
 
   /**

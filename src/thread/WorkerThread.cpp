@@ -34,9 +34,15 @@ WorkerThread::Run() noexcept
         trigger_cond.wait(lock);
     }
 
+    /* Snapshot rate limits under the mutex (SetPeriods may change
+       them from another thread). */
+    const Duration current_delay = delay;
+    const Duration current_period_min = period_min;
+    const Duration current_idle_min = idle_min;
+
     /* got the "stop" trigger? */
-    if (delay.count() > 0
-        ? _WaitForStopped(lock, delay)
+    if (current_delay.count() > 0
+        ? _WaitForStopped(lock, current_delay)
         : _CheckStoppedOrSuspended(lock))
       break;
 
@@ -49,16 +55,17 @@ WorkerThread::Run() noexcept
       const ScopeUnlock unlock(mutex);
 
       /* do the actual work */
-      clock.Update();
+      if (current_period_min.count() > 0)
+        clock.Update();
+
       Tick();
     }
 
-    auto idle = idle_min;
-    const auto pmin = GetPeriodMin();
-    if (pmin.count() > 0) {
+    auto idle = current_idle_min;
+    if (current_period_min.count() > 0) {
       const auto elapsed = clock.Elapsed();
-      if (elapsed + idle < pmin)
-        idle = pmin - elapsed;
+      if (elapsed + idle < current_period_min)
+        idle = current_period_min - elapsed;
     }
 
     if (idle.count() > 0 && _WaitForStopped(lock, idle))
