@@ -10,7 +10,6 @@
 
 #ifdef ENABLE_OPENGL
 #include "Topography/ShapeRenderer.hpp"
-#include "Geo/FAISphere.hpp"
 #endif
 
 #include <zzip/lib.h>
@@ -258,15 +257,10 @@ TopographyFile::Update(const WindowProjection &map_projection,
           map_projection.PixelsToAngle(SHAPE_MIN_BBOX_PX);
         const GeoBounds &b = it->shape->get_bounds();
         if (b.GetWidth() >= min_span || b.GetHeight() >= min_span) {
-          const unsigned level =
-            GetThinningLevel(map_projection.GetMapScale());
-          if (layout_scale == 0)
-            layout_scale = 1;
-          const ShapeScalar min_distance =
-            ShapeScalar(GetMinimumPointDistance(level))
-            / (layout_scale * FAISphere::REARTH);
+          const ShapeScalar fill_min_distance =
+            ShapeScalar(map_projection.PixelsToAngle(1).Native());
           [[maybe_unused]] const auto indices =
-            it->shape->GetIndices(int(level), min_distance);
+            it->shape->GetIndices(0, fill_min_distance);
         }
       }
 #endif

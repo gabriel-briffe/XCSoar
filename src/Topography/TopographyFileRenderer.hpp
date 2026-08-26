@@ -97,6 +97,10 @@ private:
 
 #ifdef ENABLE_OPENGL
   void UpdateArrayBuffer() noexcept;
+  void PaintOpenGL(const WindowProjection &projection) noexcept;
+#else
+  void PaintSoftware(Canvas &canvas,
+                     const WindowProjection &projection) noexcept;
 #endif
 
   void PaintPoints(Canvas &canvas, const WindowProjection &projection) noexcept;

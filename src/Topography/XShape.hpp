@@ -62,8 +62,8 @@ private:
   std::array<uint16_t *, THINNING_LEVELS> indices{};
 
   /**
-   * For polygons this will contain the total number of triangle vertices
-   * for each thinning level.
+   * For polygons this will contain the number of triangle indices
+   * (GL_TRIANGLES) per ring, then the indices (local to each ring).
    * For lines there will be an array of size num_lines for each thinning
    * level, which contains the number of points for each line.
    */

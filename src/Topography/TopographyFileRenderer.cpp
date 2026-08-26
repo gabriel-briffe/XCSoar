@@ -28,10 +28,11 @@
 #include <glm/gtc/type_ptr.hpp>
 #endif
 
-#include <string>
 #include <algorithm>
 #include <numeric>
 #include <set>
+#include <span>
+#include <string>
 
 TopographyFileRenderer::TopographyFileRenderer(const TopographyFile &_file,
                                                const TopographyLook &_look) noexcept
@@ -69,6 +70,148 @@ ShapeTooSmallToDraw(const XShape &shape, Angle min_span) noexcept
   return shape.get_type() == MS_SHAPE_POLYGON &&
     ShapeTooSmall(shape.get_bounds(), min_span);
 }
+
+#ifdef ENABLE_OPENGL
+
+namespace {
+
+static constexpr unsigned GLUSHORT_VERTEX_LIMIT = 0x10000;
+
+class FillIndexBatch {
+  ScopeVertexPointer &vp;
+  const ShapePoint *const buffer;
+  std::vector<GLsizei> counts;
+  std::vector<GLushort> indices;
+  unsigned batch_base = 0;
+
+public:
+  FillIndexBatch(ScopeVertexPointer &_vp,
+                 const ShapePoint *_buffer) noexcept
+    :vp(_vp), buffer(_buffer) {}
+
+  void Flush() noexcept;
+  bool Add(unsigned offset, unsigned n_verts,
+           const GLushort *idx, unsigned n) noexcept;
+};
+
+void
+FillIndexBatch::Flush() noexcept
+{
+#ifdef GL_EXT_multi_draw_arrays
+  if (indices.empty())
+    return;
+
+  std::vector<const GLushort *> pointers;
+  pointers.reserve(counts.size());
+  unsigned i = 0;
+  for (auto count : counts) {
+    pointers.push_back(indices.data() + i);
+    i += count;
+  }
+
+  vp.Update(GL_FLOAT, buffer + batch_base);
+  GLExt::MultiDrawElements(GL_TRIANGLES, counts.data(),
+                           GL_UNSIGNED_SHORT,
+                           (const GLvoid **)pointers.data(),
+                           counts.size());
+  counts.clear();
+  indices.clear();
+#endif
+}
+
+bool
+FillIndexBatch::Add(unsigned offset, unsigned n_verts,
+                    const GLushort *idx, unsigned n) noexcept
+{
+#ifdef GL_EXT_multi_draw_arrays
+  if (!GLExt::HaveMultiDrawElements() ||
+      n_verts == 0 || n_verts > GLUSHORT_VERTEX_LIMIT)
+    return false;
+
+  if (indices.empty())
+    batch_base = offset;
+  else if (offset < batch_base ||
+           n_verts > GLUSHORT_VERTEX_LIMIT - (offset - batch_base)) {
+    Flush();
+    batch_base = offset;
+  }
+
+  const unsigned base = offset - batch_base;
+  counts.push_back(GLsizei(n));
+  const std::size_t size = indices.size();
+  indices.resize(size + n, GLushort(base));
+  for (unsigned i = 0; i < n; ++i)
+    indices[size + i] += idx[i];
+  return true;
+#else
+  (void)offset;
+  (void)n_verts;
+  (void)idx;
+  (void)n;
+  return false;
+#endif
+}
+
+[[gnu::pure]]
+static ShapeScalar
+FillMinDistance(const WindowProjection &projection) noexcept
+{
+  return ShapeScalar(projection.PixelsToAngle(1).Native());
+}
+
+static void
+PaintOpenGLLine(ScopeVertexPointer &vp, const ShapePoint *points,
+                std::span<const uint16_t> lines, const XShape &shape,
+                unsigned level, ShapeScalar min_distance) noexcept
+{
+  vp.Update(GL_FLOAT, points);
+
+  XShape::Indices indices;
+  if (level == 0 ||
+      (indices = shape.GetIndices(level, min_distance)).indices == nullptr) {
+    unsigned offset = 0;
+    for (unsigned n : lines) {
+      glDrawArrays(GL_LINE_STRIP, offset, n);
+      offset += n;
+    }
+    return;
+  }
+
+  for (unsigned n : std::span<const GLushort>{indices.count, lines.size()}) {
+    glDrawElements(GL_LINE_STRIP, n, GL_UNSIGNED_SHORT, indices.indices);
+    indices.indices += n;
+  }
+}
+
+static void
+PaintOpenGLPolygon(ScopeVertexPointer &vp, const ShapePoint *buffer,
+                   const XShape &shape, ShapeScalar fill_min_distance,
+                   FillIndexBatch &batch) noexcept
+{
+  const auto triangles = shape.GetIndices(0, fill_min_distance);
+  if (triangles.indices == nullptr || triangles.count == nullptr)
+    return;
+
+  const GLushort *idx = triangles.indices;
+  const GLushort *counts = triangles.count;
+  unsigned vbase = 0;
+  for (const unsigned nv : shape.GetLines()) {
+    const unsigned n = *counts++;
+    if (n >= 3) {
+      const unsigned offset = shape.GetOffset() + vbase;
+      if (!batch.Add(offset, nv, idx, n)) {
+        vp.Update(GL_FLOAT, buffer + offset);
+        glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_SHORT, idx);
+      }
+    }
+    idx += n;
+    vbase += nv;
+  }
+}
+
+} // namespace
+
+#endif
 
 void
 TopographyFileRenderer::UpdateVisibleShapes(const WindowProjection &projection) noexcept
@@ -187,6 +330,17 @@ TopographyFileRenderer::Paint(Canvas &canvas,
     return;
 
 #ifdef ENABLE_OPENGL
+  PaintOpenGL(projection);
+#else
+  PaintSoftware(canvas, projection);
+#endif
+}
+
+#ifdef ENABLE_OPENGL
+
+void
+TopographyFileRenderer::PaintOpenGL(const WindowProjection &projection) noexcept
+{
   OpenGL::solid_shader->Use();
 
   UpdateArrayBuffer();
@@ -199,36 +353,67 @@ TopographyFileRenderer::Paint(Canvas &canvas,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   }
-#else
-  shape_renderer.Configure(&pen, &brush);
-#endif
 
-  // get drawing info
-
-#ifdef ENABLE_OPENGL
+  const auto map_scale = projection.GetMapScale();
   const unsigned level = file.GetThinningLevel(map_scale);
   const ShapeScalar min_distance =
     ShapeScalar(file.GetMinimumPointDistance(level))
     / (Layout::Scale(1) * FAISphere::REARTH);
+  const ShapeScalar fill_min_distance = FillMinDistance(projection);
 
   glUniformMatrix4fv(OpenGL::solid_modelview, 1, GL_FALSE,
                      glm::value_ptr(ToGLM(projection, file.GetCenter())));
+
+  ScopeVertexPointer vp;
+  FillIndexBatch batch(vp, buffer);
+
+  const Angle min_span =
+    projection.PixelsToAngle(SHAPE_MIN_BBOX_PX);
+
+  for (const XShape *shape_p : visible_shapes) {
+    const XShape &shape = *shape_p;
+    if (ShapeTooSmallToDraw(shape, min_span))
+      continue;
+
+    switch (shape.get_type()) {
+    case MS_SHAPE_NULL:
+    case MS_SHAPE_POINT:
+      break;
+
+    case MS_SHAPE_LINE:
+      PaintOpenGLLine(vp, buffer + shape.GetOffset(),
+                      shape.GetLines(), shape, level, min_distance);
+      break;
+
+    case MS_SHAPE_POLYGON:
+      PaintOpenGLPolygon(vp, buffer, shape, fill_min_distance, batch);
+      break;
+    }
+  }
+
+  batch.Flush();
+
+  glUniformMatrix4fv(OpenGL::solid_modelview, 1, GL_FALSE,
+                     glm::value_ptr(glm::mat4(1)));
+  if (!pen.GetColor().IsOpaque())
+    glDisable(GL_BLEND);
+
+  pen.Unbind();
+  array_buffer->Unbind();
+}
+
 #else // !ENABLE_OPENGL
+
+void
+TopographyFileRenderer::PaintSoftware(Canvas &canvas,
+                                      const WindowProjection &projection) noexcept
+{
+  shape_renderer.Configure(&pen, &brush);
+
   const GeoClip clip(projection.GetScreenBounds().Scale(1.1));
   AllocatedArray<GeoPoint> geo_points;
 
-  const unsigned iskip = file.GetSkipSteps(map_scale);
-#endif
-
-#ifdef ENABLE_OPENGL
-  ScopeVertexPointer vp;
-
-#ifdef GL_EXT_multi_draw_arrays
-  std::vector<GLsizei> polygon_counts;
-  std::vector<GLushort> polygon_indices;
-#endif
-#endif
-
+  const unsigned iskip = file.GetSkipSteps(projection.GetMapScale());
   const Angle min_span =
     projection.PixelsToAngle(SHAPE_MIN_BBOX_PX);
 
@@ -239,11 +424,7 @@ TopographyFileRenderer::Paint(Canvas &canvas,
       continue;
 
     const auto lines = shape.GetLines();
-#ifdef ENABLE_OPENGL
-    const ShapePoint *points = buffer + shape.GetOffset();
-#else // !ENABLE_OPENGL
     const GeoPoint *points = shape.GetPoints();
-#endif
 
     switch (shape.get_type()) {
     case MS_SHAPE_NULL:
@@ -251,79 +432,23 @@ TopographyFileRenderer::Paint(Canvas &canvas,
       break;
 
     case MS_SHAPE_LINE:
-      {
-#ifdef ENABLE_OPENGL
-        vp.Update(GL_FLOAT, points);
-
-        XShape::Indices indices;
-        if (level == 0 ||
-            (indices = shape.GetIndices(level, min_distance)).indices == nullptr) {
-          unsigned offset = 0;
-          for (unsigned n : lines) {
-            glDrawArrays(GL_LINE_STRIP, offset, n);
-            offset += n;
-          }
-        } else {
-          for (unsigned n : std::span<const GLushort>{indices.count, lines.size()}) {
-            glDrawElements(GL_LINE_STRIP, n, GL_UNSIGNED_SHORT,
-                           indices.indices);
-            indices.indices += n;
-          }
-        }
-#else // !ENABLE_OPENGL
-        for (unsigned msize : lines) {
+      for (unsigned msize : lines) {
         shape_renderer.Begin(msize);
 
         const GeoPoint *end = points + msize - 1;
         for (; points < end; ++points)
           shape_renderer.AddPointIfDistant(projection.GeoToScreen(*points));
 
-        // make sure we always draw the last point
         shape_renderer.AddPoint(projection.GeoToScreen(*points));
-
         shape_renderer.FinishPolyline(canvas);
-      }
-#endif
       }
       break;
 
     case MS_SHAPE_POLYGON:
-#ifdef ENABLE_OPENGL
       {
-        const auto triangles = shape.GetIndices(level, min_distance);
-        if (triangles.indices == nullptr || triangles.count == nullptr ||
-            *triangles.count == 0)
-          break;
-
-        const unsigned n = *triangles.count;
-
-#ifdef GL_EXT_multi_draw_arrays
-        const unsigned offset = shape.GetOffset();
-        if (GLExt::HaveMultiDrawElements() && offset + n < 0x10000) {
-          /* postpone, draw many polygons with a single
-             glMultiDrawElements() call */
-          polygon_counts.push_back(n);
-          const size_t size = polygon_indices.size();
-          polygon_indices.resize(size + n, offset);
-          for (unsigned i = 0; i < n; ++i)
-            polygon_indices[size + i] += triangles.indices[i];
-          break;
-        }
-#endif
-
-        vp.Update(GL_FLOAT, points);
-        glDrawElements(GL_TRIANGLE_STRIP, n, GL_UNSIGNED_SHORT,
-                       triangles.indices);
-      }
-#else // !ENABLE_OPENGL
-      {
-        const GeoPoint *src = &points[0];
+        const GeoPoint *src = points;
         for (const unsigned n : lines) {
           unsigned msize = n / iskip;
-
-          /* copy all polygon points into the geo_points array and
-             clip them, to avoid integer overflows (as PixelPoint may
-             store only 16 bit integers on some platforms) */
 
           geo_points.GrowDiscard(msize * 4);
           for (unsigned i = 0; i < msize; ++i)
@@ -331,59 +456,29 @@ TopographyFileRenderer::Paint(Canvas &canvas,
 
           msize = clip.ClipPolygon(geo_points.data(),
                                    geo_points.data(), msize);
-          if (msize < 3)
+          if (msize < 3) {
+            src += n;
             continue;
+          }
 
           shape_renderer.Begin(msize);
 
-          for (unsigned i = 0; i < msize; ++i) {
-            GeoPoint g = geo_points[i];
-            shape_renderer.AddPointIfDistant(projection.GeoToScreen(g));
-          }
+          for (unsigned i = 0; i < msize; ++i)
+            shape_renderer.AddPointIfDistant(
+              projection.GeoToScreen(geo_points[i]));
 
           shape_renderer.FinishPolygon(canvas);
-
           src += n;
         }
       }
-#endif
       break;
     }
   }
-#ifdef ENABLE_OPENGL
 
-#ifdef GL_EXT_multi_draw_arrays
-  if (!polygon_indices.empty()) {
-    assert(GLExt::HaveMultiDrawElements());
-
-    std::vector<const GLushort *> polygon_pointers;
-    unsigned i = 0;
-    for (auto count : polygon_counts) {
-      polygon_pointers.push_back(polygon_indices.data() + i);
-      i += count;
-    }
-
-    vp.Update(GL_FLOAT, buffer);
-
-    GLExt::MultiDrawElements(GL_TRIANGLE_STRIP, polygon_counts.data(),
-                             GL_UNSIGNED_SHORT,
-                             (const GLvoid **)polygon_pointers.data(),
-                             polygon_counts.size());
-  }
-#endif
-
-  glUniformMatrix4fv(OpenGL::solid_modelview, 1, GL_FALSE,
-                     glm::value_ptr(glm::mat4(1)));
-  if (!pen.GetColor().IsOpaque())
-    glDisable(GL_BLEND);
-
-  pen.Unbind();
-
-  array_buffer->Unbind();
-#else
   shape_renderer.Commit();
-#endif
 }
+
+#endif
 
 /**
  * Map scale (metres) at which labels use the largest font (circuit).

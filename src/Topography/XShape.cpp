@@ -4,7 +4,6 @@
 #include "Topography/XShape.hpp"
 #include "Convert.hpp"
 #include "util/Compiler.h"
-#include "util/StaticArray.hxx"
 #include "util/StringAPI.hxx"
 #include "util/UTF8.hpp"
 #include "util/StringStrip.hxx"
@@ -276,46 +275,6 @@ XShape::~XShape() noexcept = default;
 
 #ifdef ENABLE_OPENGL
 
-/**
- * Ear-clip a ring.  Rings larger than TARGET are subsampled in O(n)
- * first at every thinning level; PolygonToTriangles() itself is O(n²)
- * and a large landcover ring would freeze the topography loader.
- */
-static unsigned
-PolygonToTrianglesThinned(const ShapePoint *src, unsigned n,
-                          GLushort *triangles,
-                          ShapeScalar min_distance) noexcept
-{
-  constexpr unsigned TARGET = 128;
-  /* orig[] stores source vertex indices in GLushort. */
-  assert(n > 0 && n - 1 <= 0xffff);
-
-  if (n <= TARGET)
-    return PolygonToTriangles(src, n, triangles, min_distance);
-
-  StaticArray<ShapePoint, TARGET + 1> thin_pts;
-  StaticArray<GLushort, TARGET + 1> orig;
-
-  const unsigned stride = (n + TARGET - 1) / TARGET;
-  for (unsigned i = 0; i < n; i += stride) {
-    orig.append(i);
-    thin_pts.append(src[i]);
-  }
-  if (orig.back() != GLushort(n - 1)) {
-    orig.append(n - 1);
-    thin_pts.append(src[n - 1]);
-  }
-
-  /* PolygonToTriangles writes at most 3*(m-2) indices for m vertices;
-     m <= TARGET+1. */
-  GLushort tmp[3 * (TARGET + 1)];
-  const unsigned count =
-    PolygonToTriangles(thin_pts.data(), thin_pts.size(), tmp, 0);
-  for (unsigned j = 0; j < count; ++j)
-    triangles[j] = orig[tmp[j]];
-  return count;
-}
-
 inline bool
 XShape::BuildIndices(unsigned thinning_level, ShapeScalar min_distance) noexcept
 {
@@ -360,29 +319,27 @@ XShape::BuildIndices(unsigned thinning_level, ShapeScalar min_distance) noexcept
     // TODO: free memory saved by thinning (use malloc/realloc or some class?)
     return true;
   } else if (type == MS_SHAPE_POLYGON) {
-    const unsigned max_triangle_indices =
-      num_points > 2 ? 3 * (num_points - 2) : 0;
-    index_count[thinning_level] = std::make_unique<GLushort[]>(
-      1 + MaxTriangleStripSize(max_triangle_indices));
-    idx_count = index_count[thinning_level].get();
-    indices[thinning_level] = idx = idx_count + 1;
+    /* One GL_TRIANGLES list per ring, with indices local to that
+       ring.  Combining rings into a strip (or adding a 16-bit vertex
+       base) wraps and draws long overlapping slivers. */
+    unsigned max_triangle_indices = 0;
+    for (std::size_t i = 0; i < num_lines; i++)
+      if (lines[i] > 2)
+        max_triangle_indices += 3 * (lines[i] - 2);
 
-    *idx_count = 0;
+    index_count[thinning_level] = std::make_unique<GLushort[]>(
+      num_lines + max_triangle_indices);
+    idx_count = index_count[thinning_level].get();
+    indices[thinning_level] = idx = idx_count + num_lines;
+
     const ShapePoint *pt = points.get();
-    for (std::size_t i=0; i < num_lines; i++) {
-      std::size_t count = PolygonToTrianglesThinned(pt, lines[i],
-                                                    idx + *idx_count,
-                                                    min_distance);
-      if (i > 0) {
-        const GLushort offset = pt - points.get();
-        const std::size_t max_idx_count = *idx_count + count;
-        for (std::size_t j = *idx_count; j < max_idx_count; j++)
-          idx[j] += offset;
-      }
-      *idx_count += count;
+    for (std::size_t i = 0; i < num_lines; i++) {
+      const unsigned count = PolygonToTriangles(pt, lines[i], idx,
+                                                min_distance);
+      *idx_count++ = GLushort(count);
+      idx += count;
       pt += lines[i];
     }
-    *idx_count = TriangleToStrip(idx, *idx_count, num_points, num_lines);
     // TODO: free memory saved by thinning (use malloc/realloc or some class?)
     return true;
   } else {
