@@ -301,6 +301,9 @@ Libraries and code segments are included from the following projects:
  Graham Scan convex hull code
  http://marknelson.us/2007/08/22/convex/
 
+ Mapbox earcut.hpp (OpenGL polygon tessellation)
+ https://github.com/mapbox/earcut.hpp
+
  IMIAPI code by Juraj Rojko from IMI-Gliding
 
  Circling wind analyser by André Somers (Cumulus)

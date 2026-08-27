@@ -62,6 +62,8 @@ OPENGL_LDLIBS = -lGLESv2 -ldl
 endif
 
 OPENGL_CPPFLAGS += $(GLM_CPPFLAGS)
+include $(topdir)/build/libearcut.mk
+OPENGL_CPPFLAGS += $(EARCUT_CPPFLAGS)
 
 # Needed for native VBO support
 OPENGL_CPPFLAGS += -DGL_GLEXT_PROTOTYPES
