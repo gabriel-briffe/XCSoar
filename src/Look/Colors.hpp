@@ -71,19 +71,23 @@ static constexpr Color COLOR_AIRSPACE_WARNING_NEAR_ACK =
 
 /**
  * XCTherm overlay palette.
+ *
+ * AROME-like ramps with HSL S=100% and even H/L steps; cream for
+ * ±0.2; >+4 purple matches dark-red lightness (#8F008F).
  */
-static constexpr Color COLOR_XCTHERM_BLUE = Color(0x00, 0x00, 0xc8);
-static constexpr Color COLOR_XCTHERM_BRIGHT_CYAN = Color(0x00, 0xd0, 0xff);
-static constexpr Color COLOR_XCTHERM_SKY_BLUE = Color(0x60, 0xe0, 0xff);
-static constexpr Color COLOR_XCTHERM_LIGHT_BLUE = Color(0xa0, 0xe8, 0xff);
-static constexpr Color COLOR_XCTHERM_PALE_BLUE = Color(0xc8, 0xf0, 0xff);
-static constexpr Color COLOR_XCTHERM_CREAM = Color(0xf0, 0xf0, 0xc0);
-static constexpr Color COLOR_XCTHERM_YELLOW = Color(0xff, 0xff, 0x00);
-static constexpr Color COLOR_XCTHERM_GOLD = Color(0xff, 0xd0, 0x00);
-static constexpr Color COLOR_XCTHERM_ORANGE = Color(0xff, 0xa0, 0x00);
-static constexpr Color COLOR_XCTHERM_RED_ORANGE = Color(0xff, 0x40, 0x00);
-static constexpr Color COLOR_XCTHERM_RED = Color(0xff, 0x00, 0x00);
-static constexpr Color COLOR_XCTHERM_PURPLE = Color(0xa0, 0x20, 0xf0);
+static constexpr Color COLOR_XCTHERM_BLUE = Color(0x00, 0x00, 0x8f);       /* ≤-3 */
+static constexpr Color COLOR_XCTHERM_BRIGHT_CYAN = Color(0x00, 0x31, 0xb2); /* mid -2.5 */
+static constexpr Color COLOR_XCTHERM_SKY_BLUE = Color(0x00, 0x76, 0xd6);    /* mid -1.5 */
+static constexpr Color COLOR_XCTHERM_LIGHT_BLUE = Color(0x00, 0xca, 0xf5);  /* mid -0.75 */
+static constexpr Color COLOR_XCTHERM_PALE_BLUE = Color(0x1a, 0xff, 0xe8);   /* mid -0.35 */
+static constexpr Color COLOR_XCTHERM_CREAM = Color(0xe3, 0xe3, 0xa0);       /* ±0.2 */
+static constexpr Color COLOR_XCTHERM_YELLOW = Color(0xff, 0xff, 0x00);      /* mid +0.35 */
+static constexpr Color COLOR_XCTHERM_GOLD = Color(0xe3, 0xaa, 0x00);        /* mid +0.75 */
+static constexpr Color COLOR_XCTHERM_ORANGE = Color(0xc7, 0x63, 0x00);      /* mid +1.5 */
+static constexpr Color COLOR_XCTHERM_RED_ORANGE = Color(0xab, 0x2b, 0x00);  /* mid +2.5 */
+static constexpr Color COLOR_XCTHERM_RED = Color(0x8f, 0x00, 0x00);         /* mid +3.5 */
+static constexpr Color COLOR_XCTHERM_PURPLE = Color(0x8f, 0x00, 0x8f);      /* >+4 */
+
 
 /** Instantaneous external wind arrow (map overlay). */
 static constexpr Color COLOR_WIND_ARROW_INSTANTANEOUS =
