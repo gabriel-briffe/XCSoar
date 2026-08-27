@@ -145,6 +145,11 @@ Version 7.46 - not yet released
   - add Pages and WiFi List to the Quick Menu command list
   - keep pan-mode menu buttons about 20 mm tall on tall phones,
     large enough for a gloved tap
+  - fix blurry icons on high-DPI screens, most visible on the large
+    waypoint list icons, by rendering the icon set at a higher
+    resolution
+* documentation
+  - describe the T Next Leg InfoBox and how to use it at a turn
 * development
   - documentation: document the release and post-release version workflow
   - macOS/iOS: read TESTING=y from darwin/.env, so Xcode builds can
