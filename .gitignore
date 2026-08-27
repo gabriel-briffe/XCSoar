@@ -38,3 +38,6 @@ build/local-config.mk
 .ccache
 messages.mo
 po/*.mo
+
+# Local reference copy of mapbox/earcut.hpp (not vendored into the build yet)
+lib/earcut/
