@@ -138,7 +138,7 @@ int main()
     ok1(parts[1].size() == 1 && parts[1][0].size() >= 4);
   }
 
-  /* --- Cleanup: concave L becomes multiple convex pieces --- */
+  /* --- Cleanup: concave L stays one simple exterior --- */
   {
     Ring ell;
     ell.push_back(P(0, 0));
@@ -149,14 +149,9 @@ int main()
     ell.push_back(P(0, 2));
     ell.push_back(P(0, 0));
     auto parts = CleanExterior(ell);
-    ok1(parts.size() >= 2);
-    ok1(parts.size() <= 4);
-    /* Each piece is a single exterior ring with at least a triangle. */
-    bool all_ok = !parts.empty();
-    for (const auto &poly : parts)
-      if (poly.size() != 1 || poly[0].size() < 4)
-        all_ok = false;
-    ok1(all_ok);
+    ok1(parts.size() == 1);
+    ok1(parts[0].size() == 1);
+    ok1(parts[0][0].size() >= 4);
   }
 
   /* --- Cleanup: drop zero-area junk --- */

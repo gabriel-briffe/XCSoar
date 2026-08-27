@@ -14,8 +14,8 @@ namespace XCThermGeoJSON {
  * - drop consecutive duplicate vertices
  * - drop junk (fewer than 3 vertices, near-zero area)
  * - split self-crossing rings into simple exteriors
- * - decompose concave rings into convex pieces
  *
+ * Concave rings are kept intact; OpenGL ear-clips at draw time.
  * Returns zero or more exterior-only polygons (each a single ring).
  */
 std::vector<std::vector<Ring>>

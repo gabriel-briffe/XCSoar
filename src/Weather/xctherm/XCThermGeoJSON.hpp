@@ -96,7 +96,6 @@ struct ForecastLayer {
  *   - drop holes (not drawn)
  *   - split self-crossing exteriors
  *   - drop degenerate / zero-area junk
- *   - decompose concave exteriors into convex pieces
  *   - sort bands by ascending |midpoint|
  *
  * @param content The full file content

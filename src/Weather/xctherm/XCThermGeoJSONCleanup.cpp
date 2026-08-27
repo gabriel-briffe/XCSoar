@@ -22,9 +22,6 @@ constexpr double AREA_EPS = 1e-18;
 /** Vertex equality in lon/lat degrees. */
 constexpr double VERTEX_EPS = 1e-12;
 
-/** Treat nearly collinear turns as non-left (reflex/flat). */
-constexpr double TURN_EPS = 1e-18;
-
 [[gnu::const]]
 static bool
 Near(XY a, XY b) noexcept
@@ -90,21 +87,6 @@ static double
 AbsShoelace(const std::vector<XY> &pts) noexcept
 {
   return std::fabs(SignedShoelace(pts));
-}
-
-/** Cross product (b-a)×(c-a); positive = left turn. */
-[[gnu::const]]
-static double
-Cross(XY a, XY b, XY c) noexcept
-{
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-}
-
-static void
-EnsureCCW(std::vector<XY> &pts) noexcept
-{
-  if (SignedShoelace(pts) < 0)
-    std::reverse(pts.begin(), pts.end());
 }
 
 /**
@@ -212,216 +194,6 @@ ToClosedRing(const std::vector<XY> &pts) noexcept
   return ring;
 }
 
-[[gnu::pure]]
-static bool
-IsConvexCCW(const std::vector<XY> &pts) noexcept
-{
-  const std::size_t n = pts.size();
-  if (n < 3)
-    return false;
-
-  for (std::size_t i = 0; i < n; ++i) {
-    const XY a = pts[(i + n - 1) % n];
-    const XY b = pts[i];
-    const XY c = pts[(i + 1) % n];
-    if (Cross(a, b, c) < -TURN_EPS)
-      return false;
-  }
-  return true;
-}
-
-[[gnu::pure]]
-static std::optional<std::size_t>
-FindReflex(const std::vector<XY> &pts) noexcept
-{
-  const std::size_t n = pts.size();
-  for (std::size_t i = 0; i < n; ++i) {
-    const XY a = pts[(i + n - 1) % n];
-    const XY b = pts[i];
-    const XY c = pts[(i + 1) % n];
-    if (Cross(a, b, c) < -TURN_EPS)
-      return i;
-  }
-  return std::nullopt;
-}
-
-/** Ray-cast point-in-polygon (lon/lat as plane). */
-[[gnu::pure]]
-static bool
-PointInRing(const std::vector<XY> &pts, XY p) noexcept
-{
-  bool inside = false;
-  const std::size_t n = pts.size();
-  for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
-    const XY a = pts[i];
-    const XY b = pts[j];
-    if (((a.y > p.y) != (b.y > p.y)) &&
-        (p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x))
-      inside = !inside;
-  }
-  return inside;
-}
-
-[[gnu::pure]]
-static bool
-SegmentClear(const std::vector<XY> &pts,
-             std::size_t i, std::size_t j) noexcept
-{
-  const std::size_t n = pts.size();
-  const XY a = pts[i];
-  const XY b = pts[j];
-
-  for (std::size_t e = 0; e < n; ++e) {
-    const std::size_t f = (e + 1) % n;
-    /* Skip edges incident to i or j. */
-    if (e == i || f == i || e == j || f == j)
-      continue;
-    if (ProperIntersection(a, b, pts[e], pts[f]))
-      return false;
-  }
-  return true;
-}
-
-/**
- * True if ij is an internal diagonal of a simple CCW ring.
- */
-[[gnu::pure]]
-static bool
-DiagonalInside(const std::vector<XY> &pts,
-               std::size_t i, std::size_t j) noexcept
-{
-  const std::size_t n = pts.size();
-  if (n < 4)
-    return false;
-
-  const std::size_t d = (j + n - i) % n;
-  if (d <= 1 || d >= n - 1)
-    return false; /* adjacent */
-
-  if (!SegmentClear(pts, i, j))
-    return false;
-
-  const XY mid{
-    0.5 * (pts[i].x + pts[j].x),
-    0.5 * (pts[i].y + pts[j].y),
-  };
-  return PointInRing(pts, mid);
-}
-
-static std::pair<std::vector<XY>, std::vector<XY>>
-SplitAtDiagonal(const std::vector<XY> &pts,
-                std::size_t i, std::size_t j) noexcept
-{
-  const std::size_t n = pts.size();
-  if (i > j)
-    std::swap(i, j);
-
-  std::vector<XY> a, b;
-  a.reserve(j - i + 1);
-  b.reserve(n - (j - i) + 1);
-
-  for (std::size_t k = i; k <= j; ++k)
-    a.push_back(pts[k]);
-
-  for (std::size_t k = j; k < n; ++k)
-    b.push_back(pts[k]);
-  for (std::size_t k = 0; k <= i; ++k)
-    b.push_back(pts[k]);
-
-  return {std::move(a), std::move(b)};
-}
-
-/**
- * Ear-clip into triangles when a diagonal split cannot be found.
- * Each triangle is convex.
- */
-static void
-TriangulateEars(std::vector<XY> pts,
-                std::vector<std::vector<XY>> &convex_out,
-                unsigned depth) noexcept
-{
-  if (depth > 64 || pts.size() < 3)
-    return;
-
-  RemoveConsecutiveDuplicates(pts);
-  StripClosingDuplicate(pts);
-  if (pts.size() < 3 || AbsShoelace(pts) <= AREA_EPS)
-    return;
-
-  EnsureCCW(pts);
-  if (pts.size() == 3) {
-    convex_out.push_back(std::move(pts));
-    return;
-  }
-
-  const std::size_t n = pts.size();
-  for (std::size_t i = 0; i < n; ++i) {
-    const std::size_t prev = (i + n - 1) % n;
-    const std::size_t next = (i + 1) % n;
-    if (Cross(pts[prev], pts[i], pts[next]) <= TURN_EPS)
-      continue; /* not a convex ear tip */
-    if (!DiagonalInside(pts, prev, next))
-      continue;
-
-    convex_out.push_back({pts[prev], pts[i], pts[next]});
-
-    std::vector<XY> rest;
-    rest.reserve(n - 1);
-    for (std::size_t k = 0; k < n; ++k)
-      if (k != i)
-        rest.push_back(pts[k]);
-    TriangulateEars(std::move(rest), convex_out, depth + 1);
-    return;
-  }
-
-  /* No ear found — drop as unrecoverable. */
-}
-
-/**
- * Recursively split a simple CCW ring into convex pieces.
- */
-static void
-DecomposeConvex(std::vector<XY> pts,
-                std::vector<std::vector<XY>> &convex_out,
-                unsigned depth) noexcept
-{
-  if (depth > 64)
-    return;
-
-  RemoveConsecutiveDuplicates(pts);
-  StripClosingDuplicate(pts);
-  if (pts.size() < 3 || AbsShoelace(pts) <= AREA_EPS)
-    return;
-
-  EnsureCCW(pts);
-
-  if (IsConvexCCW(pts)) {
-    convex_out.push_back(std::move(pts));
-    return;
-  }
-
-  const auto reflex = FindReflex(pts);
-  if (!reflex) {
-    /* Numerically odd but not marked reflex — force triangulation. */
-    TriangulateEars(std::move(pts), convex_out, 0);
-    return;
-  }
-
-  const std::size_t i = *reflex;
-  const std::size_t n = pts.size();
-  for (std::size_t j = 0; j < n; ++j) {
-    if (!DiagonalInside(pts, i, j))
-      continue;
-
-    auto [left, right] = SplitAtDiagonal(pts, i, j);
-    DecomposeConvex(std::move(left), convex_out, depth + 1);
-    DecomposeConvex(std::move(right), convex_out, depth + 1);
-    return;
-  }
-
-  TriangulateEars(std::move(pts), convex_out, 0);
-}
-
 static void
 AppendCleaned(std::vector<XY> pts,
               std::vector<std::vector<Ring>> &out,
@@ -450,13 +222,9 @@ AppendCleaned(std::vector<XY> pts,
   if (AbsShoelace(pts) <= AREA_EPS)
     return;
 
-  /* Simple ring: cut into convex pieces for reliable ear-clip draw. */
-  std::vector<std::vector<XY>> convex_parts;
-  DecomposeConvex(std::move(pts), convex_parts, 0);
-  for (auto &part : convex_parts) {
-    if (part.size() >= 3 && AbsShoelace(part) > AREA_EPS)
-      out.push_back({ToClosedRing(part)});
-  }
+  /* Keep simple rings intact (including concave); draw-time ear-clip
+     fills them. */
+  out.push_back({ToClosedRing(pts)});
 }
 
 } // namespace
