@@ -8,9 +8,13 @@
 #include "Math/Line2D.hpp"
 #include "util/AllocatedArray.hxx"
 
+#include <mapbox/earcut.hpp>
+
 #include <algorithm>
+#include <array>
 #include <math.h>
 #include <cassert>
+#include <vector>
 
 /**
  * Calculate signed area of the polygon to determine the rotary direction.
@@ -54,28 +58,15 @@ InsideTriangle(const PT &p, const PT &a, const PT &b, const PT &c) noexcept
 }
 
 /**
- * Test whether the line a,b,c makes a bend to the left or not.
- *
- * @return: positive if a,b,c turns left, zero for a spike, negative otherwise
- */
-template <typename PT>
-static inline typename PT::product_type
-LeftBend(const PT &a, const PT &b, const PT &c) noexcept
-{
-  const PT ab = b - a;
-  const PT bc = c - b;
-
-  return CrossProduct(ab, bc);
-}
-
-/**
  * Test whether the area of a triangle is zero, or not.
  */
 template <typename PT>
 static inline bool
 TriangleEmpty(const PT &a, const PT &b, const PT &c) noexcept
 {
-  return LeftBend(a, b, c) == 0;
+  const PT ab = b - a;
+  const PT bc = c - b;
+  return CrossProduct(ab, bc) == 0;
 }
 
 /**
@@ -92,6 +83,10 @@ Normalize(PixelPoint *v, float length) noexcept
   v->y = lround(v->y * scale);
 }
 
+/**
+ * Optional neighbour thinning (same policy as the old ear-clipper), then
+ * Mapbox earcut for robust concave fills.  Indices refer to @p points.
+ */
 template <typename PT>
 static unsigned
 _PolygonToTriangles(const PT *points, unsigned num_points,
@@ -106,14 +101,14 @@ _PolygonToTriangles(const PT *points, unsigned num_points,
     return 0;
 
   assert(num_points < 65536);
-  // next vertex pointer
+
   auto next = new GLushort[num_points];
-  // index of the first vertex
   GLushort start = 0;
 
-  // initialize next pointer counterclockwise
+  /* Walk CCW so thinning matches historical behaviour; earcut itself
+     accepts either winding. */
   if (PolygonRotatesLeft(points, num_points)) {
-    for (unsigned i = 0; i < num_points-1; i++)
+    for (unsigned i = 0; i < num_points - 1; i++)
       next[i] = i + 1;
     next[num_points - 1] = 0;
   } else {
@@ -122,10 +117,11 @@ _PolygonToTriangles(const PT *points, unsigned num_points,
       next[i] = i - 1;
   }
 
-  // thinning
+  unsigned live = num_points;
+
   if (min_distance > 0) {
     for (unsigned a = start, b = next[a], c = next[b], heat = 0;
-         num_points > 3 && heat < num_points;
+         live > 3 && heat < live;
          a = b, b = c, c = next[c], heat++) {
       bool point_removeable = TriangleEmpty(points[a], points[b], points[c]);
       if (!point_removeable) {
@@ -144,99 +140,55 @@ _PolygonToTriangles(const PT *points, unsigned num_points,
         }
       }
       if (point_removeable) {
-        // remove node b from polygon
         if (b == start)
-          // keep track of the smallest index
           start = std::min(a, c);
 
         next[a] = c;
-        num_points--;
-        // 'a' should stay the same in the next loop
+        live--;
         b = a;
-        // reset heat
         heat = 0;
       }
     }
   }
 
-  // triangulation
-  auto t = triangles;
-  for (unsigned a = start, b = next[a], c = next[b], heat = 0;
-       num_points > 2; a = b, b = c, c = next[c]) {
-    typename PT::product_type bendiness =
-      LeftBend(points[a], points[b], points[c]);
+  if (live < 3) {
+    delete[] next;
+    return 0;
+  }
 
-    // left bend, spike or line with a redundant point in the middle
-    bool ear_cuttable = (bendiness >= 0);
+  using EarPoint = std::array<double, 2>;
+  std::vector<EarPoint> ring;
+  std::vector<GLushort> orig;
+  ring.reserve(live);
+  orig.reserve(live);
 
-    if (bendiness > 0) {
-      // left bend
-      for (unsigned prev_p = c, p = next[c]; p != a;
-           prev_p = p, p = next[p]) {
-        typename PT::product_type ab = PointLeftOfLine(points[p], points[a],
-                                                       points[b]);
-        typename PT::product_type bc = PointLeftOfLine(points[p], points[b],
-                                                       points[c]);
-        typename PT::product_type ca = PointLeftOfLine(points[p], points[c],
-                                                       points[a]);
-        if (ab > 0 && bc > 0 && ca > 0) {
-          // p is inside a,b,c
-          ear_cuttable = false;
-          break;
-        } else if (ab >= 0 && bc >= 0 && ca >= 0) {
-          // p is on one or two edges of a,b,c
-          bool outside_ab = (ab == 0) &&
-            PointLeftOfLine(points[prev_p], points[a], points[b]) <= 0;
-          bool outside_bc = (bc == 0) &&
-            PointLeftOfLine(points[prev_p], points[b], points[c]) <= 0;
-          bool outside_ca = (ca == 0) &&
-            PointLeftOfLine(points[prev_p], points[c], points[a]) <= 0;
-          if (!(outside_ab || outside_bc || outside_ca)) {
-            // line p,prev_p intersects with triangle a,b,c
-            ear_cuttable = false;
-            break;
-          }
-
-          outside_ab = (ab == 0) &&
-            PointLeftOfLine(points[next[p]], points[a], points[b]) <= 0;
-          outside_bc = (bc == 0) &&
-            PointLeftOfLine(points[next[p]], points[b], points[c]) <= 0;
-          outside_ca = (ca == 0) &&
-            PointLeftOfLine(points[next[p]], points[c], points[a]) <= 0;
-          if (!(outside_ab || outside_bc || outside_ca)) {
-            // line p,next[p] intersects with triangle a,b,c
-            ear_cuttable = false;
-            break;
-          }
-        }
-      }
-      if (ear_cuttable) {
-        // save triangle indices
-        *t++ = a;
-        *t++ = b;
-        *t++ = c;
-      }
-    }
-
-    if (ear_cuttable) {
-      // remove node b from polygon
-      next[a] = c;
-      num_points--;
-      // 'a' should stay the same in the next loop
-      b = a;
-      // reset heat
-      heat = 0;
-    }
-
-    if (heat++ > num_points) {
-      // if polygon edges overlap we may loop endlessly
-      delete[] next;
-      return 0;
-    }
+  for (unsigned i = start, n = 0; n < live; i = next[i], ++n) {
+    ring.push_back(EarPoint{
+      static_cast<double>(points[i].x),
+      static_cast<double>(points[i].y),
+    });
+    orig.push_back(static_cast<GLushort>(i));
   }
 
   delete[] next;
-  return t - triangles;
+
+  std::vector<std::vector<EarPoint>> polygon;
+  polygon.push_back(std::move(ring));
+
+  const auto indices = mapbox::earcut<uint32_t>(polygon);
+  if (indices.size() < 3 || (indices.size() % 3) != 0)
+    return 0;
+
+  /* earcut may emit steiner vertices in some hole cases; we only feed
+     a single exterior ring, so every index must stay in-range. */
+  auto *t = triangles;
+  for (const uint32_t idx : indices) {
+    if (idx >= orig.size())
+      return 0;
+    *t++ = orig[idx];
+  }
+
+  return unsigned(t - triangles);
 }
 
 unsigned

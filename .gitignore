@@ -39,5 +39,3 @@ build/local-config.mk
 messages.mo
 po/*.mo
 
-# Local reference copy of mapbox/earcut.hpp (not vendored into the build yet)
-lib/earcut/

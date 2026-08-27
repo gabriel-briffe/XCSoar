@@ -10,8 +10,9 @@ struct BulkPixelPoint;
 template<class T> class AllocatedArray;
 
 /**
- * cutting ears - simple algorithm, no support for holes
- * Optionally removes all points from a polygon that are too close together.
+ * Tessellate a simple polygon into triangles (Mapbox earcut).
+ * No support for holes in this API.  Optionally removes points that
+ * are too close together before tessellation.
  *
  * @param points polygon coordinates
  * @param num_points number of polygon vertices
