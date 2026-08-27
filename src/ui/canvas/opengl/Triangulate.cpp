@@ -222,8 +222,9 @@ PolygonToTriangles(const FloatPoint2D *points, unsigned num_points,
  * Flatten rings for earcut; strip closing duplicates.  Indices map
  * back into the concatenated @p points buffer.
  */
+template <typename PT>
 static unsigned
-_PolygonRingsToTriangles(const FloatPoint2D *points,
+_PolygonRingsToTriangles(const PT *points,
                          const unsigned *ring_sizes, unsigned num_rings,
                          GLushort *triangles) noexcept
 {
@@ -281,6 +282,23 @@ _PolygonRingsToTriangles(const FloatPoint2D *points,
   }
 
   return unsigned(t - triangles);
+}
+
+unsigned
+PolygonToTriangles(const BulkPixelPoint *points,
+                   const unsigned *ring_sizes, unsigned num_rings,
+                   AllocatedArray<GLushort> &triangles) noexcept
+{
+  unsigned total = 0;
+  for (unsigned i = 0; i < num_rings; ++i)
+    total += ring_sizes[i];
+
+  if (total < 3)
+    return 0;
+
+  triangles.GrowDiscard(3 * total);
+  return _PolygonRingsToTriangles(points, ring_sizes, num_rings,
+                                  triangles.data());
 }
 
 unsigned

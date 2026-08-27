@@ -13,8 +13,6 @@
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Color.hpp"
 #ifdef ENABLE_OPENGL
-#include "Math/FastRotation.hpp"
-#include "Math/Point2D.hpp"
 #include "ui/canvas/opengl/Scope.hpp"
 #endif
 
@@ -228,17 +226,13 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
 #ifdef ENABLE_OPENGL
   /* Enable alpha blending for the entire overlay draw */
   const ScopeAlphaBlend alpha_blend;
+#endif
 
-  /* Float screen verts — avoid integer snap before earcut. */
-  std::vector<FloatPoint2D> screen_points;
+  /* Integer screen verts (GeoToScreen). */
+  std::vector<BulkPixelPoint> screen_points;
   screen_points.reserve(256);
   std::vector<unsigned> ring_sizes;
   ring_sizes.reserve(8);
-  const FastRotation screen_rotation{projection.GetScreenAngle()};
-#else
-  std::vector<BulkPixelPoint> screen_points;
-  screen_points.reserve(256);
-#endif
 
   const auto screen_rect = projection.GetScreenRect();
 
@@ -281,15 +275,16 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
         continue;
 
       screen_points.clear();
-#ifdef ENABLE_OPENGL
       ring_sizes.clear();
+#ifdef ENABLE_OPENGL
       for (const auto &ring : polygon) {
         if (ring.size() < 3)
           continue;
         const unsigned before = (unsigned)screen_points.size();
-        for (const auto &pt : ring)
-          screen_points.push_back(projection.GeoToScreenF(pt,
-                                                          screen_rotation));
+        for (const auto &pt : ring) {
+          const auto sp = projection.GeoToScreen(pt);
+          screen_points.push_back(BulkPixelPoint{sp.x, sp.y});
+        }
         ring_sizes.push_back((unsigned)screen_points.size() - before);
       }
 
@@ -298,7 +293,7 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
 
       canvas.DrawPolygon(screen_points.data(),
                          ring_sizes.data(),
-                         (unsigned)ring_sizes.size(), 0.f);
+                         (unsigned)ring_sizes.size());
 #else
       /* Memory/GDI: fill exterior only (no hole support). */
       for (const auto &pt : exterior) {

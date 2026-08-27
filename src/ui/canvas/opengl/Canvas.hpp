@@ -230,6 +230,13 @@ public:
   void DrawPolygon(const BulkPixelPoint *points, unsigned num_points) noexcept;
 
   /**
+   * Fill a polygon with holes from integer screen vertices.
+   * @p points is exterior then holes; @p ring_sizes[i] is ring i length.
+   */
+  void DrawPolygon(const BulkPixelPoint *points,
+                   const unsigned *ring_sizes, unsigned num_rings) noexcept;
+
+  /**
    * Fill a polygon from float screen vertices (sub-pixel).  No outline.
    * @param min_distance ear-clip neighbour thinning; 0 keeps all verts
    */

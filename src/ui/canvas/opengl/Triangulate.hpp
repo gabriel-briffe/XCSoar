@@ -28,6 +28,21 @@ PolygonToTriangles(const BulkPixelPoint *points, unsigned num_points,
                    AllocatedArray<GLushort> &triangles,
                    unsigned min_distance=1) noexcept;
 
+/**
+ * Tessellate a polygon with holes (Mapbox earcut).
+ *
+ * @param points concatenated ring vertices (exterior first)
+ * @param ring_sizes vertex count per ring (must sum to total used)
+ * @param num_rings number of rings (>= 1); rings after the first are holes
+ * @param triangles triangle indices into @p points
+ *
+ * @return number of triangle indices, or 0 on failure
+ */
+unsigned
+PolygonToTriangles(const BulkPixelPoint *points,
+                   const unsigned *ring_sizes, unsigned num_rings,
+                   AllocatedArray<GLushort> &triangles) noexcept;
+
 unsigned
 PolygonToTriangles(const FloatPoint2D *points, unsigned num_points,
                    GLushort *triangles, float min_distance=1) noexcept;
