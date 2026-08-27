@@ -9,6 +9,13 @@
 
 namespace XCThermGeoJSON {
 
+/** Counters for one import cleanup pass (optional logging). */
+struct CleanupStats {
+  unsigned dedupe = 0;         /**< consecutive/closing duplicate verts */
+  unsigned self_crossings = 0; /**< rings split at an edge crossing */
+  unsigned junk = 0;           /**< rings dropped (degenerate / bailout) */
+};
+
 /**
  * Post-import cleanup for one ring (exterior or hole):
  * - drop consecutive duplicate vertices
@@ -17,17 +24,21 @@ namespace XCThermGeoJSON {
  *
  * Concave rings are kept intact; OpenGL earcuts at draw time.
  * Returns zero or more single-ring polygons.
+ * When @p stats is non-null, increments cleanup counters.
  */
 std::vector<std::vector<Ring>>
-CleanExterior(const Ring &exterior) noexcept;
+CleanExterior(const Ring &exterior,
+              CleanupStats *stats = nullptr) noexcept;
 
 /**
  * Clean every polygon in @p band.  Keeps holes when the exterior stays
  * as one simple ring; if the exterior must be split, holes are dropped
  * for those parts.  Empty results are removed.
+ * When @p stats is non-null, increments cleanup counters.
  */
 void
-CleanBandPolygons(WindBand &band) noexcept;
+CleanBandPolygons(WindBand &band,
+                  CleanupStats *stats = nullptr) noexcept;
 
 /**
  * Sort bands by ascending |midpoint| so weaker fills draw first and

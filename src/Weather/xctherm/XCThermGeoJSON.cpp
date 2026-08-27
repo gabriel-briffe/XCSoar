@@ -3,6 +3,7 @@
 
 #include "XCThermGeoJSON.hpp"
 #include "XCThermGeoJSONCleanup.hpp"
+#include "LogFile.hpp"
 
 #include <boost/json.hpp>
 
@@ -164,6 +165,7 @@ ForecastLayer
 Parse(std::string_view content, bool skip_neutral) noexcept
 {
   ForecastLayer layer;
+  CleanupStats cleanup_stats;
 
   /* The server streams one Feature per line (NDJSON style). Iterate
      over lines, parse each as JSON, append to the layer's bands. */
@@ -182,7 +184,7 @@ Parse(std::string_view content, bool skip_neutral) noexcept
           band.min_ms >= -0.2 && band.max_ms <= 0.2;
         if ((!skip_neutral || !is_neutral) && !band.polygons.empty()) {
           /* Keep holes, split self-crossings, drop degenerate junk. */
-          CleanBandPolygons(band);
+          CleanBandPolygons(band, &cleanup_stats);
           if (!band.polygons.empty()) {
             /* Grow the layer's geographic extent over this band's
                exterior rings, so callers can cheaply test coverage. */
@@ -201,6 +203,10 @@ Parse(std::string_view content, bool skip_neutral) noexcept
       break;
     pos = eol + 1;
   }
+
+  LogFmt("xctherm: cleanup dedupe:{}, selfcrossings:{}, junk:{}",
+         cleanup_stats.dedupe, cleanup_stats.self_crossings,
+         cleanup_stats.junk);
 
   /* Weaker |mid| first so opaque fill lets stronger bands win. */
   SortBandsByAbsMid(layer);

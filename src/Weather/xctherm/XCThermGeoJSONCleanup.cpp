@@ -44,25 +44,30 @@ ToGeo(XY p) noexcept
   return GeoPoint(Angle::Degrees(p.x), Angle::Degrees(p.y));
 }
 
-static void
+static unsigned
 StripClosingDuplicate(std::vector<XY> &pts) noexcept
 {
-  if (pts.size() >= 2 && Near(pts.front(), pts.back()))
+  if (pts.size() >= 2 && Near(pts.front(), pts.back())) {
     pts.pop_back();
+    return 1;
+  }
+  return 0;
 }
 
-static void
+static unsigned
 RemoveConsecutiveDuplicates(std::vector<XY> &pts) noexcept
 {
   if (pts.empty())
-    return;
+    return 0;
 
+  const std::size_t before = pts.size();
   std::size_t w = 1;
   for (std::size_t r = 1; r < pts.size(); ++r) {
     if (!Near(pts[r], pts[w - 1]))
       pts[w++] = pts[r];
   }
   pts.resize(w);
+  return unsigned(before - w);
 }
 
 [[gnu::pure]]
@@ -195,32 +200,49 @@ ToClosedRing(const std::vector<XY> &pts) noexcept
 }
 
 static void
+AddStat(CleanupStats *stats, unsigned CleanupStats::*field,
+        unsigned n) noexcept
+{
+  if (stats != nullptr && n > 0)
+    stats->*field += n;
+}
+
+static void
 AppendCleaned(std::vector<XY> pts,
               std::vector<std::vector<Ring>> &out,
+              CleanupStats *stats,
               unsigned depth) noexcept
 {
   /* Pathological rings could recurse; bail out rather than blow the
      stack — the leftover geometry is dropped as junk. */
-  if (depth > 32)
+  if (depth > 32) {
+    AddStat(stats, &CleanupStats::junk, 1);
     return;
+  }
 
-  RemoveConsecutiveDuplicates(pts);
-  StripClosingDuplicate(pts);
+  AddStat(stats, &CleanupStats::dedupe,
+          RemoveConsecutiveDuplicates(pts));
+  AddStat(stats, &CleanupStats::dedupe, StripClosingDuplicate(pts));
 
-  if (pts.size() < 3)
+  if (pts.size() < 3) {
+    AddStat(stats, &CleanupStats::junk, 1);
     return;
+  }
 
   /* Self-crossing rings often have near-zero *signed* area (lobes
      cancel).  Split before the area junk check. */
   if (auto cross = FindFirstCrossing(pts)) {
+    AddStat(stats, &CleanupStats::self_crossings, 1);
     auto [left, right] = SplitAtCrossing(pts, *cross);
-    AppendCleaned(std::move(left), out, depth + 1);
-    AppendCleaned(std::move(right), out, depth + 1);
+    AppendCleaned(std::move(left), out, stats, depth + 1);
+    AppendCleaned(std::move(right), out, stats, depth + 1);
     return;
   }
 
-  if (AbsShoelace(pts) <= AREA_EPS)
+  if (AbsShoelace(pts) <= AREA_EPS) {
+    AddStat(stats, &CleanupStats::junk, 1);
     return;
+  }
 
   /* Keep simple rings intact (including concave); draw-time earcut
      fills them (with holes when present). */
@@ -230,7 +252,7 @@ AppendCleaned(std::vector<XY> pts,
 } // namespace
 
 std::vector<std::vector<Ring>>
-CleanExterior(const Ring &exterior) noexcept
+CleanExterior(const Ring &exterior, CleanupStats *stats) noexcept
 {
   std::vector<XY> pts;
   pts.reserve(exterior.size());
@@ -238,12 +260,12 @@ CleanExterior(const Ring &exterior) noexcept
     pts.push_back(ToXY(p));
 
   std::vector<std::vector<Ring>> out;
-  AppendCleaned(std::move(pts), out, 0);
+  AppendCleaned(std::move(pts), out, stats, 0);
   return out;
 }
 
 void
-CleanBandPolygons(WindBand &band) noexcept
+CleanBandPolygons(WindBand &band, CleanupStats *stats) noexcept
 {
   std::vector<std::vector<Ring>> cleaned;
   cleaned.reserve(band.polygons.size());
@@ -252,13 +274,13 @@ CleanBandPolygons(WindBand &band) noexcept
     if (polygon.empty())
       continue;
 
-    auto exteriors = CleanExterior(polygon[0]);
+    auto exteriors = CleanExterior(polygon[0], stats);
     if (exteriors.empty())
       continue;
 
     std::vector<Ring> holes;
     for (std::size_t i = 1; i < polygon.size(); ++i) {
-      auto hole_parts = CleanExterior(polygon[i]);
+      auto hole_parts = CleanExterior(polygon[i], stats);
       for (auto &part : hole_parts) {
         if (!part.empty())
           holes.push_back(std::move(part[0]));
