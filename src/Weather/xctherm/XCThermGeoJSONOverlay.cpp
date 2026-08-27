@@ -49,6 +49,18 @@ XCThermGeoJSONOverlay::SetForecast(
   forecast_utc = _forecast_utc;
 }
 
+void
+XCThermGeoJSONOverlay::SetOpacityPercent(unsigned percent) noexcept
+{
+  if (percent < 50)
+    percent = 50;
+  else if (percent > 100)
+    percent = 100;
+
+  const std::lock_guard lock{mutex};
+  opacity_percent = percent;
+}
+
 bool
 XCThermGeoJSONOverlay::HasData() const noexcept
 {
@@ -181,21 +193,20 @@ Color
 XCThermGeoJSONOverlay::WindToColor(double min_ms, double max_ms) noexcept
 {
   /*
-   * Official XCTherm color scale (from legend):
+   * AROME-like HSL S=100% ramps on XCTherm bands:
    *
-   *  < -3.0 m/s   dark navy     (extreme sink)
-   *   -3.0 m/s    blue          #0000C8
-   *   -2.0 m/s    bright cyan   #00D0FF
-   *   -1.0 m/s    sky blue      #60E0FF
-   *   -0.5 m/s    light blue    #A0E8FF
-   *   -0.2 m/s    pale blue     #C8F0FF (neutral sink edge)
-   *   +0.2 m/s    cream/beige   #F0F0C0 (neutral lift edge)
-   *   +0.5 m/s    yellow        #FFFF00
-   *   +1.0 m/s    gold/amber    #FFD000
-   *   +2.0 m/s    orange        #FFA000
-   *   +3.0 m/s    red-orange    #FF4000
-   *   +4.0 m/s    red           #FF0000
-   *   > +4.0 m/s  purple        #A020F0 (extreme lift)
+   *  ≤ -3.0     #00008F
+   *  (-3,-2]    #0031B2
+   *  (-2,-1]    #0076D6
+   *  (-1,-0.5]  #00CAF5
+   *  (-0.5,-0.2]#1AFFE8
+   *  ±0.2       #E3E3A0
+   *  (0.2,0.5]  #FFFF00
+   *  (0.5,1]    #E3AA00
+   *  (1,2]      #C76300
+   *  (2,3]      #AB2B00
+   *  (3,4]      #8F0000
+   *  > +4.0     #8F008F
    */
 
   const double mid = (min_ms + max_ms) / 2.0;
@@ -235,17 +246,11 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
   ring_sizes.reserve(8);
 
   const auto screen_rect = projection.GetScreenRect();
+  const unsigned alpha =
+    (opacity_percent * 255u + 50u) / 100u;
 
   for (const auto &band : forecast.bands) {
-    /* Set color for this wind band.
-     * Alpha ramps down with intensity so the underlying map stays
-     * readable through the stronger lift/sink colors (which would
-     * otherwise saturate). |mid| = 0  → 140, |mid| = 4 → 68. */
     const Color color = WindToColor(band.min_ms, band.max_ms);
-    const double abs_mid = std::abs((band.min_ms + band.max_ms) / 2.0);
-    int alpha = (int)std::lround(140.0 - 18.0 * abs_mid);
-    if (alpha < 60) alpha = 60;
-    if (alpha > 150) alpha = 150;
     const Color fill_color = ColorWithAlpha(color, (uint8_t)alpha);
 
     Brush brush(fill_color);

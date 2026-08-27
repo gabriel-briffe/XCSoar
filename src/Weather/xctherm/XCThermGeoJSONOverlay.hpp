@@ -38,6 +38,9 @@ class XCThermGeoJSONOverlay final : public MapOverlay {
   std::string parameter;
   unsigned forecast_utc = 0;
 
+  /** Fill opacity 50…100 (percent). Default matches settings default. */
+  unsigned opacity_percent = 75;
+
 public:
   XCThermGeoJSONOverlay() noexcept = default;
 
@@ -53,6 +56,9 @@ public:
                    const char *_label,
                    const char *_parameter = nullptr,
                    unsigned _forecast_utc = 0) noexcept;
+
+  /** Set fill opacity (clamped to 50…100). */
+  void SetOpacityPercent(unsigned percent) noexcept;
 
   /** Is any data loaded? */
   bool HasData() const noexcept;

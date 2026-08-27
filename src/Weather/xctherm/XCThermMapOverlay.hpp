@@ -37,6 +37,12 @@ void ApplyForecastLayerToMap(XCThermGeoJSON::ForecastLayer &&forecast,
 void ClearMapOverlay() noexcept;
 
 /**
+ * Push @c weather.xctherm.opacity_percent onto the live map overlay
+ * (no-op when no XCTherm overlay is shown).
+ */
+void ApplyOverlayOpacityFromSettings() noexcept;
+
+/**
  * Drop parsed forecast data kept in RAM after the map overlay was
  * cleared. When @p parameter is non-null, only entries for that
  * parameter are removed.

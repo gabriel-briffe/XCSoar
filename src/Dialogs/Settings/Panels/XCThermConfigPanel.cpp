@@ -5,12 +5,14 @@
 
 #ifdef HAVE_HTTP
 
+#include "ActionInterface.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "Weather/Settings.hpp"
 #include "Weather/xctherm/XCThermAPI.hpp"
 #include "Weather/xctherm/XCThermCatalog.hpp"
+#include "Weather/xctherm/XCThermMapOverlay.hpp"
 #include "Widget/RowFormWidget.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
@@ -20,6 +22,7 @@ enum ControlIndex {
   XCTHERM_EMAIL,
   XCTHERM_PASSWORD,
   XCTHERM_REGION,
+  XCTHERM_OPACITY,
   XCTHERM_AUTO_SWITCH,
 };
 
@@ -64,6 +67,13 @@ XCThermConfigPanel::Prepare(ContainerWindow &parent,
           xctherm_region_list,
           settings.xctherm.model);
 
+  AddInteger(_("Overlay opacity"),
+             /* xgettext:no-c-format */
+             _("Sets the opacity of the XC Therm overlay on the map.  "
+               "50% is more transparent, 100% is fully opaque."),
+             "%d %%", "%d", 50, 100, 5,
+             settings.xctherm.opacity_percent);
+
   AddBoolean(_("XC Therm Auto Layer/Time"),
              _("Automatically switch altitude layer based on GPS altitude "
                "and forecast time based on UTC clock."),
@@ -88,6 +98,17 @@ XCThermConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValueEnum(XCTHERM_REGION, ProfileKeys::XCThermModel,
                            settings.xctherm.model);
+
+  if (SaveValueInteger(XCTHERM_OPACITY, ProfileKeys::XCThermOpacity,
+                       settings.xctherm.opacity_percent)) {
+    if (settings.xctherm.opacity_percent < 50)
+      settings.xctherm.opacity_percent = 50;
+    else if (settings.xctherm.opacity_percent > 100)
+      settings.xctherm.opacity_percent = 100;
+    XCTherm::ApplyOverlayOpacityFromSettings();
+    ActionInterface::SendUIState(true);
+    changed = true;
+  }
 
   XCThermAPI::Instance().ApplySessionSettings(settings.xctherm);
 

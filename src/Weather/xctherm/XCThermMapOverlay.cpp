@@ -165,11 +165,32 @@ ApplyForecastLayerToMap(XCThermGeoJSON::ForecastLayer &&forecast,
 #ifdef ENABLE_OPENGL
   auto overlay = std::make_unique<XCThermGeoJSONOverlay>();
   overlay->SetForecast(std::move(forecast), label, parameter, forecast_utc);
+  overlay->SetOpacityPercent(
+    CommonInterface::GetComputerSettings().weather.xctherm.opacity_percent);
   map->SetOverlay(std::move(overlay));
 #else
   (void)label;
   (void)parameter;
   (void)forecast_utc;
+#endif
+}
+
+void
+ApplyOverlayOpacityFromSettings() noexcept
+{
+#ifdef ENABLE_OPENGL
+  auto *map = UIGlobals::GetMap();
+  if (map == nullptr)
+    return;
+
+  auto *overlay =
+    const_cast<XCThermGeoJSONOverlay *>(
+      dynamic_cast<const XCThermGeoJSONOverlay *>(map->GetOverlay()));
+  if (overlay == nullptr)
+    return;
+
+  overlay->SetOpacityPercent(
+    CommonInterface::GetComputerSettings().weather.xctherm.opacity_percent);
 #endif
 }
 

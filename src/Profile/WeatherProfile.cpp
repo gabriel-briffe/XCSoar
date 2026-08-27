@@ -93,6 +93,11 @@ Profile::Load(const ProfileMap &map, WeatherSettings &settings)
   map.Get(ProfileKeys::XCThermWaveHeight, settings.xctherm.wave_height);
   map.Get(ProfileKeys::XCThermVerticalWindAGL,
           settings.xctherm.vertical_wind_agl);
+  map.Get(ProfileKeys::XCThermOpacity, settings.xctherm.opacity_percent);
+  if (settings.xctherm.opacity_percent < 50)
+    settings.xctherm.opacity_percent = 50;
+  else if (settings.xctherm.opacity_percent > 100)
+    settings.xctherm.opacity_percent = 100;
   /* download_span_hours is intentionally NOT persisted - it resets
      to the default (1 h) at every startup. */
 
