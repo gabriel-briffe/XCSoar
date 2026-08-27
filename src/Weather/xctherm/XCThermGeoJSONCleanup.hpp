@@ -10,20 +10,21 @@
 namespace XCThermGeoJSON {
 
 /**
- * Post-import cleanup for one exterior ring:
+ * Post-import cleanup for one ring (exterior or hole):
  * - drop consecutive duplicate vertices
  * - drop junk (fewer than 3 vertices, near-zero area)
- * - split self-crossing rings into simple exteriors
+ * - split self-crossing rings into simple rings
  *
- * Concave rings are kept intact; OpenGL ear-clips at draw time.
- * Returns zero or more exterior-only polygons (each a single ring).
+ * Concave rings are kept intact; OpenGL earcuts at draw time.
+ * Returns zero or more single-ring polygons.
  */
 std::vector<std::vector<Ring>>
 CleanExterior(const Ring &exterior) noexcept;
 
 /**
- * Apply CleanExterior() to every polygon in @p band, keep exterior
- * only (holes discarded), and drop empty results.
+ * Clean every polygon in @p band.  Keeps holes when the exterior stays
+ * as one simple ring; if the exterior must be split, holes are dropped
+ * for those parts.  Empty results are removed.
  */
 void
 CleanBandPolygons(WindBand &band) noexcept;

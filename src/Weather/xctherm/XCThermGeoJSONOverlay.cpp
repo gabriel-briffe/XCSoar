@@ -229,9 +229,11 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
   /* Enable alpha blending for the entire overlay draw */
   const ScopeAlphaBlend alpha_blend;
 
-  /* Float screen verts — avoid integer snap before ear-clip. */
+  /* Float screen verts — avoid integer snap before earcut. */
   std::vector<FloatPoint2D> screen_points;
   screen_points.reserve(256);
+  std::vector<unsigned> ring_sizes;
+  ring_sizes.reserve(8);
   const FastRotation screen_rotation{projection.GetScreenAngle()};
 #else
   std::vector<BulkPixelPoint> screen_points;
@@ -257,24 +259,20 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
     canvas.SelectNullPen();
 
     for (const auto &polygon : band.polygons) {
-      /* Parse() keeps exterior-only rings (holes dropped). */
-      if (polygon.empty())
+      if (polygon.empty() || polygon[0].size() < 3)
         continue;
 
-      const auto &ring = polygon[0];
-      if (ring.size() < 3)
-        continue;
+      const auto &exterior = polygon[0];
 
-      /* Quick bounding-box visibility check */
-      GeoPoint bb_min = ring[0], bb_max = ring[0];
-      for (const auto &pt : ring) {
+      /* Quick bounding-box visibility check (exterior only). */
+      GeoPoint bb_min = exterior[0], bb_max = exterior[0];
+      for (const auto &pt : exterior) {
         if (pt.longitude < bb_min.longitude) bb_min.longitude = pt.longitude;
         if (pt.latitude < bb_min.latitude) bb_min.latitude = pt.latitude;
         if (pt.longitude > bb_max.longitude) bb_max.longitude = pt.longitude;
         if (pt.latitude > bb_max.latitude) bb_max.latitude = pt.latitude;
       }
 
-      /* Check if bounding box intersects the screen */
       auto tl = projection.GeoToScreen(GeoPoint(bb_min.longitude, bb_max.latitude));
       auto br = projection.GeoToScreen(GeoPoint(bb_max.longitude, bb_min.latitude));
 
@@ -284,14 +282,26 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
 
       screen_points.clear();
 #ifdef ENABLE_OPENGL
-      for (const auto &pt : ring)
-        screen_points.push_back(projection.GeoToScreenF(pt,
-                                                        screen_rotation));
+      ring_sizes.clear();
+      for (const auto &ring : polygon) {
+        if (ring.size() < 3)
+          continue;
+        const unsigned before = (unsigned)screen_points.size();
+        for (const auto &pt : ring)
+          screen_points.push_back(projection.GeoToScreenF(pt,
+                                                          screen_rotation));
+        ring_sizes.push_back((unsigned)screen_points.size() - before);
+      }
+
+      if (ring_sizes.empty())
+        continue;
 
       canvas.DrawPolygon(screen_points.data(),
-                         (unsigned)screen_points.size(), 0.f);
+                         ring_sizes.data(),
+                         (unsigned)ring_sizes.size(), 0.f);
 #else
-      for (const auto &pt : ring) {
+      /* Memory/GDI: fill exterior only (no hole support). */
+      for (const auto &pt : exterior) {
         auto sp = projection.GeoToScreen(pt);
         screen_points.push_back(BulkPixelPoint{sp.x, sp.y});
       }

@@ -181,7 +181,7 @@ Parse(std::string_view content, bool skip_neutral) noexcept
         const bool is_neutral =
           band.min_ms >= -0.2 && band.max_ms <= 0.2;
         if ((!skip_neutral || !is_neutral) && !band.polygons.empty()) {
-          /* Drop holes, split self-crossings, drop degenerate junk. */
+          /* Keep holes, split self-crossings, drop degenerate junk. */
           CleanBandPolygons(band);
           if (!band.polygons.empty()) {
             /* Grow the layer's geographic extent over this band's

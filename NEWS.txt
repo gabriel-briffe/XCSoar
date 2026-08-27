@@ -26,6 +26,7 @@ Version 7.46 - not yet released
 * rendering
   - use Mapbox earcut for OpenGL polygon fills (more reliable concave
     geometry, e.g. XCTherm GeoJSON and topography)
+  - draw XCTherm GeoJSON polygons with holes (earcut multi-ring)
 * weather
   - show the overlay name as XC Therm (with a space) in setup, weather
     dialogs, map titles, and download messages

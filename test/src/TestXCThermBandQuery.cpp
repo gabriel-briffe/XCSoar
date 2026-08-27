@@ -115,7 +115,7 @@ int main()
   ok1(equals(lo, 1.0));
   ok1(equals(hi, 2.0));
 
-  /* --- Cleanup: drop holes --- */
+  /* --- Cleanup: keep holes when exterior stays simple --- */
   {
     WindBand band = MakeSquareBand(1.0, 2.0, 0, 0, 4, 4);
     Ring hole;
@@ -127,7 +127,7 @@ int main()
     band.polygons[0].push_back(std::move(hole));
     CleanBandPolygons(band);
     ok1(band.polygons.size() == 1);
-    ok1(band.polygons[0].size() == 1);
+    ok1(band.polygons[0].size() == 2);
   }
 
   /* --- Cleanup: split bowtie into two simple parts --- */

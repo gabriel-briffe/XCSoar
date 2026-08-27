@@ -219,6 +219,88 @@ PolygonToTriangles(const FloatPoint2D *points, unsigned num_points,
 }
 
 /**
+ * Flatten rings for earcut; strip closing duplicates.  Indices map
+ * back into the concatenated @p points buffer.
+ */
+static unsigned
+_PolygonRingsToTriangles(const FloatPoint2D *points,
+                         const unsigned *ring_sizes, unsigned num_rings,
+                         GLushort *triangles) noexcept
+{
+  if (points == nullptr || ring_sizes == nullptr || num_rings == 0)
+    return 0;
+
+  using EarPoint = std::array<double, 2>;
+  std::vector<std::vector<EarPoint>> polygon;
+  std::vector<GLushort> orig;
+  polygon.reserve(num_rings);
+
+  unsigned offset = 0;
+  for (unsigned r = 0; r < num_rings; ++r) {
+    unsigned n = ring_sizes[r];
+    if (n >= 1 && points[offset] == points[offset + n - 1])
+      --n;
+
+    if (n < 3) {
+      if (r == 0)
+        return 0; /* invalid exterior */
+      offset += ring_sizes[r];
+      continue; /* drop degenerate holes */
+    }
+
+    std::vector<EarPoint> ring;
+    ring.reserve(n);
+    for (unsigned i = 0; i < n; ++i) {
+      const auto &p = points[offset + i];
+      ring.push_back(EarPoint{
+        static_cast<double>(p.x),
+        static_cast<double>(p.y),
+      });
+      orig.push_back(static_cast<GLushort>(offset + i));
+    }
+
+    if (orig.size() >= 65536)
+      return 0;
+
+    polygon.push_back(std::move(ring));
+    offset += ring_sizes[r];
+  }
+
+  if (polygon.empty())
+    return 0;
+
+  const auto indices = mapbox::earcut<uint32_t>(polygon);
+  if (indices.size() < 3 || (indices.size() % 3) != 0)
+    return 0;
+
+  auto *t = triangles;
+  for (const uint32_t idx : indices) {
+    if (idx >= orig.size())
+      return 0;
+    *t++ = orig[idx];
+  }
+
+  return unsigned(t - triangles);
+}
+
+unsigned
+PolygonToTriangles(const FloatPoint2D *points,
+                   const unsigned *ring_sizes, unsigned num_rings,
+                   AllocatedArray<GLushort> &triangles) noexcept
+{
+  unsigned total = 0;
+  for (unsigned i = 0; i < num_rings; ++i)
+    total += ring_sizes[i];
+
+  if (total < 3)
+    return 0;
+
+  triangles.GrowDiscard(3 * total);
+  return _PolygonRingsToTriangles(points, ring_sizes, num_rings,
+                                  triangles.data());
+}
+
+/**
  * Count the occurrences of each value.
  */
 static void

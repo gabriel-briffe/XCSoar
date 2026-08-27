@@ -237,6 +237,14 @@ public:
                    float min_distance = 0) noexcept;
 
   /**
+   * Fill a polygon with holes from float screen vertices.
+   * @p points is exterior then holes; @p ring_sizes[i] is ring i length.
+   */
+  void DrawPolygon(const FloatPoint2D *points,
+                   const unsigned *ring_sizes, unsigned num_rings,
+                   float min_distance = 0) noexcept;
+
+  /**
    * Draw a triangle fan (GL_TRIANGLE_FAN).  The first point is the
    * origin of the fan.
    */

@@ -222,8 +222,8 @@ AppendCleaned(std::vector<XY> pts,
   if (AbsShoelace(pts) <= AREA_EPS)
     return;
 
-  /* Keep simple rings intact (including concave); draw-time ear-clip
-     fills them. */
+  /* Keep simple rings intact (including concave); draw-time earcut
+     fills them (with holes when present). */
   out.push_back({ToClosedRing(pts)});
 }
 
@@ -252,10 +252,29 @@ CleanBandPolygons(WindBand &band) noexcept
     if (polygon.empty())
       continue;
 
-    /* Holes are not drawn — discard them at import. */
-    auto parts = CleanExterior(polygon[0]);
-    for (auto &part : parts)
-      cleaned.push_back(std::move(part));
+    auto exteriors = CleanExterior(polygon[0]);
+    if (exteriors.empty())
+      continue;
+
+    std::vector<Ring> holes;
+    for (std::size_t i = 1; i < polygon.size(); ++i) {
+      auto hole_parts = CleanExterior(polygon[i]);
+      for (auto &part : hole_parts) {
+        if (!part.empty())
+          holes.push_back(std::move(part[0]));
+      }
+    }
+
+    if (exteriors.size() == 1) {
+      auto poly = std::move(exteriors[0]);
+      for (auto &hole : holes)
+        poly.push_back(std::move(hole));
+      cleaned.push_back(std::move(poly));
+    } else {
+      /* Exterior was split — holes cannot be assigned reliably. */
+      for (auto &part : exteriors)
+        cleaned.push_back(std::move(part));
+    }
   }
 
   band.polygons = std::move(cleaned);

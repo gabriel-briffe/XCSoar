@@ -252,6 +252,39 @@ Canvas::DrawPolygon(const FloatPoint2D *points, unsigned num_points,
 }
 
 void
+Canvas::DrawPolygon(const FloatPoint2D *points,
+                    const unsigned *ring_sizes, unsigned num_rings,
+                    float min_distance) noexcept
+{
+  if (brush.IsHollow() || points == nullptr || ring_sizes == nullptr ||
+      num_rings == 0)
+    return;
+
+  if (num_rings == 1) {
+    DrawPolygon(points, ring_sizes[0], min_distance);
+    return;
+  }
+
+  unsigned total = 0;
+  for (unsigned i = 0; i < num_rings; ++i)
+    total += ring_sizes[i];
+  if (total < 3)
+    return;
+
+  OpenGL::solid_shader->Use();
+
+  ScopeVertexPointer vp(points);
+  brush.Bind();
+
+  static AllocatedArray<GLushort> triangle_buffer;
+  unsigned idx_count = PolygonToTriangles(points, ring_sizes, num_rings,
+                                          triangle_buffer);
+  if (idx_count > 0)
+    glDrawElements(GL_TRIANGLES, idx_count, GL_UNSIGNED_SHORT,
+                   triangle_buffer.data());
+}
+
+void
 Canvas::DrawTriangleFan(const BulkPixelPoint *points, unsigned num_points) noexcept
 {
   if (brush.IsHollow() && !pen.IsDefined())
