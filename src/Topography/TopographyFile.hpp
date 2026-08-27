@@ -64,7 +64,7 @@ private:
 
   const int label_field;
 
-  const ResourceId icon, mdpi_icon, xhdpi_icon;
+  const ResourceId icon, mdpi_icon, xhdpi_icon, xxhdpi_icon;
 
   const unsigned pen_width;
 
@@ -158,6 +158,7 @@ public:
                  ResourceId icon=ResourceId::Null(),
                  ResourceId mdpi_icon=ResourceId::Null(),
                  ResourceId xhdpi_icon=ResourceId::Null(),
+                 ResourceId xxhdpi_icon=ResourceId::Null(),
                  unsigned pen_width=1);
 
   TopographyFile(const TopographyFile &) = delete;
@@ -298,6 +299,10 @@ public:
 
   ResourceId GetXhdpiIcon() const noexcept {
     return xhdpi_icon;
+  }
+
+  ResourceId GetXxhdpiIcon() const noexcept {
+    return xxhdpi_icon;
   }
 
   const auto &GetColor() const noexcept {
