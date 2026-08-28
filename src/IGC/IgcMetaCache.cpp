@@ -3,6 +3,7 @@
 
 #include "IgcMetaCache.hpp"
 
+#include "IGC/FlightEvents.hpp"
 #include "IGC/IGCParser.hpp"
 #include "Formatter/TimeFormatter.hpp"
 #include "io/FileLineReader.hpp"
@@ -11,8 +12,10 @@
 #include "io/async/AsioThread.hpp"
 #include "io/async/GlobalAsioThread.hpp"
 #include "util/BindMethod.hxx"
+#include "util/StringAPI.hxx"
 
 #include <chrono>
+#include <cstring>
 #include <utility>
 
 /**
@@ -44,6 +47,22 @@ ParseBRecordTime(const char *line, BrokenTime &time,
   return true;
 }
 
+/**
+ * Parse XCSoar takeoff/landing E-records: EHHMMSS + event code.
+ */
+[[gnu::pure]]
+static bool
+ParseFlightEventTime(const char *line, BrokenTime &time) noexcept
+{
+  if (line[0] != 'E')
+    return false;
+
+  if (std::strlen(line) < 7)
+    return false;
+
+  return IGCParseTime(line + 1, time);
+}
+
 IgcMetaCache::~IgcMetaCache() noexcept
 {
   Shutdown();
@@ -55,23 +74,60 @@ IgcMetaCache::ParseEntry(Path path) noexcept
   CacheEntry entry;
   entry.path = path;
 
+  BrokenTime takeoff_utc = BrokenTime::Invalid();
+  BrokenTime landing_utc = BrokenTime::Invalid();
+  bool has_takeoff = false;
+  bool has_landing = false;
+
+  BrokenTime first_b = BrokenTime::Invalid();
+  BrokenTime last_b = BrokenTime::Invalid();
+  bool has_first_b = false;
+  bool has_last_b = false;
+
   try {
     FileLineReaderA reader(path);
     char *line;
     while ((line = reader.ReadLine()) != nullptr) {
       BrokenTime time;
+      if (ParseFlightEventTime(line, time)) {
+        if (StringIsEqual(line + 7, IGCFlightEvent::TAKEOFF)) {
+          if (!has_takeoff) {
+            takeoff_utc = time;
+            has_takeoff = true;
+          }
+        } else if (StringIsEqual(line + 7, IGCFlightEvent::LANDING)) {
+          landing_utc = time;
+          has_landing = true;
+        }
+        continue;
+      }
+
       bool gps_valid;
       if (ParseBRecordTime(line, time, gps_valid) && gps_valid) {
-        if (!entry.meta.has_start) {
-          entry.meta.start = time;
-          entry.meta.has_start = true;
+        if (!has_first_b) {
+          first_b = time;
+          has_first_b = true;
         }
-        entry.meta.end = time;
-        entry.meta.has_end = true;
+        last_b = time;
+        has_last_b = true;
       }
     }
   } catch (...) {
     // ignore parse errors
+  }
+
+  /* Prefer XCSoar TKOFF/LAND E-records (same as the Logbook method).
+     Fall back to first/last valid B-records for older IGC files. */
+  if (has_takeoff && has_landing) {
+    entry.meta.start = takeoff_utc;
+    entry.meta.end = landing_utc;
+    entry.meta.has_start = true;
+    entry.meta.has_end = true;
+  } else if (has_first_b && has_last_b) {
+    entry.meta.start = first_b;
+    entry.meta.end = last_b;
+    entry.meta.has_start = true;
+    entry.meta.has_end = true;
   }
 
   entry.text = "";
@@ -85,12 +141,16 @@ IgcMetaCache::ParseEntry(Path path) noexcept
                 (unsigned)entry.meta.end.minute);
     entry.text = lbuf.c_str();
 
-    int64_t s = (int64_t)entry.meta.start.GetSecondOfDay();
-    int64_t e = (int64_t)entry.meta.end.GetSecondOfDay();
-    int64_t diff = e - s;
-    if (diff < 0)
-      diff += 24 * 3600;
-    auto dur = FormatTimespanSmart(std::chrono::seconds(diff), 2);
+    /* Duration from displayed HH:MM only (ignore seconds) so it
+       matches paper logbook arithmetic: landing − takeoff. */
+    int64_t s_min = (int64_t)entry.meta.start.hour * 60
+      + (int64_t)entry.meta.start.minute;
+    int64_t e_min = (int64_t)entry.meta.end.hour * 60
+      + (int64_t)entry.meta.end.minute;
+    int64_t diff_min = e_min - s_min;
+    if (diff_min < 0)
+      diff_min += 24 * 60;
+    auto dur = FormatTimespanSmart(std::chrono::seconds(diff_min * 60), 2);
     entry.text.append(" (");
     entry.text.append(dur.c_str());
     entry.text.append(")");

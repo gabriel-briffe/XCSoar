@@ -47,8 +47,11 @@ public:
   /**
    * Get compact metadata for an IGC file: "HH:MM - HH:MM (duration)".
    *
-   * Returns a safe copy of the cached metadata. The first call for a given
-   * path parses the file; subsequent calls return the cached result.
+   * Prefer XCSoar TKOFF/LAND E-records when present; otherwise fall
+   * back to the first and last valid B-records.  Duration is landing
+   * HH:MM minus takeoff HH:MM (seconds ignored) for paper logbook
+   * consistency.  The first call for a given path parses the file;
+   * subsequent calls return the cached result.
    */
   std::string GetCompactInfo(Path path) noexcept;
 
