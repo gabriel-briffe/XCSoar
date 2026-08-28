@@ -16,20 +16,17 @@
 #include "Engine/Airspace/SoonestAirspace.hpp"
 #include "Dialogs/Airspace/Airspace.hpp"
 #include "Dialogs/Airspace/AirspaceWarningDialog.hpp"
+#include "PageActions.hpp"
 #include "NMEA/Aircraft.hpp"
 #include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
 #include "util/StringCompare.hxx"
 
 /*
- * This even currently toggles DrawAirSpace() and does nothing else.
- * But since we use an int and not a bool, it is easy to expand it.
- * Note that XCSoar.cpp init OnAirSpace always to 1, and this value
- * is never saved to the registry actually. It is intended to be used
- * as a temporary choice during flight, does not affect configuration.
- * Note also that in MapWindow DrawAirSpace() is accomplished for
- * every OnAirSpace value >0 .  We can use negative numbers also,
- * but 0 should mean OFF all the way.
+ * Toggles airspace rendering on the map.  On configured pages the
+ * show/hide state is remembered per page (Config → Look → Pages does
+ * not expose it; use the Display menu or Quick Menu).  On special
+ * pages the toggle is temporary until Restore().
  */
 void
 InputEvents::eventAirSpace(const char *misc)
@@ -62,6 +59,7 @@ InputEvents::eventAirSpace(const char *misc)
   }
 
   ActionInterface::SendMapSettings(true);
+  PageActions::SaveCurrentPageAirspaceEnable();
 }
 
 void

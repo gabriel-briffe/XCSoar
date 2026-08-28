@@ -175,6 +175,12 @@ struct PageLayout
    */
   int terrain_ramp;
 
+  /**
+   * Per-page airspace overlay visibility.  Changed from the Display menu
+   * or Quick Menu, not from Config → Look → Pages.
+   */
+  bool airspace_enable;
+
   PageLayout() = default;
 
   constexpr PageLayout(bool _valid, InfoBoxConfig _infobox_config)
@@ -193,7 +199,8 @@ struct PageLayout
      rainbow_time(RAINBOW_TIME_AUTO),
      rainbow_satellite(true),
      rainbow_rain(false),
-     terrain_ramp(-1) {}
+     terrain_ramp(-1),
+     airspace_enable(true) {}
 
   constexpr PageLayout(InfoBoxConfig _infobox_config)
     :valid(true), main(Main::MAP),
@@ -211,7 +218,8 @@ struct PageLayout
      rainbow_time(RAINBOW_TIME_AUTO),
      rainbow_satellite(true),
      rainbow_rain(false),
-     terrain_ramp(-1) {}
+     terrain_ramp(-1),
+     airspace_enable(true) {}
 
   /**
    * Return an "undefined" page.  Its IsDefined() method will return

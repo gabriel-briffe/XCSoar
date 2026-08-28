@@ -134,6 +134,10 @@ Load(const ProfileMap &map, PageLayout &_pl, const unsigned page)
       pl.terrain_ramp >= (int)TerrainRendererSettings::NUM_RAMPS)
     pl.terrain_ramp = -1;
 
+  strcpy(profileKey + prefixLen, "AirspaceEnable");
+  if (!map.Get(profileKey, pl.airspace_enable))
+    pl.airspace_enable = true;
+
   if (pl.overlay == PageLayout::Overlay::NONE &&
       pl.bottom == PageLayout::Bottom::WEATHER_CONTROLS &&
       pl.skysight_overlay.empty())
@@ -223,6 +227,9 @@ Profile::Save(ProfileMap &map, const PageLayout &page, const unsigned i)
 
   strcpy(profileKey + prefixLen, "TerrainRamp");
   map.Set(profileKey, page.terrain_ramp);
+
+  strcpy(profileKey + prefixLen, "AirspaceEnable");
+  map.Set(profileKey, page.airspace_enable);
 }
 
 

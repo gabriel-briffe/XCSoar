@@ -121,6 +121,12 @@ namespace PageActions
   void SuspendWeatherOverlaysForPan() noexcept;
 
   /**
+   * Save the current airspace show/hide state to the active configured
+   * page and profile.  No-op on special pages.
+   */
+  void SaveCurrentPageAirspaceEnable() noexcept;
+
+  /**
    * Clear temporary pan suspension flags for all weather overlays.
    */
   void ResumeWeatherOverlaysAfterPan() noexcept;

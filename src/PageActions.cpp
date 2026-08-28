@@ -20,6 +20,7 @@
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "Terrain/TerrainSettings.hpp"
+#include "util/StringFormat.hpp"
 #include "Weather/MapOverlay/ControlsFactory.hpp"
 #include "Weather/MapOverlay/ControlsWidget.hpp"
 #include "Weather/Rasp/FieldControls.hpp"
@@ -58,6 +59,7 @@ namespace PageActions {
    */
   static void RestoreMapZoom();
   static void RestoreTerrainColors();
+  static void RestoreAirspaceVisibility();
 
   /**
    * Loads the layout without updating current page information in
@@ -404,6 +406,8 @@ PageActions::LeavePage()
     page.cruise_scale = map_settings.cruise_scale;
     page.circling_scale = map_settings.circling_scale;
     page.auto_zoom_enabled = map_settings.auto_zoom_enabled;
+
+    SaveCurrentPageAirspaceEnable();
   }
 }
 
@@ -450,6 +454,25 @@ PageActions::RestoreMapZoom()
   }
 
   RestoreTerrainColors();
+  RestoreAirspaceVisibility();
+}
+
+void
+PageActions::RestoreAirspaceVisibility()
+{
+  const PagesState &state = CommonInterface::GetUIState().pages;
+  if (state.special_page.IsDefined())
+    return;
+
+  const PageSettings &settings = CommonInterface::GetUISettings().pages;
+  const PageLayout &layout = settings.pages[state.current_index];
+
+  MapSettings &map_settings = CommonInterface::SetMapSettings();
+  if (map_settings.airspace.enable == layout.airspace_enable)
+    return;
+
+  map_settings.airspace.enable = layout.airspace_enable;
+  ActionInterface::SendMapSettings(true);
 }
 
 void
@@ -521,6 +544,7 @@ PageActions::Update()
 
   LoadLayout(GetCurrentLayout());
   RestoreTerrainColors();
+  RestoreAirspaceVisibility();
 }
 
 void
@@ -845,4 +869,24 @@ PageActions::AllowMapOverlayButtons() noexcept
      it; the map remains active and overlay buttons should stay. */
   return special_page.IsMapMain() &&
     special_page.bottom == PageLayout::Bottom::CUSTOM;
+}
+
+void
+PageActions::SaveCurrentPageAirspaceEnable() noexcept
+{
+  const PagesState &state = CommonInterface::GetUIState().pages;
+  if (state.special_page.IsDefined())
+    return;
+
+  const bool enable =
+    CommonInterface::GetMapSettings().airspace.enable;
+  PageSettings &page_settings = CommonInterface::SetUISettings().pages;
+  page_settings.pages[state.current_index].airspace_enable = enable;
+
+  char profile_key[32];
+  if (StringFormat(profile_key, sizeof(profile_key),
+                   "Page%uAirspaceEnable", state.current_index) <= 0)
+    return;
+
+  Profile::Set(profile_key, enable);
 }
