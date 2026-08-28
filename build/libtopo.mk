@@ -6,6 +6,7 @@ TOPO_SOURCES = \
 	$(SRC)/Topography/TopographyRenderer.cpp \
 	$(SRC)/Topography/Thread.cpp \
 	$(SRC)/Topography/TopographyGlue.cpp \
+	$(SRC)/Topography/TopographySettings.cpp \
 	$(SRC)/Topography/XShape.cpp \
 	$(SRC)/Topography/Index.cpp \
 	$(SRC)/Topography/CachedTopographyRenderer.cpp

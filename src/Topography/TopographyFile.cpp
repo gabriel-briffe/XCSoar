@@ -6,6 +6,7 @@
 #include "Convert.hpp"
 #include "Projection/WindowProjection.hpp"
 #include "util/ScopeExit.hxx"
+#include "util/StringAPI.hxx"
 
 #include <zzip/lib.h>
 
@@ -13,6 +14,7 @@
 #include <stdexcept>
 
 TopographyFile::TopographyFile(zzip_dir *_dir, const char *filename,
+                               const char *_layer_name,
                                double _threshold,
                                double _label_threshold,
                                double _important_label_threshold,
@@ -26,10 +28,16 @@ TopographyFile::TopographyFile(zzip_dir *_dir, const char *filename,
    label_field(_label_field),
    icon(_icon), big_icon(_big_icon), ultra_icon(_ultra_icon),
    pen_width(_pen_width),
-   color(_color), scale_threshold(_threshold),
+   color(_color),
+   default_scale_threshold(_threshold),
+   default_label_threshold(_label_threshold),
+   default_important_label_threshold(_important_label_threshold),
+   scale_threshold(_threshold),
    label_threshold(_label_threshold),
    important_label_threshold(_important_label_threshold)
 {
+  if (_layer_name != nullptr)
+    layer_name = _layer_name;
   const std::size_t n_shapes = file.size();
   constexpr std::size_t MAX_SHAPES = 16 * 1024 * 1024;
   if (n_shapes == 0)
@@ -58,6 +66,25 @@ TopographyFile::~TopographyFile() noexcept
     --dir->refcount;
     zzip_dir_free(dir);
   }
+}
+
+void
+TopographyFile::SetThresholds(double shape_threshold, double label_thr,
+                               double important_label_thr) noexcept
+{
+  scale_threshold = shape_threshold;
+  label_threshold = label_thr;
+  important_label_threshold = important_label_thr;
+  ++serial;
+}
+
+void
+TopographyFile::ResetThresholds() noexcept
+{
+  scale_threshold = default_scale_threshold;
+  label_threshold = default_label_threshold;
+  important_label_threshold = default_important_label_threshold;
+  ++serial;
 }
 
 void

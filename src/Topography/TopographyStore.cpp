@@ -2,9 +2,11 @@
 // Copyright The XCSoar Project
 
 #include "Topography/TopographyStore.hpp"
+#include "Topography/TopographySettings.hpp"
 #include "Index.hpp"
 #include "util/StringAPI.hxx"
 #include "util/StringCompare.hxx"
+#include "util/StringUtil.hpp"
 #include "io/LineReader.hpp"
 #include "system/ConvertPathName.hpp"
 #include "system/Path.hpp"
@@ -100,8 +102,12 @@ TopographyStore::Load(NLineReader &reader,
 
     // Create TopographyFile instance from parsed line
     try {
+      char layer_name[32];
+      CopyString(layer_name, sizeof(layer_name), entry->name);
+
       i = files.emplace_after(i,
                               zdir, shape_filename,
+                              layer_name,
                               entry->shape_range,
                               entry->label_range,
                               entry->important_label_range,
@@ -113,10 +119,53 @@ TopographyStore::Load(NLineReader &reader,
       LogError(std::current_exception());
     }
   }
+
+  TopographySettings::ApplyToStore(*this);
 }
 
 void
 TopographyStore::Reset() noexcept
 {
   files.clear();
+}
+
+TopographyFile *
+TopographyStore::FindLayer(const char *name) noexcept
+{
+  if (name == nullptr)
+    return nullptr;
+
+  for (auto &file : files)
+    if (StringIsEqual(file.GetLayerName(), name))
+      return &file;
+
+  return nullptr;
+}
+
+const TopographyFile *
+TopographyStore::FindLayer(const char *name) const noexcept
+{
+  if (name == nullptr)
+    return nullptr;
+
+  for (const auto &file : files)
+    if (StringIsEqual(file.GetLayerName(), name))
+      return &file;
+
+  return nullptr;
+}
+
+void
+TopographyStore::ResetAllLayerThresholds() noexcept
+{
+  for (auto &file : files)
+    file.ResetThresholds();
+
+  ++serial;
+}
+
+void
+TopographyStore::NotifyThresholdsChanged() noexcept
+{
+  ++serial;
 }
