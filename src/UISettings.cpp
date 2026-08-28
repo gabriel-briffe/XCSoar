@@ -28,8 +28,11 @@ UISettings::SetDefaults() noexcept
 #else
   show_menu_button = false;
 #endif
-  show_zoom_button = show_menu_button;
   show_quickmenu_button = HasTouchScreen();
+
+  transparent_quickmenu_button = false;
+
+  show_zoom_button = show_menu_button;
 
   custom_quick_menu = false;
   custom_quick_menu_count = 0;

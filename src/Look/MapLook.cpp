@@ -32,14 +32,14 @@ MapLook::Initialise(const MapSettings &settings,
 
   terrain_warning_icon.LoadResource(IDB_TERRAINWARNING_ALL);
 
-  compass_brush.Create(IsDithered() ? COLOR_WHITE : ColorWithAlpha(Color(207, 207, 207), alpha));
-  compass_pen.Create(Layout::ScalePenWidth(1),
-                     HasColors()? COLOR_GRAY : COLOR_BLACK);
+  compass_brush.Create(IsDithered()
+                       ? COLOR_WHITE
+                       : ColorWithAlpha(COLOR_BLACK, alpha));
+  compass_pen.Create(Layout::ScalePenWidth(1), COLOR_BLACK);
   compass_triangle_brush.Create(IsDithered()
                                 ? COLOR_BLACK
-                                : ColorWithAlpha(Color(50, 50, 50), alpha));
-  compass_triangle_pen.Create(Layout::ScalePenWidth(1),
-                              HasColors() ? COLOR_GRAY : COLOR_BLACK);
+                                : ColorWithAlpha(COLOR_BLACK, alpha));
+  compass_triangle_pen.Create(Layout::ScalePenWidth(1), COLOR_BLACK);
 
   traffic_safe_icon.LoadResource(IDB_TRAFFIC_SAFE_ALL, false);
   traffic_warning_icon.LoadResource(IDB_TRAFFIC_WARNING_ALL, false);

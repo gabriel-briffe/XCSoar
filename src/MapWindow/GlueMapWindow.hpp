@@ -190,6 +190,9 @@ class GlueMapWindow : public MapWindow {
    */
   unsigned int bottom_margin = 0;
 
+  /** While panning, keep the map north-up until pan mode is left. */
+  bool pan_force_north_up = false;
+
 #ifndef ENABLE_OPENGL
   /**
    * This mutex protects the attributes that are read by the
@@ -330,6 +333,7 @@ public:
   }
 
   void SetPan(bool enable) noexcept;
+  void SetPanNorthUp() noexcept;
   void TogglePan() noexcept;
   void PanTo(const GeoPoint &location) noexcept;
 

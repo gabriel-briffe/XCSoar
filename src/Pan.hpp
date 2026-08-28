@@ -31,3 +31,6 @@ LeavePan();
 
 void
 TogglePan();
+
+void
+SetPanNorthUp() noexcept;

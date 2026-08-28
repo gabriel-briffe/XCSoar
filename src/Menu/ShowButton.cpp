@@ -6,6 +6,8 @@
 #include "Renderer/SymbolButtonRenderer.hpp"
 #include "Look/ButtonLook.hpp"
 #include "Input/InputEvents.hpp"
+#include "Interface.hpp"
+#include "Pan.hpp"
 #include "PageActions.hpp"
 
 #include <memory>
@@ -51,6 +53,48 @@ MakeMapOverlaySymbolButton(const ButtonLook &look,
     std::make_unique<SymbolButtonRenderer>(look, caption));
 }
 
+/**
+ * Map overlay touch target with no visible drawing.
+ */
+class MapOverlayInvisibleButtonRenderer final : public ButtonRenderer {
+public:
+  void DrawButton(Canvas &, const PixelRect &,
+                  ButtonState) const noexcept override
+  {
+  }
+};
+
+/**
+ * Map overlay QuickMenu button; may be drawn invisibly per #UISettings.
+ */
+class QuickMenuOverlayButtonRenderer final : public ButtonRenderer {
+  SymbolButtonRenderer inner;
+
+public:
+  explicit QuickMenuOverlayButtonRenderer(const ButtonLook &look) noexcept
+    :inner(look, "q") {}
+
+  unsigned GetMinimumButtonWidth() const noexcept override {
+    return inner.GetMinimumButtonWidth();
+  }
+
+  void DrawButton(Canvas &canvas, const PixelRect &rc,
+                  ButtonState state) const noexcept override
+  {
+    if (CommonInterface::GetUISettings().transparent_quickmenu_button)
+      return;
+
+    inner.DrawButton(canvas, rc, state);
+  }
+};
+
+static std::unique_ptr<ButtonRenderer>
+MakeQuickMenuOverlayButton(const ButtonLook &look) noexcept
+{
+  return std::make_unique<ShowMapOverlayButtonRenderer>(
+    std::make_unique<QuickMenuOverlayButtonRenderer>(look));
+}
+
 void
 ShowMenuButton::Create(ContainerWindow &parent, const ButtonLook &look,
                        const PixelRect &rc, WindowStyle style) noexcept
@@ -70,13 +114,30 @@ ShowQuickMenuButton::Create(ContainerWindow &parent, const ButtonLook &look,
                             const PixelRect &rc,
                             WindowStyle style) noexcept
 {
-  Button::Create(parent, rc, style, MakeMapOverlaySymbolButton(look, "q"));
+  Button::Create(parent, rc, style, MakeQuickMenuOverlayButton(look));
 }
 
 bool
 ShowQuickMenuButton::OnClicked() noexcept
 {
   InputEvents::eventQuickMenu(nullptr);
+  return true;
+}
+
+void
+ShowPanNorthUpButton::Create(ContainerWindow &parent,
+                             [[maybe_unused]] const ButtonLook &look,
+                             const PixelRect &rc,
+                             WindowStyle style) noexcept
+{
+  Button::Create(parent, rc, style,
+                 std::make_unique<MapOverlayInvisibleButtonRenderer>());
+}
+
+bool
+ShowPanNorthUpButton::OnClicked() noexcept
+{
+  SetPanNorthUp();
   return true;
 }
 

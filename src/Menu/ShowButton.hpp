@@ -35,6 +35,18 @@ protected:
   bool OnClicked() noexcept override;
 };
 
+/* pan mode north-up button over the compass (test / placeholder) */
+class ShowPanNorthUpButton : public Button {
+public:
+  void Create(ContainerWindow &parent, const ButtonLook &look,
+              const PixelRect &rc,
+              WindowStyle style=WindowStyle()) noexcept;
+
+protected:
+  /* virtual methods from class ButtonWindow */
+  bool OnClicked() noexcept override;
+};
+
 /* map overlay zoom button (+ or -) */
 class ShowZoomButton : public Button {
 public:

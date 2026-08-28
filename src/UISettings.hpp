@@ -53,6 +53,8 @@ struct UISettings {
   bool show_menu_button;
   bool show_zoom_button;
   bool show_quickmenu_button;
+  /** Do not draw the map QuickMenu button (invisible touch target). */
+  bool transparent_quickmenu_button;
 
   /**
    * When enabled, the Quick Menu shows only the selected commands

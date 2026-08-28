@@ -45,6 +45,7 @@ enum ControlIndex {
   ShowMenuButton,
   ShowZoomButton,
   ShowQuickMenuButton,
+  TransparentQuickMenuButton,
 #ifdef DRAW_MOUSE_CURSOR
   CursorSize,
   CursorInverted,
@@ -271,6 +272,11 @@ LayoutConfigPanel::Prepare(ContainerWindow &parent,
              _("Show the QuickMenu button"),
              ui_settings.show_quickmenu_button);
   SetExpertRow(ShowQuickMenuButton);
+  AddBoolean(C_("Setting", "Transparent Quick Menu button"),
+             _("Do not draw the QuickMenu button on the map; it remains "
+               "an invisible touch target."),
+             ui_settings.transparent_quickmenu_button);
+  SetExpertRow(TransparentQuickMenuButton);
 
 #ifdef DRAW_MOUSE_CURSOR
   AddInteger(_("Cursor zoom"), _("Cursor zoom factor"), "%d x", "%d x", 1, 10, 1,
@@ -375,6 +381,12 @@ LayoutConfigPanel::Save(bool &_changed) noexcept
   if (SaveValue(ShowQuickMenuButton, ProfileKeys::ShowQuickMenuButton,
                 ui_settings.show_quickmenu_button))
     overlay_buttons_changed = changed = true;
+  if (SaveValue(TransparentQuickMenuButton,
+                ProfileKeys::TransparentQuickMenuButton,
+                ui_settings.transparent_quickmenu_button)) {
+    changed = true;
+    CommonInterface::main_window->InvalidateMapOverlayButtons();
+  }
   if (overlay_buttons_changed)
     CommonInterface::main_window->ReinitialiseMapOverlayButtons();
 

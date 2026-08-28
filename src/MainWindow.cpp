@@ -152,6 +152,20 @@ MainWindow::GetShowZoomButtonRect(const PixelRect rc,
   return GetMapOverlayButtonRect(rc, top);
 }
 
+[[gnu::pure]]
+PixelRect
+MainWindow::GetPanNorthUpButtonRect(const PixelRect rc) noexcept
+{
+  const unsigned size = std::max(1u, Layout::GetMaximumControlHeight());
+  const int compass_x = rc.right - int(Layout::Scale(19));
+  const int compass_y = rc.top + int(Layout::Scale(19));
+  const int half = int(size) / 2;
+
+  return PixelRect(compass_x - half, compass_y - half,
+                   compass_x - half + int(size),
+                   compass_y - half + int(size));
+}
+
 #ifdef ANDROID
 [[gnu::pure]]
 PixelRect
@@ -331,6 +345,8 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
   const bool overlay_buttons_active =
     widget == nullptr && map != nullptr &&
     PageActions::AllowMapOverlayButtons();
+  const bool pan_north_up_active =
+    widget == nullptr && map != nullptr && map->IsPanning();
 
   if (show_menu_button != nullptr) {
     show_menu_button->SetVisible(overlay_buttons_active);
@@ -359,6 +375,14 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
                                                       ShowZoomButton::Sign::ZOOM_IN));
   }
 
+  if (show_pan_north_up_button != nullptr) {
+    show_pan_north_up_button->SetVisible(pan_north_up_active);
+    show_pan_north_up_button->SetEnabled(pan_north_up_active);
+    if (pan_north_up_active)
+      show_pan_north_up_button->Move(
+        GetPanNorthUpButtonRect(map->GetPosition()));
+  }
+
 #ifdef ANDROID
   if (show_rotate_button != nullptr && overlay_buttons_active)
     show_rotate_button->Move(GetShowRotateButtonRect(map->GetPosition()));
@@ -372,7 +396,7 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
 
   /* Newly created overlay buttons are added after the map; keep the map
      underneath them (same as ReinitialiseLayout()). */
-  if (overlay_buttons_active)
+  if (overlay_buttons_active || pan_north_up_active)
     map->BringToBottom();
 }
 
@@ -429,7 +453,28 @@ MainWindow::ReinitialiseMapOverlayButtons() noexcept
     show_zoom_in_button = nullptr;
   }
 
+  if (show_pan_north_up_button == nullptr) {
+    show_pan_north_up_button = new ShowPanNorthUpButton();
+    show_pan_north_up_button->Create(*this, look->dialog.button,
+                                     GetPanNorthUpButtonRect(map_area_rect));
+  }
+
   UpdateMapOverlayButtonLayout();
+}
+
+void
+MainWindow::InvalidateMapOverlayButtons() noexcept
+{
+  if (show_menu_button != nullptr)
+    show_menu_button->Invalidate();
+  if (show_quickmenu_button != nullptr)
+    show_quickmenu_button->Invalidate();
+  if (show_zoom_out_button != nullptr)
+    show_zoom_out_button->Invalidate();
+  if (show_zoom_in_button != nullptr)
+    show_zoom_in_button->Invalidate();
+  if (show_pan_north_up_button != nullptr)
+    show_pan_north_up_button->Invalidate();
 }
 
 MainWindow::MainWindow(UI::Display &display) noexcept
@@ -588,6 +633,8 @@ MainWindow::Deinitialise() noexcept
   show_zoom_out_button = nullptr;
   delete show_zoom_in_button;
   show_zoom_in_button = nullptr;
+  delete show_pan_north_up_button;
+  show_pan_north_up_button = nullptr;
 
 #ifdef ANDROID
   rotate_button_timer.Cancel();

@@ -65,9 +65,28 @@ GlueMapWindow::SetPan(bool enable) noexcept
       return;
 
     follow_mode = FOLLOW_SELF;
+    pan_force_north_up = false;
     break;
   }
 
+  FullRedraw();
+}
+
+void
+GlueMapWindow::SetPanNorthUp() noexcept
+{
+  if (!IsPanning())
+    return;
+
+#ifdef HAVE_MULTI_TOUCH
+  manual_rotation = false;
+  pinch_rotating = false;
+#endif
+
+  pan_force_north_up = true;
+  visible_projection.SetScreenAngle(Angle::Zero());
+  OnProjectionModified();
+  compass_visible = true;
   FullRedraw();
 }
 
@@ -81,6 +100,7 @@ GlueMapWindow::TogglePan() noexcept
 
   case FOLLOW_PAN:
     follow_mode = FOLLOW_SELF;
+    pan_force_north_up = false;
     break;
   }
 
@@ -330,6 +350,7 @@ GlueMapWindow::UpdateScreenAngle() noexcept
        cannot reappear when leaving this page */
     manual_rotation = false;
 #endif
+    pan_force_north_up = false;
     visible_projection.SetScreenAngle(Angle::Zero());
     OnProjectionModified();
     compass_visible = false;
@@ -351,6 +372,13 @@ GlueMapWindow::UpdateScreenAngle() noexcept
     manual_rotation = false;
   }
 #endif
+
+  if (IsPanning() && pan_force_north_up) {
+    visible_projection.SetScreenAngle(Angle::Zero());
+    OnProjectionModified();
+    compass_visible = true;
+    return;
+  }
 
   MapOrientation orientation =
     ui_state.display_mode == DisplayMode::CIRCLING

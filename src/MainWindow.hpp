@@ -50,6 +50,7 @@ class MainWindow : public UI::SingleWindow {
   ShowQuickMenuButton *show_quickmenu_button = nullptr;
   ShowZoomButton *show_zoom_out_button = nullptr;
   ShowZoomButton *show_zoom_in_button = nullptr;
+  ShowPanNorthUpButton *show_pan_north_up_button = nullptr;
 
 #ifdef ANDROID
   ShowRotateButton *show_rotate_button = nullptr;
@@ -285,8 +286,6 @@ private:
    */
   void LayoutMapArea() noexcept;
 
-  void UpdateMapOverlayButtonLayout() noexcept;
-
   /**
    * Adjust the flarm radar position
    */
@@ -307,6 +306,12 @@ public:
    * UISettings, then update their positions.
    */
   void ReinitialiseMapOverlayButtons() noexcept;
+
+  /** Repaint map overlay buttons (e.g. after transparent-menu change). */
+  void InvalidateMapOverlayButtons() noexcept;
+
+  /** Update map overlay and pan-mode button visibility and layout. */
+  void UpdateMapOverlayButtonLayout() noexcept;
 
   /**
    * Called by XCSoarInterface::Startup() after startup has been
@@ -544,6 +549,7 @@ protected:
   PixelRect GetShowQuickMenuButtonRect(const PixelRect rc) noexcept;
   PixelRect GetShowZoomButtonRect(const PixelRect rc,
                                   ShowZoomButton::Sign sign) noexcept;
+  static PixelRect GetPanNorthUpButtonRect(const PixelRect rc) noexcept;
 
 #ifdef ANDROID
   static PixelRect GetShowRotateButtonRect(const PixelRect rc) noexcept;

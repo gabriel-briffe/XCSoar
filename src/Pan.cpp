@@ -49,6 +49,8 @@ FinishEnterPan() noexcept
 {
   InputEvents::setMode(InputEvents::MODE_DEFAULT);
   InputEvents::UpdatePan();
+  if (CommonInterface::main_window != nullptr)
+    CommonInterface::main_window->UpdateMapOverlayButtonLayout();
 }
 
 } // anonymous namespace
@@ -119,6 +121,8 @@ DisablePan()
   map->SetPan(false);
 
   InputEvents::UpdatePan();
+  if (CommonInterface::main_window != nullptr)
+    CommonInterface::main_window->UpdateMapOverlayButtonLayout();
   PageActions::ResumeWeatherOverlaysAfterPan();
 }
 
@@ -145,6 +149,8 @@ LeavePan()
     map->SetPan(false);
 
   InputEvents::UpdatePan();
+  if (CommonInterface::main_window != nullptr)
+    CommonInterface::main_window->UpdateMapOverlayButtonLayout();
   PageActions::Restore();
   PageActions::ResumeWeatherOverlaysAfterPan();
 }
@@ -156,4 +162,14 @@ TogglePan()
     LeavePan();
   else
     EnterPan();
+}
+
+void
+SetPanNorthUp() noexcept
+{
+  GlueMapWindow *map = UIGlobals::GetMapIfActive();
+  if (map == nullptr || !map->IsPanning())
+    return;
+
+  map->SetPanNorthUp();
 }
