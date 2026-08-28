@@ -27,6 +27,7 @@
 #include "Panels/WaypointDisplayConfigPanel.hpp"
 #include "Panels/SymbolsConfigPanel.hpp"
 #include "Panels/TerrainDisplayConfigPanel.hpp"
+#include "Panels/TopographyDisplayConfigPanel.hpp"
 #include "Panels/GlideComputerConfigPanel.hpp"
 #include "Panels/WindConfigPanel.hpp"
 #include "Panels/SafetyFactorsConfigPanel.hpp"
@@ -103,6 +104,7 @@ static constexpr TabMenuPage map_pages[] = {
   { N_("Elements"), CreateSymbolsConfigPanel },
   { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
   { N_("Terrain"), CreateTerrainDisplayConfigPanel },
+  { N_("Topology"), CreateTopographyDisplayConfigPanel },
   { N_("Airspace"), CreateAirspaceConfigPanel },
 #ifdef HAVE_HTTP
   { NC_("Setting", "NOTAM"), CreateNOTAMConfigPanel },

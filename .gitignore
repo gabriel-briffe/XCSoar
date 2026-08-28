@@ -18,6 +18,7 @@ output
 perf.data
 perf.data.old
 rasp/data
+resources/
 .#*
 callgrind.out.*
 tmp/

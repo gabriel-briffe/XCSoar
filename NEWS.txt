@@ -59,6 +59,9 @@ Version 7.46 - not yet released
   - add Terrain colors on Config → Look → Pages (map pages) so each
     page can use its own ramp or the Map Display → Terrain default;
     the choice is stored with the page and restored after restart
+  - add Map Display → Topology to override per-layer shape and label
+    zoom thresholds from topology.tpl; overrides are stored per map
+    file in the profile #2992
   - open Config → Look → Pages with the currently active map page
     selected in the list
   - fix the ragged white halo behind map labels on high-DPI screens

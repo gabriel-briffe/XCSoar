@@ -36,6 +36,14 @@ public:
     return serial;
   }
 
+  auto begin() noexcept {
+    return files.begin();
+  }
+
+  auto end() noexcept {
+    return files.end();
+  }
+
   auto begin() const noexcept {
     return files.begin();
   }
@@ -67,4 +75,12 @@ public:
   void Load(NLineReader &reader,
             Path directory, struct zzip_dir *zdir = nullptr) noexcept;
   void Reset() noexcept;
+
+  TopographyFile *FindLayer(const char *name) noexcept;
+  const TopographyFile *FindLayer(const char *name) const noexcept;
+
+  void ResetAllLayerThresholds() noexcept;
+
+  /** Increment store serial after user threshold edits (map refresh). */
+  void NotifyThresholdsChanged() noexcept;
 };

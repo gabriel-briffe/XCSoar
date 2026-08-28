@@ -139,6 +139,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/TaskDefaultsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/ScoringConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/TerrainDisplayConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/TopographyDisplayConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/UnitsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/TimeConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/WaypointDisplayConfigPanel.cpp \

@@ -8,6 +8,7 @@
 #include "util/AllocatedArray.hxx"
 #include "util/IntrusiveForwardList.hxx"
 #include "util/Serial.hpp"
+#include "util/StaticString.hxx"
 #include "ui/canvas/PortableColor.hpp"
 #include "ResourceId.hpp"
 #include "thread/Mutex.hxx"
@@ -55,24 +56,21 @@ class TopographyFile {
 
   const BGRA8Color color;
 
-  /**
-   * The threshold value for the visibility check. If the current scale
-   * is below this value the contents of this TopographyFile will be drawn.
-   */
-  const double scale_threshold;
+  StaticString<32> layer_name;
 
   /**
-   * The threshold value for label rendering. If the current scale
-   * is below this value no labels of this TopographyFile will be drawn.
+   * Default thresholds from topology.tpl (GetMapScale() units, nm×1000).
    */
-  const double label_threshold;
+  const double default_scale_threshold;
+  const double default_label_threshold;
+  const double default_important_label_threshold;
 
   /**
-   * The threshold value for label rendering in important style . If the current
-   * scale is below this value labels of this TopographyFile will be drawn
-   * in standard style
+   * Effective thresholds (may be overridden in Map Display → Topology).
    */
-  const double important_label_threshold;
+  double scale_threshold;
+  double label_threshold;
+  double important_label_threshold;
 
   /**
    * The current scope of the shape cache.  If the screen exceeds this
@@ -124,6 +122,7 @@ public:
    * Throws on error.
    *
    * @param shpname The shapefile to open (*.shp)
+   * @param layer_name Layer name from topology.tpl (without .shp)
    * @param threshold the zoom threshold for displaying this object
    * @param color The color to use for drawing, including alpha for OpenGL
    * @param label_field The field in which the labels should be searched
@@ -135,6 +134,7 @@ public:
    * be rendered in default style
    */
   TopographyFile(zzip_dir *dir, const char *shpname,
+                 const char *layer_name,
                  double threshold, double label_threshold,
                  double important_label_threshold,
                  const BGRA8Color color,
@@ -158,6 +158,45 @@ public:
   const GeoPoint &GetCenter() const noexcept {
     return center;
   }
+
+  const char *GetLayerName() const noexcept {
+    return layer_name.c_str();
+  }
+
+  [[gnu::pure]]
+  double GetDefaultScaleThreshold() const noexcept {
+    return default_scale_threshold;
+  }
+
+  [[gnu::pure]]
+  double GetDefaultLabelThreshold() const noexcept {
+    return default_label_threshold;
+  }
+
+  [[gnu::pure]]
+  double GetDefaultImportantLabelThreshold() const noexcept {
+    return default_important_label_threshold;
+  }
+
+  [[gnu::pure]]
+  double GetScaleThreshold() const noexcept {
+    return scale_threshold;
+  }
+
+  [[gnu::pure]]
+  double GetLabelThreshold() const noexcept {
+    return label_threshold;
+  }
+
+  [[gnu::pure]]
+  double GetImportantLabelThreshold() const noexcept {
+    return important_label_threshold;
+  }
+
+  void SetThresholds(double shape_threshold, double label_thr,
+                     double important_label_thr) noexcept;
+
+  void ResetThresholds() noexcept;
 
   bool IsVisible(double map_scale) const noexcept {
     return map_scale <= scale_threshold;

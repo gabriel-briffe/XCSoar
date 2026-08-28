@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: xcsoar\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-20 22:41+0200\n"
+"POT-Creation-Date: 2026-08-28 13:33+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -673,6 +673,10 @@ msgstr ""
 msgid "NOTAM list requires HTTP support"
 msgstr ""
 
+#, no-c-format
+msgid "Pages"
+msgstr ""
+
 msgid "Auto. zoom on"
 msgstr ""
 
@@ -910,6 +914,16 @@ msgid "Info Hide"
 msgstr ""
 
 msgid "Map (Full screen)"
+msgstr ""
+
+#, no-c-format
+msgctxt "Weather layer"
+msgid "Sat"
+msgstr ""
+
+#, no-c-format
+msgctxt "Weather layer"
+msgid "Rain"
 msgstr ""
 
 msgid "No data"
@@ -1174,6 +1188,16 @@ msgstr ""
 msgid "Ceiling trend"
 msgstr ""
 
+msgid "Takeoff"
+msgstr ""
+
+#, no-c-format
+msgid "Landing"
+msgstr ""
+
+msgid "Flight time"
+msgstr ""
+
 msgid "Avg. climb"
 msgstr ""
 
@@ -1382,10 +1406,6 @@ msgid "InfoBox Sets"
 msgstr ""
 
 #, no-c-format
-msgid "Pages"
-msgstr ""
-
-#, no-c-format
 msgid "WeGlide"
 msgstr ""
 
@@ -1581,6 +1601,14 @@ msgstr ""
 
 #, c-format
 msgid "Uploaded %u file(s)"
+msgstr ""
+
+msgid "Sharing is not available."
+msgstr ""
+
+#, no-c-format
+msgctxt "Button"
+msgid "Share"
 msgstr ""
 
 #, no-c-format
@@ -2045,6 +2073,9 @@ msgstr ""
 msgid "Whether you use a K6Bt to connect the device."
 msgstr ""
 
+msgid "Slow merge thread"
+msgstr ""
+
 #, no-c-format
 msgid "Edit"
 msgstr ""
@@ -2396,10 +2427,6 @@ msgstr ""
 
 #, no-c-format
 msgid "Negative"
-msgstr ""
-
-#, no-c-format
-msgid "Landing"
 msgstr ""
 
 #, no-c-format
@@ -2970,6 +2997,10 @@ msgid "Terrain"
 msgstr ""
 
 #, no-c-format
+msgid "Topology"
+msgstr ""
+
+#, no-c-format
 msgid "Glide Computer"
 msgstr ""
 
@@ -3010,11 +3041,23 @@ msgid "Screen Layout"
 msgstr ""
 
 #, no-c-format
+msgid "Quick Menu"
+msgstr ""
+
+#, no-c-format
 msgid "Thermal Information Map"
 msgstr ""
 
 #, no-c-format
+msgid "Controls"
+msgstr ""
+
+#, no-c-format
 msgid "Audio"
+msgstr ""
+
+#, no-c-format
+msgid "Services"
 msgstr ""
 
 #, no-c-format
@@ -3042,6 +3085,9 @@ msgid "Expert"
 msgstr ""
 
 msgid "Configuration"
+msgstr ""
+
+msgid "Back"
 msgstr ""
 
 msgid "The name of this InfoBox panel configuration."
@@ -3242,6 +3288,33 @@ msgstr ""
 msgid "No checklist loaded"
 msgstr ""
 
+msgid "No flights"
+msgstr ""
+
+msgid "No IGC files found in the logs folder."
+msgstr ""
+
+msgid "More…"
+msgstr ""
+
+msgid "…"
+msgstr ""
+
+msgid "(no takeoff/landing)"
+msgstr ""
+
+msgid "warn:"
+msgstr ""
+
+msgid "started too late"
+msgstr ""
+
+msgid "ended too early"
+msgstr ""
+
+msgid "Logbook"
+msgstr ""
+
 msgid "New"
 msgstr ""
 
@@ -3406,6 +3479,25 @@ msgstr ""
 #, no-c-format
 msgctxt "Menu"
 msgid "WiFi"
+msgstr ""
+
+msgid "WiFi service is not available."
+msgstr ""
+
+msgid "Failed to open system settings."
+msgstr ""
+
+#, no-c-format
+msgctxt "Setting"
+msgid "Connectivity"
+msgstr ""
+
+msgid "Open the Settings app, then go to Wi-Fi."
+msgstr ""
+
+#, no-c-format
+msgctxt "Setting"
+msgid "WiFi management"
 msgstr ""
 
 msgid "Switch InfoBox"
@@ -3591,9 +3683,6 @@ msgstr ""
 msgid "UTC date"
 msgstr ""
 
-msgid "Flight time"
-msgstr ""
-
 msgid "Takeoff time"
 msgstr ""
 
@@ -3761,6 +3850,9 @@ msgid "Pan To"
 msgstr ""
 
 msgid "Waypoint"
+msgstr ""
+
+msgid "Non-ICAO airports"
 msgstr ""
 
 msgid "Delete waypoint?"
@@ -4317,6 +4409,15 @@ msgstr ""
 msgid "Controls whether the \"final glide\" InfoBox mode should be used on \"auto\" pages."
 msgstr ""
 
+msgid "Custom menu"
+msgstr ""
+
+msgid "When enabled, the Quick Menu shows only the commands selected below, in that order. When disabled, the full default Quick Menu is used; your selection is kept for when you turn this back on."
+msgstr ""
+
+msgid "Add command"
+msgstr ""
+
 msgid "Text size"
 msgstr ""
 
@@ -4685,6 +4786,14 @@ msgstr ""
 msgid "Show the QuickMenu button"
 msgstr ""
 
+#, no-c-format
+msgctxt "Setting"
+msgid "Transparent Quick Menu button"
+msgstr ""
+
+msgid "Do not draw the QuickMenu button on the map; it remains an invisible touch target."
+msgstr ""
+
 msgid "Cursor zoom"
 msgstr ""
 
@@ -4845,9 +4954,6 @@ msgstr ""
 msgid "Maintain one map zoom level on each page."
 msgstr ""
 
-msgid "WiFi service is not available."
-msgstr ""
-
 msgid "Managed by system settings."
 msgstr ""
 
@@ -4888,22 +4994,6 @@ msgid "Auto WiFi"
 msgstr ""
 
 msgid "Enable WiFi automatically at startup."
-msgstr ""
-
-msgid "Failed to open system settings."
-msgstr ""
-
-#, no-c-format
-msgctxt "Setting"
-msgid "Connectivity"
-msgstr ""
-
-msgid "Open the Settings app, then go to Wi-Fi."
-msgstr ""
-
-#, no-c-format
-msgctxt "Setting"
-msgid "WiFi management"
 msgstr ""
 
 msgid "In-app network settings are not available in this build."
@@ -5033,6 +5123,88 @@ msgid "Specifies what should be displayed below the main area. Weather controls 
 msgstr ""
 
 #, no-c-format
+msgid "Use the Terrain colors from Map Display → Terrain."
+msgstr ""
+
+#, no-c-format
+msgid "Low lands"
+msgstr ""
+
+#, no-c-format
+msgid "Mountainous"
+msgstr ""
+
+#, no-c-format
+msgid "Imhof 7"
+msgstr ""
+
+#, no-c-format
+msgid "Imhof 4"
+msgstr ""
+
+#, no-c-format
+msgid "Imhof 12"
+msgstr ""
+
+#, no-c-format
+msgid "Imhof Atlas"
+msgstr ""
+
+#, no-c-format
+msgid "ICAO"
+msgstr ""
+
+#, no-c-format
+msgid "Vibrant"
+msgstr ""
+
+#, no-c-format
+msgid "Grey"
+msgstr ""
+
+#, no-c-format
+msgid "White"
+msgstr ""
+
+#, no-c-format
+msgid "Sandstone"
+msgstr ""
+
+#, no-c-format
+msgid "Pastel"
+msgstr ""
+
+#, no-c-format
+msgid "Italian Avioportolano VFR Chart"
+msgstr ""
+
+#, no-c-format
+msgid "German DFS VFR Chart"
+msgstr ""
+
+#, no-c-format
+msgid "French SIA VFR Chart"
+msgstr ""
+
+#, no-c-format
+msgid "High Contrast"
+msgstr ""
+
+#, no-c-format
+msgid "High Contrast low lands"
+msgstr ""
+
+#, no-c-format
+msgid "Very low lands"
+msgstr ""
+
+msgid "Terrain colors"
+msgstr ""
+
+msgid "Terrain color ramp for this map page. Default follows Map Display → Terrain."
+msgstr ""
+
+#, no-c-format
 msgctxt "Abbreviation"
 msgid "RASP"
 msgstr ""
@@ -5051,6 +5223,15 @@ msgid "Optional weather overlay on map pages. Use with Weather controls in the b
 msgstr ""
 
 msgid "Select a weather map overlay to configure its layer or level for this page."
+msgstr ""
+
+msgid "SkySight is unavailable."
+msgstr ""
+
+msgid "SkySight API rate-limited. Retrying shortly."
+msgstr ""
+
+msgid "Loading SkySight catalog..."
 msgstr ""
 
 #, no-c-format
@@ -5714,81 +5895,6 @@ msgstr ""
 msgid "Draw topographical features (roads, rivers, lakes etc.) on the map."
 msgstr ""
 
-#, no-c-format
-msgid "Low lands"
-msgstr ""
-
-#, no-c-format
-msgid "Mountainous"
-msgstr ""
-
-#, no-c-format
-msgid "Imhof 7"
-msgstr ""
-
-#, no-c-format
-msgid "Imhof 4"
-msgstr ""
-
-#, no-c-format
-msgid "Imhof 12"
-msgstr ""
-
-#, no-c-format
-msgid "Imhof Atlas"
-msgstr ""
-
-#, no-c-format
-msgid "ICAO"
-msgstr ""
-
-#, no-c-format
-msgid "Vibrant"
-msgstr ""
-
-#, no-c-format
-msgid "Grey"
-msgstr ""
-
-#, no-c-format
-msgid "White"
-msgstr ""
-
-#, no-c-format
-msgid "Sandstone"
-msgstr ""
-
-#, no-c-format
-msgid "Pastel"
-msgstr ""
-
-#, no-c-format
-msgid "Italian Avioportolano VFR Chart"
-msgstr ""
-
-#, no-c-format
-msgid "German DFS VFR Chart"
-msgstr ""
-
-#, no-c-format
-msgid "French SIA VFR Chart"
-msgstr ""
-
-#, no-c-format
-msgid "High Contrast"
-msgstr ""
-
-#, no-c-format
-msgid "High Contrast low lands"
-msgstr ""
-
-#, no-c-format
-msgid "Very low lands"
-msgstr ""
-
-msgid "Terrain colors"
-msgstr ""
-
 msgid "Defines the color ramp used in terrain rendering."
 msgstr ""
 
@@ -5896,6 +6002,36 @@ msgid "Contours"
 msgstr ""
 
 msgid "Draw contour lines on the terrain. Contour mode controls density of contour lines."
+msgstr ""
+
+msgid "Topology layers"
+msgstr ""
+
+msgid "Per-layer visibility thresholds from the map file (topology.tpl). Load a map with vector topography to adjust them."
+msgstr ""
+
+msgid "No vector topography in the current map."
+msgstr ""
+
+msgid "Reset to map defaults"
+msgstr ""
+
+msgid "shapes"
+msgstr ""
+
+msgid "Maximum map scale in nautical miles at which shapes are drawn. Larger values keep the layer visible when more zoomed out."
+msgstr ""
+
+msgid "labels"
+msgstr ""
+
+msgid "Maximum map scale in nautical miles at which labels are drawn."
+msgstr ""
+
+msgid "important labels"
+msgstr ""
+
+msgid "Labels below this map scale use the default style (smaller / less prominent)."
 msgstr ""
 
 msgid "Preset"
@@ -6124,10 +6260,18 @@ msgstr ""
 msgid "Airports and outlanding fields are displayed in the colors of a traffic light. Green if reachable, Orange if blocked by mountain and red if not reachable at all."
 msgstr ""
 
+#, no-c-format
+msgid "Purple circle only"
+msgstr ""
+
+#, no-c-format
+msgid "Airports and outlanding fields are displayed as purple circles only. Reachability is not calculated or shown for landables."
+msgstr ""
+
 msgid "Landable symbols"
 msgstr ""
 
-msgid "Three styles are available: Purple circles (WinPilot style), a high contrast (monochrome) style, or orange. The rendering differs for landable field and airport. All styles mark the waypoints within reach green."
+msgid "Purple circles (WinPilot style), high-contrast monochrome, traffic lights, or purple circles without reach marking. The first three styles mark waypoints within reach green."
 msgstr ""
 
 msgid "Waypoint icon size"
@@ -6159,6 +6303,12 @@ msgid ""
 msgstr ""
 
 msgid "Show thermal locations downloaded from Thermal Information Map (thermalmap.info)."
+msgstr ""
+
+msgid "Height"
+msgstr ""
+
+msgid "Height of the weather overlay control rows at the bottom of the map, as a percentage of the default touch/control height."
 msgstr ""
 
 msgid "pc_met Username"
@@ -6201,10 +6351,25 @@ msgstr ""
 msgid "Forecast region. Changes which model XC Therm fetches data from. Restart or re-download after changing."
 msgstr ""
 
+msgid "Overlay opacity"
+msgstr ""
+
+#, no-c-format
+msgid "Sets the opacity of the XC Therm overlay on the map.  50% is more transparent, 100% is fully opaque."
+msgstr ""
+
 msgid "XC Therm Auto Layer/Time"
 msgstr ""
 
 msgid "Automatically switch altitude layer based on GPS altitude and forecast time based on UTC clock."
+msgstr ""
+
+#, no-c-format
+msgctxt "Setting"
+msgid "Rainbow API key"
+msgstr ""
+
+msgid "API token from the Rainbow.ai developer portal."
 msgstr ""
 
 msgid "Allow download of declared tasks from Weglide in the Task Manager."
@@ -6528,10 +6693,12 @@ msgstr ""
 msgid "Optimized"
 msgstr ""
 
-msgid "Altn mode: MANUAL"
-msgstr ""
-
-msgid "Altn mode: AUTO"
+#. Alternate Mode: Auto returns a MANUAL slot to the computed
+#. list. Pinning is Select as Alternate, which is always
+#. available and sets MANUAL.
+#, no-c-format
+msgctxt "Button"
+msgid "Alternate Mode: Auto"
 msgstr ""
 
 #, no-c-format
@@ -6554,6 +6721,9 @@ msgstr ""
 #, no-c-format
 msgctxt "Menu"
 msgid "Alternates 2"
+msgstr ""
+
+msgid "Paste"
 msgstr ""
 
 msgid "Reset"
@@ -6579,9 +6749,6 @@ msgid "Auto update"
 msgstr ""
 
 msgid "Automatically download a newer RASP file when the configured forecast is missing or out of date."
-msgstr ""
-
-msgid "Overlay opacity"
 msgstr ""
 
 #, no-c-format
@@ -6883,6 +7050,9 @@ msgstr ""
 msgid "Gesture Help"
 msgstr ""
 
+msgid "Customize quick menu"
+msgstr ""
+
 #, no-c-format
 msgctxt "Setting"
 msgid "Manual"
@@ -7002,7 +7172,42 @@ msgstr ""
 msgid "Not downloaded"
 msgstr ""
 
-msgid "No layer selected."
+msgid "Delete all cached XC Therm forecast data? This includes every altitude layer and region."
+msgstr ""
+
+msgid "XC Therm"
+msgstr ""
+
+#, no-c-format
+msgctxt "Weather control"
+msgid "Span"
+msgstr ""
+
+msgid "How many forecast hours to download for each selected layer."
+msgstr ""
+
+#, c-format
+msgid "Forecast time for the current map page %s overlay. Opens the same picker as the weather controls (Auto, Now, or a UTC hour)."
+msgstr ""
+
+#, no-c-format
+msgctxt "Weather control"
+msgid "Altitude"
+msgstr ""
+
+msgid "Altitude band for the current map page. Use Apply to page to commit changes."
+msgstr ""
+
+#, no-c-format
+msgctxt "Button"
+msgid "Preload Selected"
+msgstr ""
+
+msgid "No layers selected."
+msgstr ""
+
+#, c-format
+msgid "Download %u selected XC Therm layers for offline use?"
 msgstr ""
 
 msgid "Network is not available."
@@ -7022,30 +7227,18 @@ msgid ""
 "Some slots were unavailable."
 msgstr ""
 
-msgid "Altitude layer used for Update and Delete. Use Altitude below to change what the map shows."
-msgstr ""
-
-msgid "Download and cache status for the selected layer."
-msgstr ""
-
 #, no-c-format
-msgctxt "Weather control"
-msgid "Span"
+msgctxt "Weather layer"
+msgid "Satellite"
 msgstr ""
 
-msgid "How many forecast hours to download with Update."
+msgid "Latest Rainbow cloud tiles"
 msgstr ""
 
-#, c-format
-msgid "Forecast time for the current map page %s overlay. Opens the same picker as the weather controls (Auto, Now, or a UTC hour)."
+msgid "Latest Rainbow precipitation tiles"
 msgstr ""
 
-#, no-c-format
-msgctxt "Weather control"
-msgid "Altitude"
-msgstr ""
-
-msgid "Altitude band for the current map page. Use Apply to page to commit changes."
+msgid "Pages setup"
 msgstr ""
 
 msgid "Enter your account details."
@@ -7064,12 +7257,6 @@ msgid "Please enter four letters or digits only (ICAO station code)."
 msgstr ""
 
 msgid "This function is not available on your platform yet."
-msgstr ""
-
-msgid "SkySight API rate-limited. Retrying shortly."
-msgstr ""
-
-msgid "Loading SkySight catalog..."
 msgstr ""
 
 msgid "No SkySight layers selected. Press Add to list to choose parameters."
@@ -7144,11 +7331,6 @@ msgid "Preload Layer"
 msgstr ""
 
 #, no-c-format
-msgctxt "Button"
-msgid "Preload Selected"
-msgstr ""
-
-#, no-c-format
 msgctxt "Status"
 msgid "Loading"
 msgstr ""
@@ -7205,9 +7387,6 @@ msgstr ""
 #, no-c-format
 msgctxt "Button"
 msgid "Clear downloaded data"
-msgstr ""
-
-msgid "SkySight is unavailable."
 msgstr ""
 
 msgid "Failed to acknowledge airspace warning"
@@ -7317,20 +7496,21 @@ msgstr ""
 msgid "SkySight cache finished: %u of %u files ready, %u failed."
 msgstr ""
 
-#, no-c-format
-msgctxt "Weather layer"
-msgid "Satellite"
-msgstr ""
-
 msgid "Live SkySight satellite tiles"
 msgstr ""
 
-#, no-c-format
-msgctxt "Weather layer"
-msgid "Rain"
+msgid "Live SkySight precipitation tiles"
 msgstr ""
 
-msgid "Live SkySight precipitation tiles"
+#, no-c-format
+msgctxt "Weather layer"
+msgid "Sat+Rain"
+msgstr ""
+
+msgid "Live SkySight satellite with rain overlay"
+msgstr ""
+
+msgid "Location access denied"
 msgstr ""
 
 msgid "No METAR available"
@@ -9591,9 +9771,6 @@ msgstr ""
 msgid "Simulator Steer by dragging from the glider, or using InfoBoxes Altitude and Speed Ground"
 msgstr ""
 
-msgid "Takeoff"
-msgstr ""
-
 msgid "Above final glide"
 msgstr ""
 
@@ -9759,15 +9936,20 @@ msgstr ""
 
 msgid ""
 "Info\n"
-"Page 2/3"
+"Page 2/4"
 msgstr ""
 
 msgid ""
 "Info\n"
-"Page 3/3"
+"Page 3/4"
 msgstr ""
 
 msgid "NOTAMs"
+msgstr ""
+
+msgid ""
+"Info\n"
+"Page 4/4"
 msgstr ""
 
 msgid "Airspaces"
@@ -9800,4 +9982,7 @@ msgstr ""
 msgid ""
 "Forecast\n"
 "Controls"
+msgstr ""
+
+msgid "WiFi List"
 msgstr ""
