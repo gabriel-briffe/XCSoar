@@ -26,6 +26,7 @@ enum ControlIndex {
   DisableAutoLogger,
   EnableNMEALogger,
   EnableFlightLogger,
+  LogSim,
   LoggerID,
 };
 
@@ -95,6 +96,13 @@ LoggerConfigPanel::Prepare(ContainerWindow &parent,
              logger.enable_flight_logger);
   SetExpertRow(EnableFlightLogger);
 
+  AddBoolean(_("Log sim"),
+             _("Allow the IGC logger (including Auto. logger) while the "
+               "simulator is running. Simulator flights use a -SIM- "
+               "filename. Off by default."),
+             logger.log_sim);
+  SetExpertRow(LogSim);
+
   AddText(_("Logger ID"),
           _("The three-letter logger ID used in the IGC filename."),
           logger.logger_id);
@@ -141,6 +149,8 @@ LoggerConfigPanel::Save(bool &changed) noexcept
        setting */
     require_restart = true;
   }
+
+  changed |= SaveValue(LogSim, ProfileKeys::LogSim, logger.log_sim);
 
   changed |= SaveValue(LoggerID, ProfileKeys::LoggerID, logger.logger_id);
 

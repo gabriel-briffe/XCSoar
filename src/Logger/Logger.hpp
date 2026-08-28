@@ -22,6 +22,8 @@ public:
   void LogStartEvent(const NMEAInfo &gps_info);
   void LogFinishEvent(const NMEAInfo &gps_info);
   void LogPilotEvent(const NMEAInfo &gps_info);
+  void LogTakeoffEvent(const NMEAInfo &gps_info, TimeStamp takeoff_time);
+  void LogLandingEvent(const NMEAInfo &gps_info, TimeStamp landing_time);
 
   [[gnu::pure]]
   bool IsLoggerActive() const noexcept;

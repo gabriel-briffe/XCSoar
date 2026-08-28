@@ -432,7 +432,8 @@ InputEvents::eventPlaySound(const char *misc)
 void
 InputEvents::eventAutoLogger(const char *misc)
 {
-  if (is_simulator())
+  if (is_simulator() &&
+      !CommonInterface::GetComputerSettings().logger.log_sim)
     return;
 
   LoggerSettings::AutoLogger auto_logger =
@@ -459,6 +460,8 @@ InputEvents::eventAutoLogger(const char *misc)
 // show: displays a status message indicating whether the logger is active
 // nmea: turns on and off NMEA logging
 // note: the text following the 'note' characters is added to the log file
+// takeoff: write TKOFF E-record at FlyingComputer takeoff time
+// landing: write LAND E-record at FlyingComputer landing time
 void
 InputEvents::eventLogger(const char *misc)
 try {
@@ -504,7 +507,23 @@ try {
     } else {
       Message::AddMessage(_("Logger off"));
     }
-  else if (StringIsEqual(misc, "note", 4))
+  else if (StringIsEqual(misc, "takeoff")) {
+    if (basic.gps.replay)
+      return;
+    if (is_simulator() && !settings_computer.logger.log_sim)
+      return;
+    const auto &flight = CommonInterface::Calculated().flight;
+    if (flight.HasTakenOff())
+      logger->LogTakeoffEvent(basic, flight.takeoff_time);
+  } else if (StringIsEqual(misc, "landing")) {
+    if (basic.gps.replay)
+      return;
+    if (is_simulator() && !settings_computer.logger.log_sim)
+      return;
+    const auto &flight = CommonInterface::Calculated().flight;
+    if (flight.landing_time.IsDefined())
+      logger->LogLandingEvent(basic, flight.landing_time);
+  } else if (StringIsEqual(misc, "note", 4))
     // add note to logger file if available..
     logger->LoggerNote(misc + 4);
 } catch (...) {

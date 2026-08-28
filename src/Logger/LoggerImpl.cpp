@@ -102,6 +102,28 @@ LoggerImpl::LogEvent(const NMEAInfo &gps_info, const char *event)
 }
 
 void
+LoggerImpl::LogEventAt(const NMEAInfo &gps_info, TimeStamp time,
+                       const char *event)
+{
+  if (writer == nullptr || !time.IsDefined())
+    return;
+
+  if (gps_info.location_available && !gps_info.gps.real)
+    simulator = true;
+
+  const BrokenDateTime date_time = gps_info.GetDateTimeAt(time);
+  if (!date_time.IsPlausible())
+    return;
+
+  /* Flush buffered pre-takeoff points first so the E-record sits in
+     chronological order after them. */
+  FlushPreTakeoffBuffer();
+
+  writer->LogEvent(date_time, event);
+  WritePoint(gps_info);
+}
+
+void
 LoggerImpl::LogPoint(const NMEAInfo &gps_info)
 {
   if (!gps_info.alive || !gps_info.time_available)
@@ -111,6 +133,15 @@ LoggerImpl::LogPoint(const NMEAInfo &gps_info)
     LogPointToBuffer(gps_info);
     return;
   }
+
+  FlushPreTakeoffBuffer();
+  WritePoint(gps_info);
+}
+
+void
+LoggerImpl::FlushPreTakeoffBuffer() noexcept
+{
+  assert(writer != nullptr);
 
   while (!pre_takeoff_buffer.empty()) {
     const struct PreTakeoffBuffer &src = pre_takeoff_buffer.shift();
@@ -165,8 +196,6 @@ LoggerImpl::LogPoint(const NMEAInfo &gps_info)
 
     WritePoint(tmp_info);
   }
-
-  WritePoint(gps_info);
 }
 
 void
@@ -210,8 +239,9 @@ LoggerImpl::StartLogger(const NMEAInfo &gps_info,
     : BrokenDate::TodayUTC();
 
   StaticString<64> name;
+  const char *manufacturer = is_simulator() ? "SIM" : "XCS";
   for (int i = 1; i < 99; i++) {
-    FormatIGCFilenameLong(name.buffer(), today, "XCS", logger_id, i);
+    FormatIGCFilenameLong(name.buffer(), today, manufacturer, logger_id, i);
 
     filename = AllocatedPath::Build(logs_path, name);
     if (!File::Exists(filename))

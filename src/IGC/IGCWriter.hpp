@@ -77,12 +77,10 @@ public:
 
   void LogPoint(const IGCFix &fix, int epe, int satellites);
   void LogPoint(const NMEAInfo &gps_info);
+  void LogEvent(const BrokenTime &time, const char *event);
   void LogEvent(const IGCFix &fix, int epe, int satellites, const char *event);
   void LogEvent(const NMEAInfo &gps_info, const char *event);
 
   void LogEmptyFRecord(const BrokenTime &time);
   void LogFRecord(const BrokenTime &time, const int *satellite_ids);
-
-protected:
-  void LogEvent(const BrokenTime &time, const char *event = "");
 };

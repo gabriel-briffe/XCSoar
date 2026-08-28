@@ -19,4 +19,6 @@ LoggerSettings::SetDefaults()
   enable_flight_logger = false;
 
   enable_nmea_logger = false;
+
+  log_sim = false;
 }

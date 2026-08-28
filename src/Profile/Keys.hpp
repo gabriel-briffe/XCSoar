@@ -217,6 +217,7 @@ constexpr std::string_view AutoLogger = "AutoLogger";
 constexpr std::string_view DisableAutoLogger = "DisableAutoLogger";
 constexpr std::string_view EnableFlightLogger = "EnableFlightLogger";
 constexpr std::string_view EnableNMEALogger = "EnableNMEALogger";
+constexpr std::string_view LogSim = "LogSim";
 constexpr std::string_view MapFile = "MapFile"; // pL
 constexpr std::string_view BallastSecsToEmpty = "BallastSecsToEmpty";
 constexpr std::string_view DialogFont = "DialogFont";

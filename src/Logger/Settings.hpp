@@ -21,6 +21,14 @@ struct LoggerSettings {
    */
   bool enable_nmea_logger;
 
+  /**
+   * Allow Auto logger / IGC logging while the simulator is running.
+   * Off by default so sim sessions do not create IGC files unless
+   * explicitly enabled.  Simulator IGC filenames use manufacturer
+   * code ``SIM`` (…``-SIM-``…).
+   */
+  bool log_sim;
+
   /** Logger interval in cruise mode */
   std::chrono::duration<unsigned> time_step_cruise;
 

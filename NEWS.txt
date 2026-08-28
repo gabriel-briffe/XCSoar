@@ -71,6 +71,15 @@ Version 7.46 - not yet released
   - fix keyboard wrap in the Checklist: Down from Close returns
     to the list and highlights an item so Enter acts on that row
     #2862
+  - show takeoff and landing times in Export flights from IGC
+    TKOFF/LAND E-records when present, with duration from those
+    markers; older files without markers still use the first and
+    last valid B-records
+* logger
+  - write takeoff and landing as IGC E-records (TKOFF / LAND) when
+    the Auto logger starts and stops on flight detection
+  - add an expert option to allow IGC logging in the simulator
+    (filenames use manufacturer code SIM)
 * infoboxen
   - pack portrait InfoBoxes on tall screens so title, value, and
     comment sit closer together; InfoBox title size still grows the

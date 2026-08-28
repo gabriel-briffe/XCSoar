@@ -44,14 +44,18 @@ data=STARTUP_REAL
 mode=default
 type=gce
 data=TAKEOFF
-event=AutoLogger start
+# xci2cpp runs these in reverse order: start logger first, then TKOFF.
 event=StatusMessage Takeoff
+event=Logger takeoff
+event=AutoLogger start
 
 mode=default
 type=gce
 data=LANDING
-event=StatusMessage Landing
+# xci2cpp runs these in reverse order: write LAND before stopping.
 event=AutoLogger stop
+event=StatusMessage Landing
+event=Logger landing
 
 mode=default
 type=gce

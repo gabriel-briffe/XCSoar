@@ -93,6 +93,13 @@ public:
   void LogPoint(const NMEAInfo &gps_info);
   void LogEvent(const NMEAInfo &gps_info, const char* event);
 
+  /**
+   * Write an E-record at the given flight time (e.g. detected
+   * takeoff/landing), followed by a B-record from @gps_info.
+   */
+  void LogEventAt(const NMEAInfo &gps_info, TimeStamp time,
+                  const char *event);
+
   bool IsActive() const noexcept {
     return writer != nullptr;
   }
@@ -118,5 +125,6 @@ private:
 
 private:
   void LogPointToBuffer(const NMEAInfo &gps_info) noexcept;
+  void FlushPreTakeoffBuffer() noexcept;
   void WritePoint(const NMEAInfo &gps_info);
 };

@@ -2,6 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "Logger/Logger.hpp"
+#include "IGC/FlightEvents.hpp"
 #include "Device/Declaration.hpp"
 #include "NMEA/Info.hpp"
 #include "Language/Language.hpp"
@@ -9,6 +10,8 @@
 #include "Task/ProtectedTaskManager.hpp"
 #include "Engine/Task/Ordered/OrderedTask.hpp"
 #include "Computer/Settings.hpp"
+#include "Simulator.hpp"
+#include "time/Stamp.hpp"
 
 void
 Logger::LogPoint(const NMEAInfo &gps_info)
@@ -45,6 +48,20 @@ Logger::LogPilotEvent(const NMEAInfo &gps_info)
   LogEvent(gps_info, "PEV");
 }
 
+void
+Logger::LogTakeoffEvent(const NMEAInfo &gps_info, TimeStamp takeoff_time)
+{
+  const std::lock_guard protect{lock};
+  logger.LogEventAt(gps_info, takeoff_time, IGCFlightEvent::TAKEOFF);
+}
+
+void
+Logger::LogLandingEvent(const NMEAInfo &gps_info, TimeStamp landing_time)
+{
+  const std::lock_guard protect{lock};
+  logger.LogEventAt(gps_info, landing_time, IGCFlightEvent::LANDING);
+}
+
 bool
 Logger::IsLoggerActive() const noexcept
 {
@@ -59,6 +76,9 @@ Logger::GUIStartLogger(const NMEAInfo& gps_info,
                     bool noAsk)
 {
   if (IsLoggerActive() || gps_info.gps.replay)
+    return;
+
+  if (is_simulator() && !settings.logger.log_sim)
     return;
 
   auto task = protected_task_manager != nullptr
