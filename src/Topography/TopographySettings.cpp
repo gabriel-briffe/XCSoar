@@ -6,7 +6,9 @@
 #include "Topography/TopographyFile.hpp"
 #include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
-#include "system/Path.hpp"
+#include "Profile/Current.hpp"
+#include "Profile/Map.hpp"
+#include "util/StringPointer.hxx"
 #include "util/StringCompare.hxx"
 #include "util/StaticString.hxx"
 
@@ -31,12 +33,8 @@ ThresholdToNm(double threshold) noexcept
 const char *
 GetConfiguredMapBase() noexcept
 {
-  const AllocatedPath map_path = Profile::GetPath(ProfileKeys::MapFile);
-  if (map_path == nullptr)
-    return nullptr;
-
-  const Path base = map_path.GetBase();
-  if (base.empty())
+  const auto base = Profile::map.GetPathBase(ProfileKeys::MapFile);
+  if (base == nullptr || base.empty())
     return nullptr;
 
   return base.c_str();
@@ -68,6 +66,43 @@ ParseLayerTriple(const char *p, const char *end,
   return *endptr == '\0' || *endptr == ',';
 }
 
+static bool
+ParseLayerEntry(const char *p, const char *end,
+                const TopographyStore &store,
+                StaticString<32> &layer_name,
+                double &shape_nm, double &label_nm,
+                double &important_nm) noexcept
+{
+  for (const auto &file : store) {
+    const char *name = file.GetLayerName();
+    const std::size_t name_len = strlen(name);
+    if (p + name_len > end)
+      continue;
+
+    if (memcmp(p, name, name_len) != 0)
+      continue;
+
+    const char *triple = p + name_len;
+    if (triple >= end)
+      continue;
+
+    /* Current format: layer:shape:label:important
+       Legacy format (missing separator): layershape:label:important */
+    if (*triple == ':')
+      ++triple;
+    else if (*triple < '0' || *triple > '9')
+      continue;
+
+    if (!ParseLayerTriple(triple, end, shape_nm, label_nm, important_nm))
+      continue;
+
+    layer_name = name;
+    return true;
+  }
+
+  return false;
+}
+
 } // namespace
 
 void
@@ -91,31 +126,32 @@ TopographySettings::ApplyToStore(TopographyStore &store) noexcept
     return;
 
   const char *p = sep + 1;
+  bool any_applied = false;
   while (*p != '\0') {
     const char *comma = strchr(p, ',');
     const char *end = comma != nullptr ? comma : p + strlen(p);
 
-    const char *colon = strchr(p, ':');
-    if (colon == nullptr || colon >= end)
-      break;
-
     StaticString<32> layer_name;
-    layer_name = std::string_view{p, std::size_t(colon - p)};
-
     double shape_nm, label_nm, important_nm;
-    if (!ParseLayerTriple(colon + 1, end, shape_nm, label_nm, important_nm))
+    if (!ParseLayerEntry(p, end, store, layer_name,
+                         shape_nm, label_nm, important_nm))
       break;
 
-    if (TopographyFile *file = store.FindLayer(layer_name.c_str()))
+    if (TopographyFile *file = store.FindLayer(layer_name.c_str())) {
       file->SetThresholds(NmToThreshold(shape_nm),
                           NmToThreshold(label_nm),
                           NmToThreshold(important_nm));
+      any_applied = true;
+    }
 
     if (comma == nullptr)
       break;
 
     p = comma + 1;
   }
+
+  if (any_applied)
+    store.NotifyThresholdsChanged();
 }
 
 void
@@ -142,7 +178,7 @@ TopographySettings::SaveFromStore(const TopographyStore &store) noexcept
     any_custom = true;
 
     char triple[96];
-    snprintf(triple, sizeof(triple), "%s%s%.3f:%.3f:%.3f",
+    snprintf(triple, sizeof(triple), "%s%s:%.3f:%.3f:%.3f",
              first ? "" : ",",
              file.GetLayerName(),
              ThresholdToNm(file.GetScaleThreshold()),
@@ -154,10 +190,12 @@ TopographySettings::SaveFromStore(const TopographyStore &store) noexcept
 
   if (!any_custom) {
     Profile::Set(ProfileKeys::TopographyLayerOverrides, "");
+    Profile::Save();
     return;
   }
 
   Profile::Set(ProfileKeys::TopographyLayerOverrides, buffer.c_str());
+  Profile::Save();
 }
 
 unsigned
