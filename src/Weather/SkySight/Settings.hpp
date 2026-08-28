@@ -12,6 +12,11 @@ struct SkySightSettings {
   StaticString<32> region;
   bool auto_update;
 
+  /**
+   * Map overlay opacity (50…100 percent).  100 = fully opaque.
+   */
+  unsigned opacity_percent;
+
   constexpr bool IsDefined() const noexcept {
     return !email.empty() && !password.empty();
   }
@@ -21,5 +26,6 @@ struct SkySightSettings {
     password.clear();
     region = GetDefaultSkySightRegion().id;
     auto_update = true;
+    opacity_percent = 60;
   }
 };

@@ -31,6 +31,11 @@ namespace Profile {
     if (!map.Get(ProfileKeys::SkySightRegion, settings.region))
       map.Get(ProfileKeys::LegacySkySightRegion, settings.region);
     map.Get(ProfileKeys::SkySightAutoUpdate, settings.auto_update);
+    map.Get(ProfileKeys::SkySightOpacity, settings.opacity_percent);
+    if (settings.opacity_percent < 50)
+      settings.opacity_percent = 50;
+    else if (settings.opacity_percent > 100)
+      settings.opacity_percent = 100;
   }
 
   static void Load(const ProfileMap &map, RainbowSettings &settings) {

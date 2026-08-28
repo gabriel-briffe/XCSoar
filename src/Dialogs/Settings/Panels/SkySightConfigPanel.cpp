@@ -5,6 +5,7 @@
 
 #ifdef HAVE_HTTP
 
+#include "ActionInterface.hpp"
 #include "DataGlobals.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Profile/Keys.hpp"
@@ -21,6 +22,7 @@ enum ControlIndex {
   SKYSIGHT_EMAIL,
   SKYSIGHT_PASSWORD,
   SKYSIGHT_REGION,
+  SKYSIGHT_OPACITY,
 };
 
 class SkySightConfigPanel final : public RowFormWidget {
@@ -67,6 +69,13 @@ SkySightConfigPanel::Prepare(ContainerWindow &parent,
   }
 
   region->RefreshDisplay();
+
+  AddInteger(_("Overlay opacity"),
+             /* xgettext:no-c-format */
+             _("Sets the opacity of the SkySight overlay on the map.  "
+               "50% is more transparent, 100% is fully opaque."),
+             "%d %%", "%d", 50, 100, 5,
+             settings.skysight.opacity_percent);
 }
 
 bool
@@ -81,6 +90,18 @@ SkySightConfigPanel::Save(bool &_changed) noexcept
                        settings.skysight.password);
   changed |= SaveValue(SKYSIGHT_REGION, ProfileKeys::SkySightRegion,
                        settings.skysight.region);
+
+  if (SaveValueInteger(SKYSIGHT_OPACITY, ProfileKeys::SkySightOpacity,
+                       settings.skysight.opacity_percent)) {
+    if (settings.skysight.opacity_percent < 50)
+      settings.skysight.opacity_percent = 50;
+    else if (settings.skysight.opacity_percent > 100)
+      settings.skysight.opacity_percent = 100;
+    if (auto skysight = DataGlobals::GetSkySight())
+      skysight->ApplyOverlayOpacityFromSettings();
+    ActionInterface::SendUIState(true);
+    changed = true;
+  }
 
   if (changed)
     if (auto skysight = DataGlobals::GetSkySight())

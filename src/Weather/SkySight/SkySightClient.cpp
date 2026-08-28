@@ -28,9 +28,12 @@
 #include "LocalPath.hpp"
 #include "MapWindow/GlueMapWindow.hpp"
 #include "MapWindow/OverlayBitmap.hpp"
+#include "MapWindow/OverlayLimits.hpp"
 #include "Weather/MapOverlay/ControlsWidget.hpp"
 #include "system/FileUtil.hpp"
 #include "thread/Debug.hpp"
+#include "util/StringCompare.hxx"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -42,6 +45,15 @@
 namespace {
 
 static constexpr auto CLEANUP_CHECK_INTERVAL = std::chrono::minutes{1};
+
+[[gnu::const]]
+static float
+GetOverlayAlphaFromSettings() noexcept
+{
+  const unsigned percent =
+    CommonInterface::GetComputerSettings().weather.skysight.opacity_percent;
+  return float(percent) / 100.f;
+}
 
 void
 MigrateCacheFiles(Path source_path, Path destination_path) noexcept
@@ -1117,7 +1129,7 @@ SkySightClient::UpdateActiveLayer(unsigned index, Path path,
     return false;
   }
 
-  bitmap->SetAlpha(source.alpha);
+  bitmap->SetAlpha(GetOverlayAlphaFromSettings());
 
   StaticString<160> label;
   label.Format("SkySight: %s", source.name.c_str());
@@ -1750,6 +1762,38 @@ SkySightClient::DisplaySatRainTileLayer()
     manual_update_requested = false;
 
   return !visible_tiles.empty();
+#endif
+}
+
+void
+SkySightClient::ApplyOverlayOpacityFromSettings() const noexcept
+{
+#ifndef ENABLE_OPENGL
+  return;
+#else
+  auto *map = UIGlobals::GetMap();
+  if (map == nullptr)
+    return;
+
+  const float alpha = GetOverlayAlphaFromSettings();
+
+  for (std::size_t i = 0; i < MapWindowOverlay::MAX_MAP_OVERLAYS; ++i) {
+    const MapOverlay *overlay = map->GetOverlay(i);
+    if (overlay == nullptr)
+      continue;
+
+    const char *label = overlay->GetLabel();
+    if (label == nullptr || !StringStartsWith(label, "SkySight:"))
+      continue;
+
+    auto *bitmap =
+      const_cast<MapOverlayBitmap *>(
+        dynamic_cast<const MapOverlayBitmap *>(overlay));
+    if (bitmap == nullptr)
+      continue;
+
+    bitmap->SetAlpha(alpha);
+  }
 #endif
 }
 

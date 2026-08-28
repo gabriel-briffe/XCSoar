@@ -301,6 +301,7 @@ constexpr std::string_view PCMetFtpPassword = "PCMetFtpPassword";
 constexpr std::string_view SkySightEmail = "SkySightEmail";
 constexpr std::string_view SkySightPassword = "SkySightPassword";
 constexpr std::string_view SkySightRegion = "SkySightRegion";
+constexpr std::string_view SkySightOpacity = "SkySightOpacity";
 constexpr std::string_view SkySightSelectedLayers = "SkySightSelectedLayers";
 constexpr std::string_view LegacySkySightEmail = "SkysightEmail";
 constexpr std::string_view LegacySkySightPassword = "SkysightPassword";

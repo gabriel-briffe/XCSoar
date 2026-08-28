@@ -125,6 +125,9 @@ public:
   void OnForecastProgress(const SkySight::ForecastProgress &progress) noexcept;
   void OnForecastProgressCancelled() noexcept;
 
+  /** Push @c weather.skysight.opacity_percent onto live map overlays. */
+  void ApplyOverlayOpacityFromSettings() const noexcept;
+
 private:
   bool AddSelectedLayer(std::string_view id, bool save_profile,
                         bool request_datafiles);
