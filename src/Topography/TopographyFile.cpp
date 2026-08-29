@@ -84,6 +84,50 @@ TopographyFile::ResetThresholds() noexcept
   scale_threshold = default_scale_threshold;
   label_threshold = default_label_threshold;
   important_label_threshold = default_important_label_threshold;
+  display_mode = LayerDisplayMode::BOTH;
+  ++serial;
+}
+
+void
+TopographyFile::SetDisplayMode(LayerDisplayMode mode) noexcept
+{
+  if (!HasLabels()) {
+    /* Without a label field, only shapes on/off make sense. */
+    if (mode == LayerDisplayMode::GRAPHIC)
+      mode = LayerDisplayMode::BOTH;
+    else if (mode == LayerDisplayMode::LABEL)
+      mode = LayerDisplayMode::NONE;
+  }
+
+  display_mode = mode;
+  ++serial;
+}
+
+void
+TopographyFile::CycleDisplayMode() noexcept
+{
+  if (!HasLabels()) {
+    display_mode = ShowsShapes()
+      ? LayerDisplayMode::NONE
+      : LayerDisplayMode::BOTH;
+    ++serial;
+    return;
+  }
+
+  switch (display_mode) {
+  case LayerDisplayMode::BOTH:
+    display_mode = LayerDisplayMode::GRAPHIC;
+    break;
+  case LayerDisplayMode::GRAPHIC:
+    display_mode = LayerDisplayMode::LABEL;
+    break;
+  case LayerDisplayMode::LABEL:
+    display_mode = LayerDisplayMode::NONE;
+    break;
+  case LayerDisplayMode::NONE:
+    display_mode = LayerDisplayMode::BOTH;
+    break;
+  }
   ++serial;
 }
 
@@ -114,7 +158,7 @@ LoadShape(ShapeFile &file, GeoPoint &center, std::size_t i, int label_field)
 bool
 TopographyFile::Update(const WindowProjection &map_projection)
 {
-  if (map_projection.GetMapScale() > scale_threshold)
+  if (!IsNeeded(map_projection.GetMapScale()))
     /* not visible, don't update cache now */
     return false;
 

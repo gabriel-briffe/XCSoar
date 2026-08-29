@@ -16,8 +16,9 @@ void
 SaveFromStore(const TopographyStore &store) noexcept;
 
 /**
- * Apply hard-coded layer thresholds (full-resolution ALPS map).
- * @return number of layers updated
+ * Apply hard-coded layer thresholds for #ALPS_Test.xcm
+ * (shape / label / important only).
+ * @return number of layers updated (0 if the map is not ALPS_Test)
  */
 unsigned
 ApplyCustomPreset(TopographyStore &store) noexcept;

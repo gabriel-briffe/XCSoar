@@ -18,6 +18,7 @@
 #endif
 
 #include <cassert>
+#include <cstdint>
 #include <memory>
 
 class WindowProjection;
@@ -25,6 +26,19 @@ class XShape;
 struct zzip_dir;
 
 class TopographyFile {
+public:
+  /**
+   * Per-layer map display filter (Map Display → Topology → Filter).
+   * Thresholds still apply when shapes or labels are enabled.
+   */
+  enum class LayerDisplayMode : uint8_t {
+    BOTH,
+    GRAPHIC,
+    LABEL,
+    NONE,
+  };
+
+private:
   struct ShapeEnvelope final : IntrusiveForwardListHook {
     std::unique_ptr<const XShape> shape;
   };
@@ -71,6 +85,8 @@ class TopographyFile {
   double scale_threshold;
   double label_threshold;
   double important_label_threshold;
+
+  LayerDisplayMode display_mode = LayerDisplayMode::BOTH;
 
   /**
    * The current scope of the shape cache.  If the screen exceeds this
@@ -198,12 +214,52 @@ public:
 
   void ResetThresholds() noexcept;
 
+  [[gnu::pure]]
+  LayerDisplayMode GetDisplayMode() const noexcept {
+    return display_mode;
+  }
+
+  void SetDisplayMode(LayerDisplayMode mode) noexcept;
+
+  void CycleDisplayMode() noexcept;
+
+  [[gnu::pure]]
+  bool HasLabels() const noexcept {
+    return label_field >= 0;
+  }
+
+  [[gnu::pure]]
+  bool ShowsShapes() const noexcept {
+    return display_mode == LayerDisplayMode::BOTH ||
+           display_mode == LayerDisplayMode::GRAPHIC;
+  }
+
+  [[gnu::pure]]
+  bool ShowsLabels() const noexcept {
+    return HasLabels() &&
+           (display_mode == LayerDisplayMode::BOTH ||
+            display_mode == LayerDisplayMode::LABEL);
+  }
+
+  /**
+   * True when shapes should be painted at this map scale.
+   */
   bool IsVisible(double map_scale) const noexcept {
     return map_scale <= scale_threshold;
   }
 
   bool IsLabelVisible(double map_scale) const noexcept {
     return map_scale <= label_threshold;
+  }
+
+  /**
+   * True when this layer needs shapes in the cache (for painting
+   * shapes and/or labels).
+   */
+  [[gnu::pure]]
+  bool IsNeeded(double map_scale) const noexcept {
+    return (ShowsShapes() && IsVisible(map_scale)) ||
+           (ShowsLabels() && IsLabelVisible(map_scale));
   }
 
   /**

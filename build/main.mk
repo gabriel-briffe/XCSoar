@@ -113,6 +113,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Waypoint/WaypointList.cpp \
 	$(SRC)/Dialogs/Waypoint/GetWaypointReachability.cpp \
 	$(SRC)/Dialogs/Waypoint/NearestWaypoint.cpp \
+	$(SRC)/Dialogs/Topography/dlgTopologyFilter.cpp \
 	\
 	$(SRC)/Dialogs/Settings/Panels/AirspaceConfigPanel.cpp \
 	$(if $(filter y,$(HAVE_HTTP)),$(SRC)/Dialogs/Settings/Panels/NOTAMConfigPanel.cpp) \

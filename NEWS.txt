@@ -66,6 +66,8 @@ Version 7.46 - not yet released
   - add Map Display → Topology to override per-layer shape and label
     zoom thresholds from topology.tpl; overrides are stored per map
     file in the profile #2992
+  - add a Topology Filter button that cycles each layer through
+    graphic, label, both, and none (thresholds still apply)
   - open Config → Look → Pages with the currently active map page
     selected in the list
   - fix the ragged white halo behind map labels on high-DPI screens

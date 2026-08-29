@@ -40,10 +40,47 @@ GetConfiguredMapBase() noexcept
   return base.c_str();
 }
 
+using LayerDisplayMode = TopographyFile::LayerDisplayMode;
+
+[[gnu::pure]]
+constexpr unsigned
+DisplayModeToInt(LayerDisplayMode mode) noexcept
+{
+  return unsigned(mode);
+}
+
+[[gnu::pure]]
+constexpr LayerDisplayMode
+IntToDisplayMode(unsigned value) noexcept
+{
+  switch (value) {
+  case 1:
+    return LayerDisplayMode::GRAPHIC;
+  case 2:
+    return LayerDisplayMode::LABEL;
+  case 3:
+    return LayerDisplayMode::NONE;
+  default:
+    return LayerDisplayMode::BOTH;
+  }
+}
+
+[[gnu::pure]]
+bool
+IsDefaultLayer(const TopographyFile &file) noexcept
+{
+  return file.GetScaleThreshold() == file.GetDefaultScaleThreshold() &&
+         file.GetLabelThreshold() == file.GetDefaultLabelThreshold() &&
+         file.GetImportantLabelThreshold() ==
+         file.GetDefaultImportantLabelThreshold() &&
+         file.GetDisplayMode() == LayerDisplayMode::BOTH;
+}
+
 static bool
-ParseLayerTriple(const char *p, const char *end,
+ParseLayerFields(const char *p, const char *end,
                  double &shape_nm, double &label_nm,
-                 double &important_nm) noexcept
+                 double &important_nm,
+                 LayerDisplayMode &mode) noexcept
 {
   char *endptr;
   shape_nm = strtod(p, &endptr);
@@ -63,6 +100,17 @@ ParseLayerTriple(const char *p, const char *end,
   if (endptr > end)
     return false;
 
+  mode = LayerDisplayMode::BOTH;
+  if (*endptr == ':') {
+    p = endptr + 1;
+    const unsigned mode_value = strtoul(p, &endptr, 10);
+    if (endptr == p)
+      return false;
+    if (endptr > end)
+      return false;
+    mode = IntToDisplayMode(mode_value);
+  }
+
   return *endptr == '\0' || *endptr == ',';
 }
 
@@ -71,7 +119,8 @@ ParseLayerEntry(const char *p, const char *end,
                 const TopographyStore &store,
                 StaticString<32> &layer_name,
                 double &shape_nm, double &label_nm,
-                double &important_nm) noexcept
+                double &important_nm,
+                LayerDisplayMode &mode) noexcept
 {
   for (const auto &file : store) {
     const char *name = file.GetLayerName();
@@ -82,18 +131,19 @@ ParseLayerEntry(const char *p, const char *end,
     if (memcmp(p, name, name_len) != 0)
       continue;
 
-    const char *triple = p + name_len;
-    if (triple >= end)
+    const char *fields = p + name_len;
+    if (fields >= end)
       continue;
 
-    /* Current format: layer:shape:label:important
+    /* Current format: layer:shape:label:important[:mode]
        Legacy format (missing separator): layershape:label:important */
-    if (*triple == ':')
-      ++triple;
-    else if (*triple < '0' || *triple > '9')
+    if (*fields == ':')
+      ++fields;
+    else if (*fields < '0' || *fields > '9')
       continue;
 
-    if (!ParseLayerTriple(triple, end, shape_nm, label_nm, important_nm))
+    if (!ParseLayerFields(fields, end, shape_nm, label_nm, important_nm,
+                          mode))
       continue;
 
     layer_name = name;
@@ -133,14 +183,16 @@ TopographySettings::ApplyToStore(TopographyStore &store) noexcept
 
     StaticString<32> layer_name;
     double shape_nm, label_nm, important_nm;
+    LayerDisplayMode mode;
     if (!ParseLayerEntry(p, end, store, layer_name,
-                         shape_nm, label_nm, important_nm))
+                         shape_nm, label_nm, important_nm, mode))
       break;
 
     if (TopographyFile *file = store.FindLayer(layer_name.c_str())) {
       file->SetThresholds(NmToThreshold(shape_nm),
                           NmToThreshold(label_nm),
                           NmToThreshold(important_nm));
+      file->SetDisplayMode(mode);
       any_applied = true;
     }
 
@@ -169,23 +221,21 @@ TopographySettings::SaveFromStore(const TopographyStore &store) noexcept
   bool first = true;
 
   for (const auto &file : store) {
-    if (file.GetScaleThreshold() == file.GetDefaultScaleThreshold() &&
-        file.GetLabelThreshold() == file.GetDefaultLabelThreshold() &&
-        file.GetImportantLabelThreshold() ==
-        file.GetDefaultImportantLabelThreshold())
+    if (IsDefaultLayer(file))
       continue;
 
     any_custom = true;
 
-    char triple[96];
-    snprintf(triple, sizeof(triple), "%s%s:%.3f:%.3f:%.3f",
+    char entry[112];
+    snprintf(entry, sizeof(entry), "%s%s:%.3f:%.3f:%.3f:%u",
              first ? "" : ",",
              file.GetLayerName(),
              ThresholdToNm(file.GetScaleThreshold()),
              ThresholdToNm(file.GetLabelThreshold()),
-             ThresholdToNm(file.GetImportantLabelThreshold()));
+             ThresholdToNm(file.GetImportantLabelThreshold()),
+             DisplayModeToInt(file.GetDisplayMode()));
     first = false;
-    buffer += triple;
+    buffer += entry;
   }
 
   if (!any_custom) {
@@ -201,27 +251,33 @@ TopographySettings::SaveFromStore(const TopographyStore &store) noexcept
 unsigned
 TopographySettings::ApplyCustomPreset(TopographyStore &store) noexcept
 {
-  /* Thresholds from the full-resolution ALPS map (topology.tpl).  The
-     repository download uses other layer names (e.g. water_area
-     instead of water_area_large); map those explicitly. */
+  const char *map_base = GetConfiguredMapBase();
+  if (map_base == nullptr ||
+      !StringIsEqual(map_base, "ALPS_Test.xcm"))
+    return 0;
+
+  /* Hard-coded thresholds for ALPS_Test.xcm (shape / label /
+     important only; display mode is left unchanged). */
   static constexpr struct {
     const char *layer_name;
     double shape_nm, label_nm, important_nm;
   } preset[] = {
-    { "city_area", 50, 50, 0 },
-    { "water_area", 5, 5, 0 },
-    { "water_area_large", 5, 5, 0 },
-    { "water_area_small", 1, 1, 0 },
-    { "water_line", 5, 5, 0 },
-    { "roadbig_line", 15, 15, 0 },
-    { "roadmedium_line", 8, 8, 0 },
-    { "roadsmall_line", 2, 2, 0 },
-    { "railway_line", 10, 10, 0 },
-    { "city_point", 50, 50, 10 },
-    { "town_point", 10, 10, 3 },
-    { "suburb_point", 3, 3, 0 },
-    { "village_point", 3, 3, 0 },
-    { "airstrip_area", 10, 1, 1 },
+    { "city_area_large", 12.500, 0.000, 0.000 },
+    { "city_area_small", 1.875, 0.000, 0.000 },
+    { "water_area_large", 18.750, 1.875, 0.000 },
+    { "water_area_small", 2.500, 0.625, 0.000 },
+    { "water_lines", 15.000, 8.000, 0.000 },
+    { "roadbig_line", 12.500, 15.000, 0.000 },
+    { "city_point", 11.250, 25.000, 0.000 },
+    { "town_point", 10.000, 10.000, 0.000 },
+    { "suburb_point", 2.500, 2.500, 0.000 },
+    { "building_area_large", 1.250, 0.000, 0.000 },
+    { "aerodrome_area", 8.000, 8.000, 0.000 },
+    { "airstrip_area", 10.000, 1.000, 0.000 },
+    { "peak_point_high", 2.500, 1.250, 1.250 },
+    { "peak_point", 1.250, 0.625, 0.000 },
+    { "pass_point_high", 2.500, 1.250, 1.250 },
+    { "pass_point", 1.250, 0.625, 0.000 },
   };
 
   unsigned count = 0;
