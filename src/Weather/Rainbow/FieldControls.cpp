@@ -46,6 +46,7 @@ bool overlay_active = false;
 /** True while Auto mode is waiting for the OS to report connectivity. */
 bool waiting_for_connectivity = false;
 
+
 void CancelAutoSchedule() noexcept;
 void CancelPrefetchJob() noexcept;
 void ScheduleAutoAfterSuccess() noexcept;
@@ -59,6 +60,8 @@ void StartRefresh(bool force_snapshot_poll = false) noexcept;
 [[nodiscard]] bool SnapshotPollDue(bool force) noexcept;
 void RecordSnapshotPollStart() noexcept;
 [[nodiscard]] bool TryRestoreLiveFromCache(int64_t epoch) noexcept;
+[[nodiscard]] bool ApplyLiveFromCache(int64_t epoch,
+                                      bool allow_partial) noexcept;
 
 [[nodiscard]]
 bool
@@ -151,13 +154,15 @@ StartRefresh(bool force_snapshot_poll) noexcept
 
   const auto &settings =
     CommonInterface::GetComputerSettings().weather.rainbow;
+
+  const auto &cursor =
+    CommonInterface::GetUIState().weather.rainbow_cursor;
+
   if (!settings.IsDefined()) {
     LogFmt("rainbow: missing API key");
     return;
   }
 
-  const auto &cursor =
-    CommonInterface::GetUIState().weather.rainbow_cursor;
   if (!cursor.satellite && !cursor.rain)
     return;
 
@@ -192,8 +197,7 @@ StartRefresh(bool force_snapshot_poll) noexcept
 
   /* Snapshot viewport on the UI thread; downloads run on the network
      thread and must not touch OpenGL Bitmaps / map overlays. */
-  const auto plan = BuildOverlayPlan(*map, cursor.satellite, cursor.rain,
-                                     plan_snapshot);
+  const auto plan = BuildOverlayPlan(*map, cursor.satellite, cursor.rain, plan_snapshot);
   if (!plan.IsValid())
     return;
 
@@ -206,8 +210,6 @@ StartRefresh(bool force_snapshot_poll) noexcept
     DownloadOverlayTiles(*Net::curl, settings.api_key.c_str(),
                          plan, refresh_env),
     [expected_tiles](std::vector<PreparedTile> tiles) {
-      /* Prefer rain's snapshot for the label when both layers are on;
-         clouds and precip can publish different latest epochs. */
       int64_t sat_snap = 0;
       int64_t rain_snap = 0;
       for (const auto &tile : tiles) {
@@ -225,6 +227,9 @@ StartRefresh(bool force_snapshot_poll) noexcept
         cursor.displayed_time = rain_snap;
       else if (sat_snap > 0)
         cursor.displayed_time = sat_snap;
+
+      if (!IsAutoMode() && cursor.displayed_time > 0)
+        cursor.time = cursor.displayed_time;
 
       const unsigned count = InstallPreparedOverlays(std::move(tiles));
       /* Partial viewport fills still show and update the bottom time,
@@ -323,7 +328,7 @@ RecordSnapshotPollStart() noexcept
 
 [[nodiscard]]
 bool
-TryRestoreLiveFromCache(int64_t epoch) noexcept
+ApplyLiveFromCache(int64_t epoch, bool allow_partial) noexcept
 {
   if (epoch <= 0 || !overlay_active)
     return false;
@@ -341,26 +346,47 @@ TryRestoreLiveFromCache(int64_t epoch) noexcept
   last_refresh_plan = plan;
 
   const unsigned expected_tiles = plan.CountPlannedTiles();
-  const unsigned count = InstallCachedOverlayTiles(plan, epoch);
-  if (expected_tiles == 0 || count < expected_tiles)
+  const unsigned count =
+    InstallCachedOverlayTiles(plan, epoch, allow_partial);
+  const bool complete =
+    expected_tiles > 0 && count >= expected_tiles;
+
+  if (!allow_partial && !complete)
     return false;
 
   auto &mutable_cursor =
     CommonInterface::SetUIState().weather.rainbow_cursor;
   mutable_cursor.displayed_time = epoch;
-  mutable_cursor.tiles_complete = true;
-  last_complete_live_epoch = epoch;
+  mutable_cursor.tiles_complete = complete;
+  if (complete)
+    last_complete_live_epoch = epoch;
 
-  LogFmt("rainbow: restored live cache (snapshot {})", epoch);
+  if (count > 0)
+    LogFmt("rainbow: restored live cache {}/{} (snapshot {})",
+           count, expected_tiles, epoch);
+  else
+    LogFmt("rainbow: live cache miss (snapshot {}), labels only",
+           epoch);
+
   WeatherMapOverlay::RefreshControlsLabels();
   ActionInterface::SendUIState(false);
+  return complete;
+}
+
+[[nodiscard]]
+bool
+TryRestoreLiveFromCache(int64_t epoch) noexcept
+{
+  if (!ApplyLiveFromCache(epoch, false))
+    return false;
+
   UpdateAutoScheduleAfterAttempt(true);
   return true;
 }
 
 /**
- * Seconds until the next wall-clock ``:x2`` after a 10-minute boundary
- * (e.g. 12:42, 21:02), when a new product is expected to be published.
+ * Seconds until the next publish window after a snapshot boundary.
+ * For Rainbow.ai (10-minute cadence) this is ``:x2`` (e.g. 12:42, 21:02).
  */
 [[nodiscard]]
 std::chrono::steady_clock::duration
@@ -463,6 +489,7 @@ ApplyCursorFromPageLayout(const PageLayout &layout) noexcept
   cursor.time = layout.rainbow_time;
   cursor.satellite = layout.rainbow_satellite;
   cursor.rain = layout.rainbow_rain;
+
 }
 
 void
@@ -550,9 +577,20 @@ bool
 StepTime(int delta) noexcept
 {
   auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
+  const time_t interval = SNAPSHOT_INTERVAL_SECONDS;
   const int64_t latest = LatestSnapshotFloor();
-  int64_t current = cursor.time > 0 ? AlignSnapshot(cursor.time) : latest;
-  current += int64_t(delta) * SNAPSHOT_INTERVAL_SECONDS;
+
+  /* Leave Auto from the frame on the map, not wall-clock floor — that
+     was jumping forward (e.g. Auto 21:45 → manual 22:10). */
+  int64_t current;
+  if (cursor.time > 0)
+    current = AlignSnapshot(cursor.time);
+  else if (cursor.displayed_time > 0)
+    current = AlignSnapshot(cursor.displayed_time);
+  else
+    current = latest;
+
+  current += int64_t(delta) * interval;
 
   const int64_t oldest = latest - SNAPSHOT_HISTORY_SECONDS;
   if (current > latest)
@@ -560,13 +598,15 @@ StepTime(int delta) noexcept
   if (current < oldest)
     current = oldest;
 
-  if (current == latest)
+  if (current >= latest) {
     cursor.time = PageLayout::RAINBOW_TIME_AUTO;
-  else
+    (void)ApplyLiveFromCache(AlignSnapshot(current), true);
+  } else {
     cursor.time = current;
+    cursor.displayed_time = 0;
+    cursor.tiles_complete = false;
+  }
 
-  cursor.displayed_time = 0;
-  cursor.tiles_complete = false;
   CommonInterface::SetUIState().weather.rainbow.cursor_initialized =
     cursor.time != PageLayout::RAINBOW_TIME_AUTO;
 
@@ -580,35 +620,81 @@ StepTime(int delta) noexcept
 
 namespace {
 
+enum class DisplayMode : unsigned {
+  SATELLITE = 0,
+  RAIN = 1,
+  SAT_RAIN = 2,
+  COUNT = 3,
+};
+
 [[nodiscard]]
-unsigned
-LayerMode(bool satellite, bool rain) noexcept
+DisplayMode
+CursorDisplayMode(bool satellite, bool rain) noexcept
 {
   if (satellite && rain)
-    return 2;
+    return DisplayMode::SAT_RAIN;
   if (rain)
-    return 1;
-  return 0; /* satellite only (default) */
+    return DisplayMode::RAIN;
+  return DisplayMode::SATELLITE;
 }
 
 void
-ApplyLayerMode(unsigned mode) noexcept
+ApplyDisplayMode(DisplayMode mode) noexcept
 {
   auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
-  switch (mode % 3) {
-  case 1:
+  switch (mode) {
+  case DisplayMode::RAIN:
     cursor.satellite = false;
     cursor.rain = true;
     break;
-  case 2:
+  case DisplayMode::SAT_RAIN:
     cursor.satellite = true;
     cursor.rain = true;
     break;
+  case DisplayMode::SATELLITE:
+  case DisplayMode::COUNT:
   default:
     cursor.satellite = true;
     cursor.rain = false;
     break;
   }
+}
+
+[[nodiscard]]
+bool
+DisplayModeEnabled(DisplayMode mode) noexcept
+{
+  const auto &settings =
+    CommonInterface::GetComputerSettings().weather.rainbow;
+  switch (mode) {
+  case DisplayMode::SATELLITE:
+    return settings.display_satellite;
+  case DisplayMode::RAIN:
+    return settings.display_rain;
+  case DisplayMode::SAT_RAIN:
+    return settings.display_sat_rain;
+  case DisplayMode::COUNT:
+    break;
+  }
+  return false;
+}
+
+/**
+ * Collect enabled display modes in cycle order.
+ * @return number of modes written to @p out (0..4)
+ */
+[[nodiscard]]
+unsigned
+CollectEnabledModes(DisplayMode *out) noexcept
+{
+  unsigned n = 0;
+  for (unsigned i = 0; i < unsigned(DisplayMode::COUNT); ++i) {
+    const auto mode = DisplayMode(i);
+    if (!DisplayModeEnabled(mode))
+      continue;
+    out[n++] = mode;
+  }
+  return n;
 }
 
 } // namespace
@@ -619,15 +705,44 @@ StepLayer(int delta) noexcept
   if (delta == 0)
     return false;
 
-  auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
-  const unsigned current = LayerMode(cursor.satellite, cursor.rain);
-  const unsigned next = (current + (delta > 0 ? 1u : 2u)) % 3u;
-  if (next == current)
+  DisplayMode enabled[unsigned(DisplayMode::COUNT)];
+  const unsigned count = CollectEnabledModes(enabled);
+  if (count == 0)
     return false;
 
-  ApplyLayerMode(next);
+  auto &cursor = CommonInterface::SetUIState().weather.rainbow_cursor;
+  const DisplayMode current =
+    CursorDisplayMode(cursor.satellite, cursor.rain);
+
+  unsigned index = 0;
+  bool found = false;
+  for (unsigned i = 0; i < count; ++i) {
+    if (enabled[i] == current) {
+      index = i;
+      found = true;
+      break;
+    }
+  }
+
+  DisplayMode next;
+  if (!found) {
+    /* Current mode left the pool — snap to the first enabled mode. */
+    next = enabled[0];
+  } else if (count == 1) {
+    return false;
+  } else {
+    const unsigned step = delta > 0 ? 1u : count - 1u;
+    next = enabled[(index + step) % count];
+  }
+
+  if (next == current && found)
+    return false;
+
+  ApplyDisplayMode(next);
+  cursor.displayed_time = 0;
+  cursor.tiles_complete = false;
   PersistCursorToPage();
-  StartRefresh();
+  StartRefresh(true);
   return true;
 }
 
@@ -637,9 +752,10 @@ FormatTimeLabel(StaticString<64> &text) noexcept
   const auto &cursor = CommonInterface::GetUIState().weather.rainbow_cursor;
   const bool automatic = cursor.time <= 0;
 
-  /* Manual: show the requested slot.  Auto: show the snapshot on the map
-     (do not reuse a manual replay epoch after returning to Auto). */
-  int64_t stamp = automatic ? cursor.displayed_time : cursor.time;
+  /* Prefer the frame on the map so the control matches the title. */
+  int64_t stamp = cursor.displayed_time > 0
+    ? cursor.displayed_time
+    : (automatic ? 0 : cursor.time);
   if (stamp <= 0) {
     text = automatic ? C_("Status", "Auto")
                      : C_("Status", "Live");
@@ -660,16 +776,21 @@ void
 FormatLayerLabel(StaticString<64> &text) noexcept
 {
   const auto &cursor = CommonInterface::GetUIState().weather.rainbow_cursor;
-  text.clear();
-  if (cursor.satellite)
+  switch (CursorDisplayMode(cursor.satellite, cursor.rain)) {
+  case DisplayMode::SAT_RAIN:
+    text.Format("%s+%s",
+                C_("Weather layer", "Sat"),
+                C_("Weather layer", "Rain"));
+    break;
+  case DisplayMode::RAIN:
+    text = C_("Weather layer", "Rain");
+    break;
+  case DisplayMode::SATELLITE:
+  case DisplayMode::COUNT:
+  default:
     text = C_("Weather layer", "Sat");
-  if (cursor.rain) {
-    if (!text.empty())
-      text.append(" ");
-    text.append(C_("Weather layer", "Rain"));
+    break;
   }
-  if (text.empty())
-    text = C_("Weather layer", "Sat");
 }
 
 bool
@@ -709,11 +830,9 @@ SetTimeAutoAdvance(bool auto_advance, int64_t known_live_epoch) noexcept
     const int64_t restore = known_live_epoch > 0
       ? AlignSnapshot(known_live_epoch)
       : last_complete_live_epoch;
-    const bool restored = TryRestoreLiveFromCache(restore);
-    if (!restored) {
-      cursor.displayed_time = 0;
-      cursor.tiles_complete = false;
-    }
+    const bool complete = restore > 0 && ApplyLiveFromCache(restore, true);
+    if (complete)
+      UpdateAutoScheduleAfterAttempt(true);
   } else if (IsAutoMode()) {
     cursor.time = LatestSnapshotFloor();
     cursor.displayed_time = 0;
@@ -730,7 +849,7 @@ SetTimeAutoAdvance(bool auto_advance, int64_t known_live_epoch) noexcept
   PersistCursorToPage();
 
   if (auto_advance) {
-    if (cursor.displayed_time > 0)
+    if (cursor.tiles_complete && !SnapshotPollDue(false))
       return;
 
     StartRefresh(false);
@@ -785,8 +904,9 @@ CanReplayLiveTime() noexcept
   if (reference <= 0)
     return false;
 
+  static constexpr unsigned replay_frames = 2;
   const int64_t oldest = reference - SNAPSHOT_HISTORY_SECONDS;
-  return reference - 2 * SNAPSHOT_INTERVAL_SECONDS >= oldest;
+  return reference - int64_t(replay_frames) * SNAPSHOT_INTERVAL_SECONDS >= oldest;
 }
 
 } // namespace Rainbow

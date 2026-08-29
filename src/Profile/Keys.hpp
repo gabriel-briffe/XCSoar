@@ -360,6 +360,8 @@ constexpr std::string_view RainbowApiKey = "RainbowApiKey";
 constexpr std::string_view RainbowDisplaySatellite =
   "RainbowDisplaySatellite";
 constexpr std::string_view RainbowDisplayRain = "RainbowDisplayRain";
+constexpr std::string_view RainbowDisplaySatRain =
+  "RainbowDisplaySatRain";
 constexpr std::string_view WeatherControlsHeightPercent =
   "WeatherControlsHeightPercent";
 constexpr std::string_view RaspLayerOpacity = "RaspLayerOpacity";

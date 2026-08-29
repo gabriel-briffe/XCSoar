@@ -18,21 +18,13 @@ class ProgressListener;
 
 namespace Rainbow {
 
-/**
- * One downloaded tile ready to be installed on the OpenGL/UI thread.
- * Produced on the network thread; must not touch #Bitmap / overlays.
- */
 struct PreparedTile {
   AllocatedPath path;
   LayerId layer_id;
   GeoBitmap::TileData tile;
-  /** Snapshot epoch used for this tile (API or requested time). */
   int64_t snapshot = 0;
 };
 
-/**
- * Viewport snapshot taken on the UI thread before download starts.
- */
 struct OverlayPlan {
   GeoBounds map_bounds = GeoBounds::Invalid();
   bool satellite = false;
@@ -46,62 +38,34 @@ struct OverlayPlan {
       (satellite || rain);
   }
 
-  /**
-   * How many tiles #DownloadOverlayTiles will attempt (after the
-   * per-layer overlay slot budget).
-   */
   [[nodiscard]] unsigned CountPlannedTiles() const noexcept;
 };
 
-/**
- * Build a download plan from the current map viewport (UI thread).
- */
 [[nodiscard]]
 OverlayPlan
 BuildOverlayPlan(GlueMapWindow &map, bool satellite, bool rain,
                  int64_t snapshot_time) noexcept;
 
-/**
- * Download tiles for @p plan.  Runs on the network thread — no OpenGL.
- * Takes @p plan by value so the UI-thread snapshot outlives the job.
- */
 Co::Task<std::vector<PreparedTile>>
 DownloadOverlayTiles(CurlGlobal &curl, std::string_view api_key,
                      OverlayPlan plan, ProgressListener &progress);
 
-/**
- * Download missing tiles for @p plan into the cache only (no UI install).
- * Used to warm T-1 / T-2 snapshots after the current Auto view is complete.
- */
 Co::Task<void>
 CacheOverlayTiles(CurlGlobal &curl, std::string_view api_key,
                   OverlayPlan plan, ProgressListener &progress);
 
-/**
- * Sequentially cache T-1 and T-2 snapshots for the same viewport.
- */
 Co::Task<bool>
 PrefetchHistorySnapshots(CurlGlobal &curl, std::string_view api_key,
                          OverlayPlan base_plan, int64_t reference,
                          ProgressListener &progress);
 
-/**
- * Install viewport tiles from the on-disk cache for @p snapshot (UI thread).
- * @return number of overlay slots filled (0 if any tile is missing)
- */
 unsigned
-InstallCachedOverlayTiles(const OverlayPlan &plan,
-                          int64_t snapshot) noexcept;
+InstallCachedOverlayTiles(const OverlayPlan &plan, int64_t snapshot,
+                          bool allow_partial = false) noexcept;
 
-/**
- * Load textures and install overlays.  Must run on the OpenGL/UI thread.
- *
- * @return number of overlay slots filled
- */
 unsigned
 InstallPreparedOverlays(std::vector<PreparedTile> &&tiles) noexcept;
 
-/** Clear all map overlay slots used by Rainbow (UI/OpenGL thread). */
 void
 ClearOverlays() noexcept;
 

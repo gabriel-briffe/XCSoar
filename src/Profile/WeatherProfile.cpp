@@ -43,6 +43,8 @@ namespace Profile {
     map.Get(ProfileKeys::RainbowDisplaySatellite,
             settings.display_satellite);
     map.Get(ProfileKeys::RainbowDisplayRain, settings.display_rain);
+    map.Get(ProfileKeys::RainbowDisplaySatRain,
+            settings.display_sat_rain);
   }
 }
 

@@ -201,16 +201,19 @@ RainbowControlsModel::AdvanceTimeReplay() noexcept
   if (replay_reference <= 0)
     return;
 
-  if (replay_step == 1) {
+  const time_t interval = Rainbow::SNAPSHOT_INTERVAL_SECONDS;
+  const unsigned total_frames = 2;
+
+  if (replay_step > 0 && replay_step < total_frames) {
     if (Rainbow::SetPageTime(replay_reference -
-                             Rainbow::SNAPSHOT_INTERVAL_SECONDS))
+                             int64_t(total_frames - replay_step) * interval))
       Notify(ControlsUpdate::OVERLAY);
-    replay_step = 2;
+    ++replay_step;
     replay_timer.Schedule(std::chrono::milliseconds{500});
     return;
   }
 
-  if (replay_step == 2) {
+  if (replay_step == total_frames) {
     const int64_t live = replay_reference;
     CancelTimeReplay();
     Rainbow::SetTimeAutoAdvance(true, live);
@@ -235,8 +238,11 @@ RainbowControlsModel::ReplayPrimary() noexcept
   if (replay_reference <= 0)
     return;
 
+  const time_t interval = Rainbow::SNAPSHOT_INTERVAL_SECONDS;
+  const unsigned total_frames = 2;
+
   if (Rainbow::SetPageTime(replay_reference -
-                           2 * Rainbow::SNAPSHOT_INTERVAL_SECONDS))
+                           int64_t(total_frames) * interval))
     Notify(ControlsUpdate::OVERLAY);
 
   replay_step = 1;

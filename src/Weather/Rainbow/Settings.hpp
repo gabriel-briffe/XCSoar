@@ -6,12 +6,12 @@
 #include "util/StaticString.hxx"
 
 struct RainbowSettings {
-  /** Rainbow.ai API token from the developer portal. */
   StaticString<128> api_key;
 
-  /** Persist checkbox selection from the Weather → Rainbow tab. */
+  /** Which layer modes the weather-control cycle may show. */
   bool display_satellite;
   bool display_rain;
+  bool display_sat_rain;
 
   constexpr bool IsDefined() const noexcept {
     return !api_key.empty();
@@ -21,5 +21,6 @@ struct RainbowSettings {
     api_key.clear();
     display_satellite = true;
     display_rain = false;
+    display_sat_rain = false;
   }
 };

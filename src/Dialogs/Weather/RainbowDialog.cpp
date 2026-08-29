@@ -22,6 +22,7 @@
 #include "UIState.hpp"
 #include "Language/Language.hpp"
 #include "PageSettings.hpp"
+#include "Weather/Rainbow/FieldControls.hpp"
 #include "ui/canvas/Canvas.hpp"
 
 #include <memory>
@@ -31,7 +32,8 @@ namespace {
 enum LayerRow {
   ROW_SATELLITE = 0,
   ROW_RAIN = 1,
-  ROW_COUNT = 2,
+  ROW_SAT_RAIN = 2,
+  ROW_COUNT = 3,
 };
 
 class RainbowOptionsPanel;
@@ -57,6 +59,7 @@ public:
     SetLengthWithSelection(ROW_COUNT);
     SetSelected(ROW_SATELLITE, settings.display_satellite);
     SetSelected(ROW_RAIN, settings.display_rain);
+    SetSelected(ROW_SAT_RAIN, settings.display_sat_rain);
   }
 
   void OnPaintItem(Canvas &canvas, const PixelRect rc,
@@ -85,13 +88,46 @@ public:
   void Show(const PixelRect &rc) noexcept override;
   void SyncDraftFromList() noexcept;
   void RefreshButtons() noexcept;
-
-  /** Push checkbox layers onto the current Rainbow page, if any. */
   void ApplyLayersToCurrentRainbowPage() noexcept;
 
 private:
   void AddPageClicked() noexcept;
 };
+
+void
+ApplyDisplayMode(PageLayout &layout, bool satellite, bool rain) noexcept
+{
+  layout.rainbow_satellite = satellite;
+  layout.rainbow_rain = rain;
+}
+
+void
+ApplyFirstEnabledMode(PageLayout &layout,
+                      bool sat, bool rain, bool sat_rain) noexcept
+{
+  if (sat)
+    ApplyDisplayMode(layout, true, false);
+  else if (rain)
+    ApplyDisplayMode(layout, false, true);
+  else if (sat_rain)
+    ApplyDisplayMode(layout, true, true);
+  else
+    ApplyDisplayMode(layout, false, false);
+}
+
+[[nodiscard]]
+bool
+ModeInPool(const PageLayout &layout,
+           bool sat, bool rain, bool sat_rain) noexcept
+{
+  if (layout.rainbow_satellite && layout.rainbow_rain)
+    return sat_rain;
+  if (layout.rainbow_rain)
+    return rain;
+  if (layout.rainbow_satellite)
+    return sat;
+  return false;
+}
 
 void
 RainbowLayerListWidget::OnPaintItem(Canvas &canvas, const PixelRect rc,
@@ -112,12 +148,23 @@ RainbowLayerListWidget::OnPaintItem(Canvas &canvas, const PixelRect rc,
 
   DrawCheckBox(canvas, look, box_rc, IsSelected(i), focused, false, true);
 
-  const char *title = i == ROW_SATELLITE
-    ? C_("Weather layer", "Satellite")
-    : C_("Weather layer", "Rain");
-  const char *detail = i == ROW_SATELLITE
-    ? _("Latest Rainbow cloud tiles")
-    : _("Latest Rainbow precipitation tiles");
+  const char *title;
+  const char *detail;
+  switch (i) {
+  case ROW_SATELLITE:
+    title = C_("Weather layer", "Satellite");
+    detail = _("Latest Rainbow cloud tiles");
+    break;
+  case ROW_RAIN:
+    title = C_("Weather layer", "Rain");
+    detail = _("Latest Rainbow precipitation tiles");
+    break;
+  case ROW_SAT_RAIN:
+  default:
+    title = C_("Weather layer", "Sat+Rain");
+    detail = _("Rainbow satellite with rain overlay");
+    break;
+  }
 
   PixelRect text_rc = rc;
   text_rc.left = box_rc.right + 2 * int(padding);
@@ -131,20 +178,17 @@ RainbowLayerListWidget::PersistSelection() noexcept
   auto &settings = CommonInterface::SetComputerSettings().weather.rainbow;
   settings.display_satellite = IsSelected(ROW_SATELLITE);
   settings.display_rain = IsSelected(ROW_RAIN);
+  settings.display_sat_rain = IsSelected(ROW_SAT_RAIN);
   Profile::Set(ProfileKeys::RainbowDisplaySatellite,
                settings.display_satellite);
   Profile::Set(ProfileKeys::RainbowDisplayRain, settings.display_rain);
+  Profile::Set(ProfileKeys::RainbowDisplaySatRain,
+               settings.display_sat_rain);
 }
 
 void
 RainbowLayerListWidget::OnSelectionChanged() noexcept
 {
-  /* Keep at least one layer so the Rainbow page stays valid. */
-  if (!IsSelected(ROW_SATELLITE) && !IsSelected(ROW_RAIN)) {
-    SetSelected(ROW_RAIN, true);
-    return;
-  }
-
   PersistSelection();
   if (options_panel != nullptr) {
     options_panel->SyncDraftFromList();
@@ -171,23 +215,6 @@ RainbowOptionsPanel::Show(const PixelRect &rc) noexcept
 {
   RowFormWidget::Show(rc);
   overlay.Load(PageLayout::Overlay::RAINBOW);
-
-  /* When the open page is already Rainbow, drive the checkboxes from
-     that page so Sat/Rain match what is on the map. */
-  const auto &pages = CommonInterface::GetUISettings().pages;
-  const unsigned current =
-    CommonInterface::GetUIState().pages.current_index;
-  if (list != nullptr && current < pages.n_pages &&
-      pages.pages[current].UsesRainbowOverlay()) {
-    const auto &page = pages.pages[current];
-    auto &settings =
-      CommonInterface::SetComputerSettings().weather.rainbow;
-    settings.display_satellite = page.rainbow_satellite;
-    settings.display_rain = page.rainbow_rain;
-    list->SetSelected(ROW_SATELLITE, page.rainbow_satellite);
-    list->SetSelected(ROW_RAIN, page.rainbow_rain);
-  }
-
   SyncDraftFromList();
 }
 
@@ -201,10 +228,17 @@ RainbowOptionsPanel::SyncDraftFromList() noexcept
     CommonInterface::GetComputerSettings().weather.rainbow;
   overlay.draft.overlay = PageLayout::Overlay::RAINBOW;
   overlay.draft.bottom = PageLayout::Bottom::WEATHER_CONTROLS;
-  overlay.draft.rainbow_satellite = settings.display_satellite;
-  overlay.draft.rainbow_rain = settings.display_rain;
   if (overlay.draft.rainbow_time < PageLayout::RAINBOW_TIME_AUTO)
     overlay.draft.rainbow_time = PageLayout::RAINBOW_TIME_AUTO;
+
+  if (!ModeInPool(overlay.draft,
+                  settings.display_satellite, settings.display_rain,
+                  settings.display_sat_rain))
+    ApplyFirstEnabledMode(overlay.draft,
+                          settings.display_satellite,
+                          settings.display_rain,
+                          settings.display_sat_rain);
+
   overlay.draft.Normalise();
   RefreshButtons();
 }
@@ -225,10 +259,30 @@ RainbowOptionsPanel::ApplyLayersToCurrentRainbowPage() noexcept
       !pages.pages[current].UsesRainbowOverlay())
     return;
 
-  /* Without "Apply to page", layer checkboxes still update the open
-     Rainbow page immediately (Sat/Rain only — time stays on the page). */
-  if (overlay.ApplyIfDirty())
-    RefreshButtons();
+  const auto &settings =
+    CommonInterface::GetComputerSettings().weather.rainbow;
+
+  auto &page = CommonInterface::SetUISettings().pages.pages[current];
+  if (!ModeInPool(page,
+                  settings.display_satellite, settings.display_rain,
+                  settings.display_sat_rain))
+    ApplyFirstEnabledMode(page,
+                          settings.display_satellite,
+                          settings.display_rain,
+                          settings.display_sat_rain);
+
+  page.Normalise();
+  Rainbow::ApplyCursorFromPageLayout(page);
+  if (page.UsesRainbowOverlay()) {
+    Rainbow::PersistCursorToPage();
+    Rainbow::ActivatePageOverlay();
+  } else {
+    Rainbow::ClearMapOverlay();
+  }
+
+  overlay.draft = page;
+  overlay.draft.Normalise();
+  RefreshButtons();
 }
 
 void

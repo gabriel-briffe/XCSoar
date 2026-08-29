@@ -160,9 +160,11 @@ struct PageLayout
   int xctherm_time;
 
   /**
-   * Per-page Rainbow.ai cursor.  Time is a UTC snapshot epoch (10-minute
+   * Per-page Rainbow cursor.  Time is a UTC snapshot epoch (10-minute
    * steps); #RAINBOW_TIME_AUTO follows the latest snapshot.  Satellite
-   * and rain may both be enabled (rain drawn above satellite).
+   * and rain may both be enabled (rain drawn above satellite).  The
+   * Weather → Rainbow checkboxes choose which modes the bottom control
+   * may cycle.
    */
   static constexpr int64_t RAINBOW_TIME_AUTO = 0;
   int64_t rainbow_time;

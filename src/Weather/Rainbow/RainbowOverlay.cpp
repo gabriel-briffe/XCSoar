@@ -48,16 +48,18 @@ PlanLayerTiles(GlueMapWindow &map, const GeoBounds &map_bounds,
 static const LayerSpec &
 LayerSpecFor(LayerId id) noexcept
 {
-  return id == LayerId::RAIN ? LAYER_RAIN : LAYER_SATELLITE;
+  switch (id) {
+  case LayerId::RAIN:
+    return LAYER_RAIN;
+  default:
+    return LAYER_SATELLITE;
+  }
 }
 
 static bool
 SetOverlayTile(GlueMapWindow &map, unsigned slot, Path path,
                const LayerSpec &layer, const GeoBitmap::TileData &tile)
 {
-  /* Prefer Bitmap + explicit geo bounds so WebP cloud tiles (Android
-     BitmapFactory) and PNG rain tiles both work — LoadGeoFile only
-     accepts PNG/JPEG by extension. */
   Bitmap bitmap;
   if (!bitmap.LoadFile(path)) {
     LogFmt("rainbow: failed to load tile {}", path.c_str());
@@ -108,7 +110,6 @@ DownloadLayerTiles(CurlGlobal &curl, std::string_view api_key,
       });
       ++filled;
     } catch (...) {
-      /* skip failed tiles; keep going for the rest of the viewport */
     }
   }
 }
@@ -183,7 +184,7 @@ DownloadOverlayTiles(CurlGlobal &curl, std::string_view api_key,
   const unsigned layer_count =
     (plan.satellite ? 1u : 0u) + (plan.rain ? 1u : 0u);
   const unsigned slots_per_layer =
-    MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count;
+    layer_count > 0 ? MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count : 0;
 
   std::vector<PreparedTile> prepared;
   prepared.reserve(MapWindowOverlay::MAX_MAP_OVERLAYS);
@@ -220,7 +221,7 @@ CacheOverlayTiles(CurlGlobal &curl, std::string_view api_key,
   const unsigned layer_count =
     (plan.satellite ? 1u : 0u) + (plan.rain ? 1u : 0u);
   const unsigned slots_per_layer =
-    MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count;
+    layer_count > 0 ? MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count : 0;
 
   if (plan.satellite) {
     int64_t snapshot = plan.snapshot_time;
@@ -294,12 +295,13 @@ PrefetchHistorySnapshots(CurlGlobal &curl, std::string_view api_key,
 }
 
 unsigned
-InstallCachedOverlayTiles(const OverlayPlan &plan,
-                          int64_t snapshot) noexcept
+InstallCachedOverlayTiles(const OverlayPlan &plan, int64_t snapshot,
+                          bool allow_partial) noexcept
 {
 #ifndef ENABLE_OPENGL
   (void)plan;
   (void)snapshot;
+  (void)allow_partial;
   return 0;
 #else
   if (snapshot <= 0 || !plan.IsValid())
@@ -309,7 +311,7 @@ InstallCachedOverlayTiles(const OverlayPlan &plan,
   const unsigned layer_count =
     (plan.satellite ? 1u : 0u) + (plan.rain ? 1u : 0u);
   const unsigned slots_per_layer =
-    MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count;
+    layer_count > 0 ? MapWindowOverlay::MAX_MAP_OVERLAYS / layer_count : 0;
 
   std::vector<PreparedTile> prepared;
   prepared.reserve(MapWindowOverlay::MAX_MAP_OVERLAYS);
@@ -324,8 +326,11 @@ InstallCachedOverlayTiles(const OverlayPlan &plan,
         break;
 
       auto path = MakeTilePath(cache_dir, layer, snapshot, tile);
-      if (!File::ExistsAny(path))
-        return false;
+      if (!File::ExistsAny(path)) {
+        if (!allow_partial)
+          return false;
+        continue;
+      }
 
       prepared.push_back(PreparedTile{
         std::move(path),
@@ -343,6 +348,9 @@ InstallCachedOverlayTiles(const OverlayPlan &plan,
     return 0;
   if (plan.rain &&
       !collect(LAYER_RAIN, plan.rain_tiles))
+    return 0;
+
+  if (prepared.empty())
     return 0;
 
   return InstallPreparedOverlays(std::move(prepared));
