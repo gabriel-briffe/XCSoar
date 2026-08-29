@@ -34,6 +34,11 @@ struct TrailQuery {
   unsigned point_stride = 1;
   /** Cap kept points; 0 = unlimited. */
   unsigned max_points = 0;
+  /**
+   * Keep every stored fix (no screen spacing / point budget).  Used for
+   * TrailSettings::Length::FULL on the GPU path.
+   */
+  bool keep_all = false;
 };
 
 /**

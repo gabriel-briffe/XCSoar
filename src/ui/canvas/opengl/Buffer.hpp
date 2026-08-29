@@ -68,6 +68,14 @@ public:
     Unbind();
   }
 
+  /**
+   * Update a range inside an existing buffer (buffer must be bound).
+   */
+  static void SubData(GLintptr offset, GLsizeiptr size,
+                      const GLvoid *data) noexcept {
+    glBufferSubData(target, offset, size, data);
+  }
+
   static void *MapWrite() noexcept {
 #ifdef HAVE_DYNAMIC_MAPBUFFER
     return GLExt::map_buffer(target, GL_WRITE_ONLY_OES);
@@ -124,4 +132,7 @@ public:
 };
 
 class GLArrayBuffer : public GLBuffer<GL_ARRAY_BUFFER, GL_STATIC_DRAW> {
+};
+
+class GLDynamicArrayBuffer : public GLBuffer<GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW> {
 };

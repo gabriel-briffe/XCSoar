@@ -16,6 +16,7 @@ enum ControlIndex {
   ENABLE_FLARM_MAP,
   FADE_TRAFFIC,
   TRAIL_LENGTH,
+  TRAIL_VBO,
   TRAIL_DRIFT,
   TRAIL_TYPE,
   TRAIL_WIDTH,
@@ -47,6 +48,7 @@ private:
 void
 SymbolsConfigPanel::ShowTrailControls(bool show)
 {
+  SetRowVisible(TRAIL_VBO, show);
   SetRowVisible(TRAIL_DRIFT, show);
   SetRowVisible(TRAIL_TYPE, show);
   SetRowVisible(TRAIL_WIDTH, show);
@@ -148,6 +150,13 @@ SymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
           (unsigned)settings_map.trail.length, this);
   SetExpertRow(TRAIL_LENGTH);
 
+  AddBoolean(_("Trail VBO"),
+             _("OpenGL only: for Full trail length, keep the path in a GPU "
+               "vertex buffer (no screen-space thinning). Off uses the "
+               "normal CPU trail path."),
+             settings_map.trail.vbo);
+  SetExpertRow(TRAIL_VBO);
+
   AddBoolean(_("Trail drift"),
              _("Determines whether the snail trail is drifted with the wind "
                "when displayed in circling mode at near map scales. Switched "
@@ -208,6 +217,8 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
                        settings_map.fade_traffic);
 
   changed |= SaveValueEnum(TRAIL_LENGTH, ProfileKeys::SnailTrail, settings_map.trail.length);
+
+  changed |= SaveValue(TRAIL_VBO, ProfileKeys::SnailTrailVBO, settings_map.trail.vbo);
 
   changed |= SaveValue(TRAIL_DRIFT, ProfileKeys::TrailDrift, settings_map.trail.wind_drift_enabled);
 

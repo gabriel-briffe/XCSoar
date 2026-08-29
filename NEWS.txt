@@ -59,6 +59,13 @@ Version 7.46 - not yet released
     overview plus loaded fine tiles instead of CPU sampling; on a
     Pixel-class phone, full rebuilds drop from roughly 40–70 ms to
     about 2–6 ms
+  - draw Full snail trails without screen-space thinning on OpenGL:
+    every stored fix is kept in a GPU vertex buffer; new fixes append
+    (Catmull-Rom baked once per leg, then left alone) so pan/zoom and
+    long flights stay cheap; toggle with Map Display → Symbols →
+    Trail VBO (stored in the profile)
+  - freeze snail-trail colour scaling across pan/zoom so thinning no
+    longer remaps climb/altitude colours while keeping local contrast
   - add a waypoint type Display filter on the map Waypoints settings
     page (SeeYou CUP styles; task and watched waypoints stay visible),
     including a Non-ICAO airports toggle (hide airports whose short

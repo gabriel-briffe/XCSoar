@@ -15,6 +15,7 @@ TrailSettings::SetDefaults() noexcept
 {
   wind_drift_enabled = true;
   scaling_enabled = true;
+  vbo = true;
   type = Type::VARIO_1;
   length = Length::LONG;
 }

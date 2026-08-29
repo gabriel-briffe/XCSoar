@@ -156,6 +156,7 @@ Profile::Load(const ProfileMap &map, TrailSettings &settings)
   map.Get(ProfileKeys::SnailWidthScale, settings.scaling_enabled);
   map.GetEnum(ProfileKeys::SnailType, settings.type);
   map.GetEnum(ProfileKeys::SnailTrail, settings.length);
+  map.Get(ProfileKeys::SnailTrailVBO, settings.vbo);
 }
 
 void

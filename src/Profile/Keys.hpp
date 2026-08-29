@@ -213,6 +213,7 @@ constexpr std::string_view PredictContest = "PredictContest";
 constexpr std::string_view Handicap = "Handicap";
 constexpr std::string_view SnailWidthScale = "SnailWidthScale";
 constexpr std::string_view SnailType = "SnailType";
+constexpr std::string_view SnailTrailVBO = "SnailTrailVBO";
 constexpr std::string_view UserLevel = "UserLevel";
 constexpr std::string_view RiskGamma = "RiskGamma";
 constexpr std::string_view PredictWindDrift = "PredictWindDrift";

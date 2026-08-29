@@ -10,12 +10,20 @@
 #include "Geo/GeoBounds.hpp"
 #include "MapSettings.hpp"
 #include "ui/dim/Point.hpp"
+#include "ui/dim/BulkPoint.hpp"
 #include "time/Stamp.hpp"
 #include "util/Serial.hpp"
 
+#ifdef ENABLE_OPENGL
+#include "ui/canvas/Color.hpp"
+#include "ui/canvas/opengl/Buffer.hpp"
+#include "Math/Point2D.hpp"
+
+#include <memory>
+#endif
+
 #include <vector>
 
-struct BulkPixelPoint;
 class Canvas;
 class TraceComputer;
 class Projection;
@@ -119,6 +127,20 @@ class TrailRenderer {
   /** Keep completed-segment drift stable between GPS trace updates. */
   TimeStamp stable_drift_time{TimeStamp::Undefined()};
 
+  /**
+   * Colour scale frozen across pan/zoom.  Recomputed when the time-window
+   * history or trail type changes, from the current draw #trace (local
+   * contrast).  Using the full history extremes washed out Long trails.
+   */
+  bool color_scale_valid = false;
+  ColorScale frozen_color_scale{};
+  double frozen_color_value_min{};
+  double frozen_color_value_max{};
+  Serial color_scale_append_serial{};
+  Serial color_scale_modify_serial{};
+  TrailSettings::Type color_scale_type{};
+  std::chrono::duration<unsigned> color_scale_min_time{};
+
 public:
   TrailRenderer(const TrailLook &_look) noexcept:look(_look) {}
 
@@ -136,7 +158,8 @@ public:
 
   [[gnu::pure]]
   static TrailQuery MakeTrailQuery(TimeStamp min_time,
-                                   const WindowProjection &projection) noexcept;
+                                   const WindowProjection &projection,
+                                   bool keep_all=false) noexcept;
 
   void ScanBounds(GeoBounds &bounds) const noexcept {
     trace.ScanBounds(bounds);
@@ -190,6 +213,19 @@ private:
   void DrawRibbonPolyline(Canvas &canvas, unsigned color_index,
                           const BulkPixelPoint *pts, unsigned n) noexcept;
 
+#ifdef ENABLE_OPENGL
+  /** Expand ribbon segments into #ribbon_vertices / #ribbon_colors. */
+  void AppendRibbonGeometry(unsigned color_index,
+                            const BulkPixelPoint *pts,
+                            unsigned n) noexcept;
+
+  /** Draw and clear the batched ribbon triangle list. */
+  void FlushRibbonBatch() noexcept;
+
+  std::vector<BulkPixelPoint> ribbon_vertices;
+  std::vector<Color> ribbon_colors;
+#endif
+
   void DrawCachedSegments(Canvas &canvas,
                           const WindowProjection &projection,
                           TrailSettings::Type type,
@@ -198,6 +234,74 @@ private:
                           const GeoPoint &traildrift,
                           TimeStamp drift_now,
                           const std::vector<CachedTrailSegment> &segments) noexcept;
+
+#ifdef ENABLE_OPENGL
+  /**
+   * Draw unthinned Full trail with geo vertices and GPU projection
+   * (#ToGLM).  Pan/zoom only updates the modelview matrix.
+   */
+  void DrawFullTrailGPU(Canvas &canvas,
+                        const WindowProjection &projection,
+                        TrailSettings::Type type,
+                        bool scaled_trail,
+                        const ColorScale &color_scale,
+                        bool use_smoothing,
+                        unsigned num_segments,
+                        const NMEAInfo &basic,
+                        PixelPoint aircraft_pos,
+                        const TrailSettings &settings) noexcept;
+
+  void RebuildFullTrailGeoRuns(const ColorScale &color_scale,
+                               TrailSettings::Type type,
+                               bool use_smoothing,
+                               unsigned num_segments) noexcept;
+
+  /**
+   * Append geometry for new store points.  With smoothing: finalize the
+   * previous provisional tip with Catmull-Rom, then append a new straight
+   * tip leg (needs the next fix as Catmull g3).  Old VBO content stays.
+   */
+  void AppendFullTrailGeoLegs(const ColorScale &color_scale,
+                              TrailSettings::Type type,
+                              bool use_smoothing,
+                              unsigned num_segments,
+                              size_t from_point) noexcept;
+
+  void UploadFullTrailVBO(size_t from_vertex) noexcept;
+
+  void TruncateFullTrailVertices(size_t new_size) noexcept;
+
+  void EmitFullTrailLeg(const ColorScale &color_scale,
+                        TrailSettings::Type type,
+                        bool use_smoothing,
+                        unsigned num_segments,
+                        size_t leg_index) noexcept;
+
+  /** One GL_LINE_STRIP range inside #full_trail_vertices / VBO. */
+  struct FullTrailDrawRange {
+    unsigned color_index{};
+    unsigned first{};
+    unsigned count{};
+  };
+
+  void AppendFullTrailVertex(unsigned color_index,
+                             FloatPoint2D p) noexcept;
+
+  std::vector<FloatPoint2D> full_trail_vertices;
+  std::vector<FullTrailDrawRange> full_trail_ranges;
+  std::unique_ptr<GLDynamicArrayBuffer> full_trail_vbo;
+  size_t full_trail_vbo_capacity = 0;
+  size_t full_trail_point_count = 0;
+  /** Start of provisional (non-Catmull) tip verts; truncated on next append. */
+  size_t full_trail_pending_vertex = 0;
+  bool full_trail_smoothing_enabled = false;
+  GeoPoint full_trail_reference = GeoPoint::Invalid();
+  Serial full_trail_append_serial{};
+  Serial full_trail_modify_serial{};
+  TrailSettings::Type full_trail_type{};
+  double full_trail_color_min{};
+  double full_trail_color_max{};
+#endif
 
   [[gnu::pure]]
   static PixelPoint ProjectCachedPathPoint(const CachedPathPoint &p,

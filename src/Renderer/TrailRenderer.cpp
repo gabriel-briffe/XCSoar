@@ -14,7 +14,21 @@
 #include "Engine/Contest/ContestTrace.hpp"
 #include "Screen/Layout.hpp"
 
+#ifdef ENABLE_OPENGL
+#include "ui/canvas/opengl/Shaders.hpp"
+#include "ui/canvas/opengl/Program.hpp"
+#include "ui/canvas/opengl/VertexPointer.hpp"
+#include "ui/canvas/opengl/Buffer.hpp"
+#include "ui/canvas/opengl/Color.hpp"
+#include "ui/canvas/opengl/Geo.hpp"
+#include "Math/Angle.hpp"
+
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/mat4x4.hpp>
+#endif
+
 #include <algorithm>
+#include <memory>
 #include <new>
 #include <utility>
 #include <vector>
@@ -484,17 +498,26 @@ GetTrailPointBudget() noexcept
 
 TrailQuery
 TrailRenderer::MakeTrailQuery(TimeStamp min_time,
-                              const WindowProjection &projection) noexcept
+                              const WindowProjection &projection,
+                              bool keep_all) noexcept
 {
   const double map_scale = projection.GetMapScale();
   TrailQuery query;
   query.min_time = min_time.Cast<std::chrono::duration<unsigned>>();
   query.bounds = projection.GetScreenBounds().Scale(TRAIL_BOUNDS_SCALE);
   query.project_location = projection.GetGeoScreenCenter();
-  query.min_distance_m =
-    projection.DistancePixelsToMeters(GetTrailSpacingPixels(map_scale));
-  query.point_stride = 1;
-  query.max_points = GetTrailPointBudget();
+  query.keep_all = keep_all;
+  if (keep_all) {
+    /* No screen-space thinning or soft budget — every stored fix. */
+    query.min_distance_m = 0;
+    query.point_stride = 1;
+    query.max_points = 0;
+  } else {
+    query.min_distance_m =
+      projection.DistancePixelsToMeters(GetTrailSpacingPixels(map_scale));
+    query.point_stride = 1;
+    query.max_points = GetTrailPointBudget();
+  }
   return query;
 }
 
@@ -518,18 +541,39 @@ TrailRenderer::InvalidateHistory() noexcept
   history_valid = false;
   history_min_time = {};
   last_query = {};
+  color_scale_valid = false;
 }
 
 void
 TrailRenderer::InvalidateSegmentCache() noexcept
 {
   segment_cache.clear();
+  color_scale_valid = false;
+#ifdef ENABLE_OPENGL
+  full_trail_vertices.clear();
+  full_trail_ranges.clear();
+  full_trail_vbo.reset();
+  full_trail_vbo_capacity = 0;
+  full_trail_point_count = 0;
+  full_trail_pending_vertex = 0;
+  full_trail_smoothing_enabled = false;
+  full_trail_reference.SetInvalid();
+#endif
 }
 
 bool
 TrailRenderer::TrailQueryViewEqual(const TrailQuery &a,
                                    const TrailQuery &b) noexcept
 {
+  if (a.keep_all != b.keep_all)
+    return false;
+
+  /* keep_all ignores viewport: pan/zoom must not refilter the store. */
+  if (a.keep_all)
+    return a.min_distance_m == b.min_distance_m &&
+      a.point_stride == b.point_stride &&
+      a.max_points == b.max_points;
+
   return a.min_distance_m == b.min_distance_m &&
     a.point_stride == b.point_stride &&
     a.max_points == b.max_points &&
@@ -603,9 +647,22 @@ TrailRenderer::SyncTrace(const TraceComputer &trace_computer,
       history_modify_serial = modify;
     }
 
-    const TrailSpatialFilter filter =
-      trace_computer.LockedMakeSpatialFilter(query);
-    RefilterTraceFromHistory(filter);
+    if (query.keep_all) {
+      trace = history;
+      merge_vario_samples.clear();
+      if (!trace.empty()) {
+        const auto vario_min = trace.front().GetTime();
+        merge_vario_samples.reserve(history_vario.size());
+        for (const auto &s : history_vario) {
+          if (s.time >= vario_min)
+            merge_vario_samples.push_back(s);
+        }
+      }
+    } else {
+      const TrailSpatialFilter filter =
+        trace_computer.LockedMakeSpatialFilter(query);
+      RefilterTraceFromHistory(filter);
+    }
   } catch (const std::bad_alloc &) {
     InvalidateHistory();
     InvalidateSegmentCache();
@@ -745,6 +802,37 @@ TrailRenderer::DrawCachedSegments(Canvas &canvas,
     TrailLook::NUMSNAILCOLORS / 2;
 
   if (use_ribbon) {
+#ifdef ENABLE_OPENGL
+    ribbon_vertices.clear();
+    ribbon_colors.clear();
+
+    size_t total_pts = 0;
+    for (const auto &seg : segments)
+      for (const auto &run : seg.colour_runs)
+        total_pts += run.points.size();
+    /* ~6 verts/segment + join discs; reserve roughly. */
+    ribbon_vertices.reserve(total_pts * 8);
+    ribbon_colors.reserve(total_pts * 8);
+
+    for (const auto &seg : segments) {
+      for (const auto &run : seg.colour_runs) {
+        if (run.points.size() < 2)
+          continue;
+
+        if (suppress_sink_lines && run.color_index < null_color_index)
+          continue;
+
+        auto *dst = Prepare(run.points.size());
+        unsigned n = 0;
+        ProjectCachedColourRun(run, 0, projection, enable_traildrift,
+                               traildrift, drift_now, dst, n,
+                               simplify_projected);
+        AppendRibbonGeometry(run.color_index, dst, n);
+      }
+    }
+
+    FlushRibbonBatch();
+#else
     for (const auto &seg : segments) {
       for (const auto &run : seg.colour_runs) {
         if (run.points.size() < 2)
@@ -762,6 +850,7 @@ TrailRenderer::DrawCachedSegments(Canvas &canvas,
         DrawRibbonPolyline(canvas, run.color_index, dst, n);
       }
     }
+#endif
 
     return;
   }
@@ -836,6 +925,355 @@ TrailRenderer::DrawCachedSegments(Canvas &canvas,
 
   flush_batch();
 }
+
+#ifdef ENABLE_OPENGL
+
+void
+TrailRenderer::AppendFullTrailVertex(unsigned color_index,
+                                     FloatPoint2D p) noexcept
+{
+  if (full_trail_ranges.empty() ||
+      full_trail_ranges.back().color_index != color_index) {
+    FloatPoint2D junction = p;
+    if (!full_trail_vertices.empty())
+      junction = full_trail_vertices.back();
+
+    full_trail_ranges.push_back({
+      color_index,
+      unsigned(full_trail_vertices.size()),
+      0,
+    });
+
+    /* Always emit the shared endpoint into the new strip.  When the
+       next leg starts at the previous end (p == junction), skipping
+       that push left the new run with only the far point and dropped
+       the connecting segment — a dotted trail. */
+    full_trail_vertices.push_back(junction);
+    ++full_trail_ranges.back().count;
+
+    if (p.x != junction.x || p.y != junction.y) {
+      full_trail_vertices.push_back(p);
+      ++full_trail_ranges.back().count;
+    }
+    return;
+  }
+
+  if (full_trail_vertices.empty() ||
+      full_trail_vertices.back().x != p.x ||
+      full_trail_vertices.back().y != p.y) {
+    full_trail_vertices.push_back(p);
+    ++full_trail_ranges.back().count;
+  }
+}
+
+void
+TrailRenderer::TruncateFullTrailVertices(size_t new_size) noexcept
+{
+  if (new_size >= full_trail_vertices.size())
+    return;
+
+  while (!full_trail_ranges.empty()) {
+    auto &run = full_trail_ranges.back();
+    if (run.first >= new_size) {
+      full_trail_ranges.pop_back();
+      continue;
+    }
+
+    const size_t end = size_t(run.first) + run.count;
+    if (end > new_size)
+      run.count = unsigned(new_size - run.first);
+    if (run.count == 0)
+      full_trail_ranges.pop_back();
+    break;
+  }
+
+  full_trail_vertices.resize(new_size);
+}
+
+void
+TrailRenderer::EmitFullTrailLeg(const ColorScale &color_scale,
+                                TrailSettings::Type type,
+                                bool use_smoothing,
+                                unsigned num_segments,
+                                size_t leg_index) noexcept
+{
+  if (leg_index + 1 >= trace.size() || !full_trail_reference.IsValid())
+    return;
+
+  const auto &a = trace[leg_index];
+  const auto &b = trace[leg_index + 1];
+  const double value = (type == TrailSettings::Type::ALTITUDE)
+    ? b.GetAltitude() : b.GetVario();
+  const unsigned color_index = color_scale.Index(value);
+
+  if (IsVarioDotsOnlyMode(type) &&
+      color_index < TrailLook::NUMSNAILCOLORS / 2)
+    return;
+
+  auto rel = [&](const GeoPoint &g) noexcept -> FloatPoint2D {
+    return FloatPoint2D{
+      float((g.longitude - full_trail_reference.longitude).Native()),
+      float((g.latitude - full_trail_reference.latitude).Native()),
+    };
+  };
+
+  /* Catmull needs g0..g3; bake once when the next fix exists. */
+  const bool smooth_leg =
+    use_smoothing && num_segments > 0 &&
+    leg_index >= 1 && leg_index + 2 < trace.size();
+
+  if (smooth_leg) {
+    const GeoPoint g0 = trace[leg_index - 1].GetLocation();
+    const GeoPoint g1 = a.GetLocation();
+    const GeoPoint g2 = b.GetLocation();
+    const GeoPoint g3 = trace[leg_index + 2].GetLocation();
+    AppendFullTrailVertex(color_index, rel(g1));
+    for (unsigned s = 1; s < num_segments; ++s) {
+      const double t = double(s) / double(num_segments);
+      AppendFullTrailVertex(color_index,
+                            rel(CatmullRomGeo(g0, g1, g2, g3, t)));
+    }
+    AppendFullTrailVertex(color_index, rel(g2));
+  } else {
+    AppendFullTrailVertex(color_index, rel(a.GetLocation()));
+    AppendFullTrailVertex(color_index, rel(b.GetLocation()));
+  }
+}
+
+void
+TrailRenderer::RebuildFullTrailGeoRuns(const ColorScale &color_scale,
+                                       TrailSettings::Type type,
+                                       bool use_smoothing,
+                                       unsigned num_segments) noexcept
+{
+  full_trail_vertices.clear();
+  full_trail_ranges.clear();
+  full_trail_point_count = 0;
+  full_trail_pending_vertex = 0;
+  if (trace.size() < 2)
+    return;
+
+  full_trail_reference = trace.front().GetLocation();
+
+  /* Bake Catmull for every leg that already has a following fix.
+     With smoothing, the newest GPS leg stays out of the VBO and is
+     drawn live (Catmull with aircraft as g3) until the next fix. */
+  for (size_t i = 0; i + 1 < trace.size(); ++i) {
+    if (use_smoothing && num_segments > 0 && i + 2 >= trace.size())
+      break;
+
+    EmitFullTrailLeg(color_scale, type, use_smoothing, num_segments, i);
+  }
+
+  full_trail_pending_vertex = full_trail_vertices.size();
+  full_trail_point_count = trace.size();
+  UploadFullTrailVBO(0);
+}
+
+void
+TrailRenderer::AppendFullTrailGeoLegs(const ColorScale &color_scale,
+                                      TrailSettings::Type type,
+                                      bool use_smoothing,
+                                      unsigned num_segments,
+                                      size_t from_point) noexcept
+{
+  if (trace.size() < 2 || from_point == 0 ||
+      from_point >= trace.size() || !full_trail_reference.IsValid())
+    return;
+
+  size_t upload_from = full_trail_vertices.size();
+
+  if (use_smoothing && num_segments > 0) {
+    /* VBO has no provisional tip — only append newly finalizable legs. */
+    const size_t first_new =
+      from_point >= 2 ? from_point - 2 : 0;
+    for (size_t i = first_new; i + 2 < trace.size(); ++i)
+      EmitFullTrailLeg(color_scale, type, use_smoothing, num_segments, i);
+
+    full_trail_pending_vertex = full_trail_vertices.size();
+    full_trail_point_count = trace.size();
+    if (full_trail_vertices.size() != upload_from)
+      UploadFullTrailVBO(upload_from);
+    return;
+  }
+
+  for (size_t i = from_point - 1; i + 1 < trace.size(); ++i)
+    EmitFullTrailLeg(color_scale, type, false, 0, i);
+
+  full_trail_pending_vertex = full_trail_vertices.size();
+  full_trail_point_count = trace.size();
+  if (full_trail_vertices.size() != upload_from)
+    UploadFullTrailVBO(upload_from);
+}
+
+void
+TrailRenderer::UploadFullTrailVBO(size_t from_vertex) noexcept
+{
+  if (full_trail_vertices.empty()) {
+    full_trail_vbo.reset();
+    full_trail_vbo_capacity = 0;
+    return;
+  }
+
+  if (full_trail_vbo == nullptr)
+    full_trail_vbo = std::make_unique<GLDynamicArrayBuffer>();
+
+  const size_t n = full_trail_vertices.size();
+  const size_t bytes = n * sizeof(FloatPoint2D);
+
+  if (n > full_trail_vbo_capacity || from_vertex == 0) {
+    size_t capacity = full_trail_vbo_capacity;
+    if (n > capacity) {
+      capacity = std::max(n, std::max(size_t(256), capacity * 2));
+      full_trail_vbo_capacity = capacity;
+    }
+
+    full_trail_vbo->Bind();
+    GLDynamicArrayBuffer::Data(GLsizeiptr(full_trail_vbo_capacity *
+                                          sizeof(FloatPoint2D)),
+                               nullptr);
+    GLDynamicArrayBuffer::SubData(0, GLsizeiptr(bytes),
+                                  full_trail_vertices.data());
+    GLDynamicArrayBuffer::Unbind();
+    return;
+  }
+
+  if (from_vertex >= n)
+    return;
+
+  full_trail_vbo->Bind();
+  GLDynamicArrayBuffer::SubData(GLintptr(from_vertex * sizeof(FloatPoint2D)),
+                                GLsizeiptr((n - from_vertex) *
+                                           sizeof(FloatPoint2D)),
+                                full_trail_vertices.data() + from_vertex);
+  GLDynamicArrayBuffer::Unbind();
+}
+
+void
+TrailRenderer::DrawFullTrailGPU(Canvas &canvas,
+                                const WindowProjection &projection,
+                                TrailSettings::Type type,
+                                bool scaled_trail,
+                                const ColorScale &color_scale,
+                                bool use_smoothing,
+                                unsigned num_segments,
+                                const NMEAInfo &basic,
+                                PixelPoint aircraft_pos,
+                                const TrailSettings &settings) noexcept
+{
+  const bool color_changed =
+    full_trail_type != type ||
+    full_trail_color_min != (color_scale.is_altitude
+                             ? color_scale.alt_min
+                             : color_scale.neg_inv_min) ||
+    full_trail_color_max != (color_scale.is_altitude
+                             ? color_scale.alt_inv_range
+                             : color_scale.inv_max);
+
+  const bool modify_changed =
+    full_trail_modify_serial != synced_modify_serial;
+  const bool append_changed =
+    full_trail_append_serial != synced_append_serial;
+  /* Turning smoothing on must rebuild so history gets Catmull once;
+     turning it off leaves baked curves (append continues straight). */
+  const bool smoothing_on =
+    use_smoothing != full_trail_smoothing_enabled && use_smoothing;
+  const bool can_append =
+    !color_changed && !modify_changed && !smoothing_on && append_changed &&
+    full_trail_reference.IsValid() &&
+    full_trail_point_count > 0 &&
+    full_trail_point_count < trace.size() &&
+    full_trail_vbo != nullptr;
+
+  if (full_trail_vertices.empty() || !full_trail_reference.IsValid() ||
+      modify_changed || color_changed || smoothing_on ||
+      (append_changed && !can_append)) {
+    RebuildFullTrailGeoRuns(color_scale, type, use_smoothing, num_segments);
+  } else if (can_append) {
+    AppendFullTrailGeoLegs(color_scale, type, use_smoothing, num_segments,
+                           full_trail_point_count);
+  }
+
+  full_trail_append_serial = synced_append_serial;
+  full_trail_modify_serial = synced_modify_serial;
+  full_trail_type = type;
+  full_trail_smoothing_enabled = use_smoothing;
+  full_trail_color_min = color_scale.is_altitude
+    ? color_scale.alt_min : color_scale.neg_inv_min;
+  full_trail_color_max = color_scale.is_altitude
+    ? color_scale.alt_inv_range : color_scale.inv_max;
+
+  if (!full_trail_reference.IsValid() || full_trail_vertices.empty() ||
+      full_trail_vbo == nullptr)
+    return;
+
+  OpenGL::solid_shader->Use();
+  glUniformMatrix4fv(OpenGL::solid_modelview, 1, GL_FALSE,
+                     glm::value_ptr(ToGLM(projection, full_trail_reference)));
+
+  full_trail_vbo->Bind();
+  {
+    const ScopeVertexPointer vp(GL_FLOAT, nullptr);
+    for (const auto &run : full_trail_ranges) {
+      if (run.count < 2)
+        continue;
+
+      /* SelectTrailPen only stores the Canvas pen; Bind() uploads colour
+         and width to the solid shader (same as Canvas::DrawPolyline). */
+      SelectTrailPen(canvas, run.color_index, scaled_trail);
+      if (scaled_trail)
+        look.scaled_trail_pens[run.color_index].Bind();
+      else
+        look.trail_pens[run.color_index].Bind();
+      glDrawArrays(GL_LINE_STRIP, GLint(run.first), GLsizei(run.count));
+    }
+  }
+  GLDynamicArrayBuffer::Unbind();
+
+  const glm::mat4 identity(1);
+  glUniformMatrix4fv(OpenGL::solid_modelview, 1, GL_FALSE,
+                     glm::value_ptr(identity));
+
+  /* Live tip: with smoothing, Catmull the last GPS leg using the
+     aircraft as g3 (not in VBO yet); always bridge last fix → glider. */
+  valid_points.clear();
+  if (use_smoothing && num_segments > 0 && trace.size() >= 2) {
+    const size_t tip_from = trace.size() >= 3 ? trace.size() - 3 : 0;
+    for (size_t i = tip_from; i < trace.size(); ++i) {
+      const auto &tp = trace[i];
+      const double value = (type == TrailSettings::Type::ALTITUDE)
+        ? tp.GetAltitude() : tp.GetVario();
+      valid_points.push_back({
+        projection.GeoToScreen(tp.GetLocation()),
+        value,
+        tp.GetTime(),
+      });
+    }
+
+    const size_t tip_first_smooth =
+      GetFirstSmoothedPointIndex(valid_points.size());
+    DrawOpenLeg(canvas, settings, color_scale, scaled_trail,
+                true, num_segments, tip_first_smooth,
+                basic, aircraft_pos);
+  }
+
+  if (!trace.empty()) {
+    valid_points.clear();
+    const auto &tp = trace.back();
+    const double value = (type == TrailSettings::Type::ALTITUDE)
+      ? tp.GetAltitude() : tp.GetVario();
+    valid_points.push_back({
+      projection.GeoToScreen(tp.GetLocation()),
+      value,
+      tp.GetTime(),
+    });
+    DrawOpenLeg(canvas, settings, color_scale, scaled_trail,
+                false, 0, valid_points.size(),
+                basic, aircraft_pos);
+  }
+}
+
+#endif /* ENABLE_OPENGL */
 
 void
 TrailRenderer::AppendColourRun(std::vector<CachedColourRun> &runs,
@@ -1134,7 +1572,14 @@ TrailRenderer::Draw(Canvas &canvas, const TraceComputer &trace_computer,
   if (settings.length == TrailSettings::Length::OFF)
     return;
 
-  const TrailQuery query = MakeTrailQuery(min_time, projection);
+  const bool keep_all =
+#ifdef ENABLE_OPENGL
+    settings.length == TrailSettings::Length::FULL && settings.vbo;
+#else
+    /* Soft/GDI still use spacing + budget; no GPU project path. */
+    false;
+#endif
+  const TrailQuery query = MakeTrailQuery(min_time, projection, keep_all);
   if (!SyncTrace(trace_computer, query))
     return;
 
@@ -1149,15 +1594,47 @@ TrailRenderer::Draw(Canvas &canvas, const TraceComputer &trace_computer,
     traildrift = basic.location - tp1;
   }
 
-  const auto minmax = GetMinMax(settings.type, trace);
-  const ColorScale color_scale =
-    ColorScale::FromMinMax(settings.type, minmax.first, minmax.second);
+  /* Colour scale from the drawn #trace for local contrast, but freeze it
+     across pan/zoom so thinning does not remap climb/altitude colours. */
+  const auto trace_minmax = GetMinMax(settings.type, trace);
+  const bool rescale =
+    !color_scale_valid ||
+    settings.type != color_scale_type ||
+    synced_append_serial != color_scale_append_serial ||
+    synced_modify_serial != color_scale_modify_serial ||
+    query.min_time != color_scale_min_time;
+  if (rescale) {
+    frozen_color_value_min = trace_minmax.first;
+    frozen_color_value_max = trace_minmax.second;
+    frozen_color_scale =
+      ColorScale::FromMinMax(settings.type, frozen_color_value_min,
+                             frozen_color_value_max);
+    color_scale_valid = true;
+    color_scale_type = settings.type;
+    color_scale_append_serial = synced_append_serial;
+    color_scale_modify_serial = synced_modify_serial;
+    color_scale_min_time = query.min_time;
+  }
+  const ColorScale &color_scale = frozen_color_scale;
 
   const double map_scale = projection.GetMapScale();
   const bool zoomed_in = map_scale <= TRAIL_ZOOMED_OUT_MAP_SCALE;
   const bool scaled_trail = settings.scaling_enabled && zoomed_in;
 
   const bool use_smoothing = UseTrailSmoothing(settings.type, map_scale);
+
+#ifdef ENABLE_OPENGL
+  /* Unthinned Full trail: geo buffer + GPU projection.  Wind drift
+     still uses the CPU path (time-based geo offset). */
+  if (keep_all && !enable_traildrift) {
+    const unsigned num_segments = use_smoothing ? TRAIL_SMOOTH_SEGMENTS : 0u;
+
+    DrawFullTrailGPU(canvas, projection, settings.type, scaled_trail,
+                     color_scale, use_smoothing, num_segments,
+                     basic, pos, settings);
+    return;
+  }
+#endif
 
   const bool append_changed =
     synced_append_serial != cache_append_serial;
@@ -1192,8 +1669,8 @@ TrailRenderer::Draw(Canvas &canvas, const TraceComputer &trace_computer,
   const TrailDrawFingerprint new_fingerprint{
     projection.GetScale(),
     query.bounds,
-    minmax.first,
-    minmax.second,
+    frozen_color_value_min,
+    frozen_color_value_max,
     settings.type,
   };
 
@@ -1330,6 +1807,13 @@ TrailRenderer::DrawRibbonPolyline(Canvas &canvas, unsigned color_index,
   if (n < 2)
     return;
 
+#ifdef ENABLE_OPENGL
+  ribbon_vertices.clear();
+  ribbon_colors.clear();
+  AppendRibbonGeometry(color_index, pts, n);
+  FlushRibbonBatch();
+  (void)canvas;
+#else
   const double half_width =
     std::max(1., GetRibbonWidth(look, color_index) * 0.5);
   const unsigned join_radius = unsigned(std::ceil(half_width));
@@ -1370,7 +1854,103 @@ TrailRenderer::DrawRibbonPolyline(Canvas &canvas, unsigned color_index,
     for (unsigned i = 1; i + 1 < n; ++i)
       canvas.DrawCircle({pts[i].x, pts[i].y}, join_radius);
   }
+#endif
 }
+
+#ifdef ENABLE_OPENGL
+
+void
+TrailRenderer::AppendRibbonGeometry(unsigned color_index,
+                                    const BulkPixelPoint *pts,
+                                    unsigned n) noexcept
+{
+  if (n < 2)
+    return;
+
+  const Color color = look.trail_brushes[color_index].GetColor();
+  const double half_width =
+    std::max(1., GetRibbonWidth(look, color_index) * 0.5);
+  const unsigned join_radius = unsigned(std::ceil(half_width));
+
+  auto push_tri = [&](BulkPixelPoint a, BulkPixelPoint b,
+                      BulkPixelPoint c) noexcept {
+    ribbon_vertices.push_back(a);
+    ribbon_vertices.push_back(b);
+    ribbon_vertices.push_back(c);
+    ribbon_colors.push_back(color);
+    ribbon_colors.push_back(color);
+    ribbon_colors.push_back(color);
+  };
+
+  for (unsigned i = 0; i + 1 < n; ++i) {
+    const auto &a = pts[i];
+    const auto &b = pts[i + 1];
+    const double dx = double(b.x - a.x);
+    const double dy = double(b.y - a.y);
+    const double length = std::hypot(dx, dy);
+    if (length <= 0.)
+      continue;
+
+    const double ux = dx / length;
+    const double uy = dy / length;
+    const double nx = -uy * half_width;
+    const double ny = ux * half_width;
+    const double overlap = 0.5;
+    const double ax = double(a.x) - ux * overlap;
+    const double ay = double(a.y) - uy * overlap;
+    const double bx = double(b.x) + ux * overlap;
+    const double by = double(b.y) + uy * overlap;
+
+    const BulkPixelPoint p0 = RoundRibbonPoint(ax + nx, ay + ny);
+    const BulkPixelPoint p1 = RoundRibbonPoint(ax - nx, ay - ny);
+    const BulkPixelPoint p2 = RoundRibbonPoint(bx - nx, by - ny);
+    const BulkPixelPoint p3 = RoundRibbonPoint(bx + nx, by + ny);
+
+    push_tri(p0, p1, p2);
+    push_tri(p0, p2, p3);
+  }
+
+  if (join_radius > 1) {
+    constexpr unsigned SIDES = 8;
+    for (unsigned i = 1; i + 1 < n; ++i) {
+      const BulkPixelPoint center{pts[i].x, pts[i].y};
+      BulkPixelPoint prev = RoundRibbonPoint(
+        double(center.x) + join_radius,
+        double(center.y));
+      for (unsigned s = 1; s <= SIDES; ++s) {
+        const Angle ang = Angle::FullCircle() * (double(s) / SIDES);
+        const BulkPixelPoint cur = RoundRibbonPoint(
+          double(center.x) + join_radius * ang.fastcosine(),
+          double(center.y) + join_radius * ang.fastsine());
+        push_tri(center, prev, cur);
+        prev = cur;
+      }
+    }
+  }
+}
+
+void
+TrailRenderer::FlushRibbonBatch() noexcept
+{
+  const unsigned n = unsigned(ribbon_vertices.size());
+  if (n < 3) {
+    ribbon_vertices.clear();
+    ribbon_colors.clear();
+    return;
+  }
+
+  assert(ribbon_colors.size() == ribbon_vertices.size());
+
+  OpenGL::solid_shader->Use();
+  const ScopeVertexPointer vp(ribbon_vertices.data());
+  const ScopeColorPointer cp(ribbon_colors.data());
+  glDrawArrays(GL_TRIANGLES, 0, GLsizei(n));
+
+  ribbon_vertices.clear();
+  ribbon_colors.clear();
+}
+
+#endif /* ENABLE_OPENGL */
 
 void
 TrailRenderer::DrawVarioColouredPolyline(Canvas &canvas,

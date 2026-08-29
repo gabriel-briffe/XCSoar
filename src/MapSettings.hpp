@@ -74,6 +74,12 @@ struct TrailSettings {
   bool wind_drift_enabled;
   bool scaling_enabled;
 
+  /**
+   * OpenGL Full trail: keep all fixes in a GPU vertex buffer.
+   * When false, Full uses the same CPU thinned path as Long/Short.
+   */
+  bool vbo;
+
   /** 0: standard, 1: seeyou colors */
   enum class Type: uint8_t {
     VARIO_1,
