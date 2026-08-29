@@ -122,3 +122,12 @@ struct WaypointRendererSettings {
 
   void SaveNonIcaoAirportsDisplay(bool display) noexcept;
 };
+
+class MapWindowProjection;
+
+[[gnu::pure]]
+bool
+IsMapWaypointVisible(const Waypoint &waypoint,
+                     const WaypointRendererSettings &settings,
+                     const MapWindowProjection &projection,
+                     bool in_task) noexcept;

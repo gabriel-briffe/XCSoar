@@ -24,6 +24,7 @@ class RasterTerrain;
 class ProtectedRoutePlanner;
 struct ComputerSettings;
 struct WaypointRendererSettings;
+class MapWindowProjection;
 class NOAAStore;
 namespace TIM { struct Thermal; }
 
@@ -43,6 +44,8 @@ public:
   void AddSelfIfNear(const GeoPoint &self, Angle bearing);
   void AddWaypoints(const Waypoints &waypoints,
                     const ProtectedRoutePlanner *route_planner,
+                    const ProtectedTaskManager *task,
+                    const MapWindowProjection &projection,
                     const MoreData &basic, const DerivedInfo &calculated,
                     const ComputerSettings &settings,
                     const WaypointRendererSettings &waypoint_settings);

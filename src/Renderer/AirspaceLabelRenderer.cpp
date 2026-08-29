@@ -9,6 +9,7 @@
 #include "Airspace/AirspaceComputerSettings.hpp"
 #include "Airspace/AirspaceVisibility.hpp"
 #include "Airspace/AirspaceWarningCopy.hpp"
+#include "Airspace/AirspaceMapVisible.hpp"
 #include "Engine/Airspace/AbstractAirspace.hpp"
 #include "Airspace/AirspaceClass.hpp"
 #include "Formatter/AirspaceFormatter.hpp"
@@ -41,27 +42,6 @@ struct NotamLabelCluster {
   PixelPoint anchor;
   unsigned count = 0;
   StaticArray<StaticString<64>, NOTAM_CLUSTER_VISIBLE_LINES> labels;
-};
-
-class AirspaceMapVisible
-{
-  const AirspaceVisibility visible_predicate;
-  const AirspaceWarningCopy &warnings;
-
-public:
-  AirspaceMapVisible(const AirspaceComputerSettings &_computer_settings,
-                     const AirspaceRendererSettings &_renderer_settings,
-                     const AircraftState &_state,
-                     const AirspaceWarningCopy &_warnings) noexcept
-    :visible_predicate(_computer_settings, _renderer_settings, _state),
-     warnings(_warnings) {}
-
-  [[gnu::pure]]
-  bool operator()(const AbstractAirspace& airspace) const noexcept {
-    return visible_predicate(airspace) ||
-      warnings.IsInside(airspace) ||
-      warnings.HasWarning(airspace);
-  }
 };
 
 static StaticString<64>

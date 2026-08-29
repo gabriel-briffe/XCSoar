@@ -59,7 +59,7 @@ GlueMapWindow::ShowMapItems(const GeoPoint &location,
     builder.AddTaskOZs(*task);
 
   const Airspaces *airspace_database = airspace_renderer.GetAirspaces();
-  if (airspace_database)
+  if (airspace_database && settings.airspace.enable)
     builder.AddVisibleAirspace(*airspace_database,
                                airspace_renderer.GetWarningManager(),
                                computer_settings.airspace,
@@ -78,8 +78,9 @@ GlueMapWindow::ShowMapItems(const GeoPoint &location,
   }
 
   if (waypoints)
-    builder.AddWaypoints(*waypoints, route_planner, basic, calculated,
-                         computer_settings, settings.waypoint);
+    builder.AddWaypoints(*waypoints, route_planner, task, visible_projection,
+                         basic, calculated, computer_settings,
+                         settings.waypoint);
 
 #ifdef HAVE_NOAA
   if (noaa_store)

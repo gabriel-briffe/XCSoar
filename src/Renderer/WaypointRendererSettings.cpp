@@ -3,6 +3,7 @@
 
 #include "WaypointRendererSettings.hpp"
 #include "Profile/Profile.hpp"
+#include "Projection/MapWindowProjection.hpp"
 #include "util/StringFormat.hpp"
 
 #include <cassert>
@@ -65,6 +66,22 @@ WaypointRendererSettings::IsWaypointDisplayed(const Waypoint &waypoint) const no
 
   if (!display_non_icao_airports && waypoint.IsAirport() &&
       waypoint.shortname.length() != 4)
+    return false;
+
+  return true;
+}
+
+bool
+IsMapWaypointVisible(const Waypoint &waypoint,
+                     const WaypointRendererSettings &settings,
+                     const MapWindowProjection &projection,
+                     bool in_task) noexcept
+{
+  const bool watched = waypoint.flags.watched;
+  if (!in_task && !watched && !settings.IsWaypointDisplayed(waypoint))
+    return false;
+
+  if (!projection.WaypointInScaleFilter(waypoint) && !in_task)
     return false;
 
   return true;

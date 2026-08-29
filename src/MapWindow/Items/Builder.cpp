@@ -11,12 +11,62 @@
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Renderer/WaypointReachability.hpp"
 #include "Renderer/WaypointRendererSettings.hpp"
+#include "Projection/MapWindowProjection.hpp"
 #include "Computer/Settings.hpp"
 #include "NMEA/Aircraft.hpp"
 #include "Task/ProtectedTaskManager.hpp"
 #include "Task/ProtectedRoutePlanner.hpp"
+#include "Engine/Task/AbstractTask.hpp"
+#include "Engine/Task/Unordered/UnorderedTaskPoint.hpp"
+#include "Engine/Task/Ordered/Points/OrderedTaskPoint.hpp"
+#include "Engine/Task/Visitors/TaskPointVisitor.hpp"
+#include "Engine/Task/Points/Type.hpp"
 #include "NMEA/Info.hpp"
 #include "Terrain/RasterTerrain.hpp"
+
+namespace {
+
+class TaskWaypointIdCollector final : public TaskPointConstVisitor {
+  StaticArray<unsigned, 32> &ids;
+
+  void Add(const WaypointPtr &wp) noexcept {
+    if (wp != nullptr)
+      ids.checked_append(wp->id);
+  }
+
+public:
+  explicit TaskWaypointIdCollector(StaticArray<unsigned, 32> &_ids) noexcept
+    :ids(_ids) {}
+
+  void Visit(const TaskPoint &tp) override {
+    switch (tp.GetType()) {
+    case TaskPointType::UNORDERED:
+      Add(((const UnorderedTaskPoint &)tp).GetWaypointPtr());
+      break;
+    case TaskPointType::START:
+    case TaskPointType::AST:
+    case TaskPointType::AAT:
+    case TaskPointType::FINISH:
+      Add(((const OrderedTaskPoint &)tp).GetWaypointPtr());
+      break;
+    }
+  }
+};
+
+void
+CollectTaskWaypointIds(const ProtectedTaskManager &task,
+                       StaticArray<unsigned, 32> &ids) noexcept
+{
+  ProtectedTaskManager::Lease task_manager(task);
+  const AbstractTask *active = task_manager->GetActiveTask();
+  if (active == nullptr)
+    return;
+
+  TaskWaypointIdCollector collector(ids);
+  active->AcceptTaskPointVisitor(collector);
+}
+
+} // namespace
 
 void
 MapItemListBuilder::AddLocation(const NMEAInfo &basic,
@@ -76,13 +126,23 @@ MapItemListBuilder::AddSelfIfNear(const GeoPoint &self, Angle bearing)
 void
 MapItemListBuilder::AddWaypoints(const Waypoints &waypoints,
                                  const ProtectedRoutePlanner *route_planner,
+                                 const ProtectedTaskManager *task,
+                                 const MapWindowProjection &projection,
                                  const MoreData &basic,
                                  const DerivedInfo &calculated,
                                  const ComputerSettings &settings,
                                  const WaypointRendererSettings &waypoint_settings)
 {
+  StaticArray<unsigned, 32> task_waypoint_ids;
+  if (task != nullptr)
+    CollectTaskWaypointIds(*task, task_waypoint_ids);
+
   waypoints.VisitWithinRange(location, range, [&](const auto &w){
     if (list.full())
+      return;
+
+    const bool in_task = task_waypoint_ids.contains(w->id);
+    if (!IsMapWaypointVisible(*w, waypoint_settings, projection, in_task))
       return;
 
     /* calculate the reachability the same way the map does, so the
