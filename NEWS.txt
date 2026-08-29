@@ -22,6 +22,8 @@ Version 7.46 - not yet released
 * rendering
   - use Mapbox earcut for OpenGL polygon fills (more reliable concave
     geometry for topography)
+  - add terrain shading that follows sun and wind lighting on the GPU
+    without rebuilding the slope image; contour lines stay unshaded
 * weather
   - show the overlay name as XC Therm (with a space) in setup, weather
     dialogs, map titles, and download messages
@@ -36,6 +38,12 @@ Version 7.46 - not yet released
   - add Map Display → Topology to override per-layer shape and label
     zoom thresholds from topology.tpl; overrides are stored per map
     file in the profile #2992
+  - add a Topology Filter button that cycles each layer through
+    graphic, label, both, and none (thresholds still apply)
+  - skip tiny topography fills, simplify large areas, clip long roads
+    to the map view, and keep recently seen shapes while panning
+  - offer the ALPS_Test.xcm dense topography beta map in the map
+    download list (sorted alphabetically)
   - fix the ragged white halo behind map labels on high-DPI screens
     #2879
   - fix the map scale arrows: draw them at the height of the scale box

@@ -24,6 +24,9 @@
 #include "thread/Mutex.hxx"
 #include "LocalPath.hpp"
 #include "system/FileUtil.hpp"
+#include "util/StringAPI.hxx"
+
+#include <algorithm>
 #include <vector>
 
 #include <cassert>
@@ -161,6 +164,11 @@ DownloadFilePickerWidget::RefreshList()
   for (auto &i : repository)
     if (i.type == file_type)
       items.emplace_back(std::move(i));
+
+  std::sort(items.begin(), items.end(),
+            [](const AvailableFile &a, const AvailableFile &b) noexcept {
+              return StringCollate(a.GetName(), b.GetName()) < 0;
+            });
 
   ListControl &list = GetList();
   list.SetLength(std::max(items.size(), size_t{1}));
