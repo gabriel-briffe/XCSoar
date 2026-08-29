@@ -320,7 +320,7 @@ TopographyFileRenderer::Paint(Canvas &canvas,
   const std::lock_guard lock{file.mutex};
 
   const auto map_scale = projection.GetMapScale();
-  if (!file.IsVisible(map_scale))
+  if (!file.ShowsShapes() || !file.IsVisible(map_scale))
     return;
 
   UpdateVisibleShapes(projection);
@@ -520,7 +520,7 @@ TopographyFileRenderer::PaintLabels(Canvas &canvas,
   const std::lock_guard lock{file.mutex};
 
   const auto map_scale = projection.GetMapScale();
-  if (!file.IsVisible(map_scale) || !file.IsLabelVisible(map_scale))
+  if (!file.ShowsLabels() || !file.IsLabelVisible(map_scale))
     return;
 
   UpdateVisibleShapes(projection);
