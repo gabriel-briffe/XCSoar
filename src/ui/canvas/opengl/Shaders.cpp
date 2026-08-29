@@ -52,6 +52,10 @@ GLint hillshade_projection, hillshade_translate,
   hillshade_q, hillshade_do_shading, hillshade_contour_div,
   hillshade_height_texel;
 
+GLProgram *height_blit_shader;
+GLint height_blit_projection, height_blit_translate,
+  height_blit_texture, height_blit_texel;
+
 } // namespace OpenGL
 
 #define GLSL_VERSION "#version 100\n"
@@ -362,6 +366,71 @@ static constexpr char hillshade_fragment_shader[] =
     }
 )glsl";
 
+static const char *const height_blit_vertex_shader = texture_vertex_shader;
+
+static constexpr char height_blit_fragment_shader[] =
+  GLSL_VERSION
+  R"glsl(
+    precision mediump float;
+    uniform sampler2D texture;
+    uniform vec2 texel; /* 1/allocated size */
+    varying vec2 texcoordvar;
+
+    vec2 unpack_la(vec4 t) {
+      return vec2(floor(t.r * 255.0 + 0.5),
+                  floor(t.a * 255.0 + 0.5));
+    }
+
+    bool is_special(vec2 b) {
+      return b.y >= 128.0 &&
+             (b.y < 138.0 || (b.y == 138.0 && b.x <= 208.0));
+    }
+
+    float height(vec2 b) {
+      float h = (b.y >= 128.0)
+        ? ((b.y - 256.0) * 256.0 + b.x)
+        : (b.y * 256.0 + b.x);
+      return clamp(h, -16383.0, 16383.0);
+    }
+
+    vec4 encode_height(float h) {
+      h = floor(h + 0.5);
+      h = clamp(h, -32768.0, 32767.0);
+      float v = h < 0.0 ? h + 65536.0 : h;
+      float lo = mod(v, 256.0);
+      float hi = floor(v / 256.0);
+      return vec4(lo / 255.0, 0.0, 0.0, hi / 255.0);
+    }
+
+    void main() {
+      /* Bilinear on decoded heights (LA bytes are not linear). */
+      vec2 uv0 = texcoordvar / texel - vec2(0.5, 0.5);
+      vec2 i = floor(uv0);
+      vec2 f = uv0 - i;
+      vec2 t00 = (i + vec2(0.5, 0.5)) * texel;
+      vec2 t10 = t00 + vec2(texel.x, 0.0);
+      vec2 t01 = t00 + vec2(0.0, texel.y);
+      vec2 t11 = t00 + texel;
+
+      vec2 b00 = unpack_la(texture2D(texture, t00));
+      vec2 b10 = unpack_la(texture2D(texture, t10));
+      vec2 b01 = unpack_la(texture2D(texture, t01));
+      vec2 b11 = unpack_la(texture2D(texture, t11));
+
+      if (is_special(b00) || is_special(b10) ||
+          is_special(b01) || is_special(b11)) {
+        /* Keep special cells sharp (water / invalid). */
+        vec2 b = unpack_la(texture2D(texture, texcoordvar));
+        gl_FragColor = vec4(b.x / 255.0, 0.0, 0.0, b.y / 255.0);
+        return;
+      }
+
+      float h0 = mix(height(b00), height(b10), f.x);
+      float h1 = mix(height(b01), height(b11), f.x);
+      gl_FragColor = encode_height(mix(h0, h1, f.y));
+    }
+)glsl";
+
 static void
 CompileAttachShader(GLProgram &program, GLenum type, const char *code)
 {
@@ -537,11 +606,38 @@ OpenGL::InitShaders()
     LogFmt("OpenGL: hillshade shader failed ({}); using CPU",
            GetFullMessage(std::current_exception()));
   }
+
+  try {
+    height_blit_shader = CompileProgram(height_blit_vertex_shader,
+                                        height_blit_fragment_shader);
+    height_blit_shader->BindAttribLocation(Attribute::POSITION, "position");
+    height_blit_shader->BindAttribLocation(Attribute::TEXCOORD, "texcoord");
+    LinkProgram(*height_blit_shader);
+
+    height_blit_projection =
+      height_blit_shader->GetUniformLocation("projection");
+    height_blit_translate =
+      height_blit_shader->GetUniformLocation("translate");
+    height_blit_texture =
+      height_blit_shader->GetUniformLocation("texture");
+    height_blit_texel =
+      height_blit_shader->GetUniformLocation("texel");
+
+    height_blit_shader->Use();
+    glUniform1i(height_blit_texture, 0);
+  } catch (...) {
+    delete height_blit_shader;
+    height_blit_shader = nullptr;
+    LogFmt("OpenGL: height_blit shader failed ({})",
+           GetFullMessage(std::current_exception()));
+  }
 }
 
 void
 OpenGL::DeinitShaders() noexcept
 {
+  delete height_blit_shader;
+  height_blit_shader = nullptr;
   delete hillshade_shader;
   hillshade_shader = nullptr;
   delete filled_circle_shader;
@@ -603,6 +699,12 @@ OpenGL::UpdateShaderProjectionMatrix() noexcept
     glUniformMatrix4fv(hillshade_projection, 1, GL_FALSE,
                        glm::value_ptr(projection_matrix));
   }
+
+  if (height_blit_shader != nullptr) {
+    height_blit_shader->Use();
+    glUniformMatrix4fv(height_blit_projection, 1, GL_FALSE,
+                       glm::value_ptr(projection_matrix));
+  }
 }
 
 void
@@ -637,5 +739,10 @@ OpenGL::UpdateShaderTranslate() noexcept
   if (hillshade_shader != nullptr) {
     hillshade_shader->Use();
     glUniform2f(hillshade_translate, t.x, t.y);
+  }
+
+  if (height_blit_shader != nullptr) {
+    height_blit_shader->Use();
+    glUniform2f(height_blit_translate, t.x, t.y);
   }
 }

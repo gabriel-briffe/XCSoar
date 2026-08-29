@@ -398,26 +398,47 @@ TerrainRenderer::Generate(const WindowProjection &map_projection,
     }
   }
 
+  /* With GPU DEM tiles, serial bumps mean new fine tiles — fall
+     through to PrepareGpuDemTiles even if the camera is unchanged. */
+
 #ifdef ENABLE_OPENGL
   const GeoBounds &old_bounds = raster_renderer.GetBounds();
   GeoBounds new_bounds = map_projection.GetScreenBounds();
   assert(new_bounds.IsValid());
 
+  const bool spike = settings.gpu_dem_spike;
+  const bool serial_ok = terrain_serial == terrain.GetSerial();
+
   {
     RasterTerrain::Lease map(terrain);
     if (!new_bounds.IntersectWith(map->GetBounds()))
-      /* map is outside of visible screen area */
       return false;
   }
 
+  const bool do_water = true;
+  const int interp_levels = 2;
+  const bool is_terrain = true;
+  const bool do_shading = is_terrain &&
+                          settings.slope_shading != SlopeShading::OFF;
+
+  const ColorRamp *const color_ramp = &terrain_ramps[settings.ramp];
+  if (color_ramp != last_color_ramp) {
+    raster_renderer.PrepareColorTable(color_ramp, do_water,
+                                      height_scale, interp_levels);
+    last_color_ramp = color_ramp;
+  }
+
+  const bool coverage_ok = old_bounds.IsValid() &&
+    old_bounds.IsInside(new_bounds) &&
+    !IsLargeSizeDifference(old_bounds, new_bounds);
+
+  /* Same overscan reuse as the CPU path: pan/rotate within the
+     composed height FBO without a full re-blit. */
   if (!quantisation_improved &&
-      old_bounds.IsValid() && old_bounds.IsInside(new_bounds) &&
-      !IsLargeSizeDifference(old_bounds, new_bounds) &&
-      terrain_serial == terrain.GetSerial() &&
-      sun_ok) {
-    /* The existing terrain image is suitable for reuse.
-       CPU contours need a rebuild when zoom changes the interval;
-       the shader updates contour_div as a uniform. */
+      coverage_ok &&
+      serial_ok &&
+      sun_ok &&
+      (!spike || raster_renderer.IsGpuDemTiles())) {
     if (settings.contours == Contours::OFF ||
         raster_renderer.IsShaderHillshade() ||
         raster_renderer.GetQuantisationPixels() > 2 ||
@@ -427,10 +448,24 @@ TerrainRenderer::Generate(const WindowProjection &map_projection,
     }
   }
 
-  /* CPU slope shading is too expensive to run while the user is
-     dragging.  GPU hillshade only resamples the DEM; overscan reuse
-     already covers small pans, and GPS follow is idle so coverage
-     updates immediately. */
+  /* Approach 2: fine DEM tiles on GPU — no ScanMap. */
+  if (spike) {
+    const bool allow_incremental =
+      coverage_ok && !quantisation_improved &&
+      raster_renderer.IsGpuDemTiles();
+    RasterTerrain::Lease map(terrain);
+    if (raster_renderer.PrepareGpuDemTiles(map, map_projection,
+                                           do_shading, height_scale,
+                                           last_contour_spacing,
+                                           allow_incremental)) {
+      terrain_serial = terrain.GetSerial();
+      compare_projection = CompareProjection(map_projection);
+      last_sun_azimuth = sunazimuth;
+      last_projection_scale = map_projection.GetScale();
+      return true;
+    }
+  }
+
   if (!raster_renderer.IsShaderHillshade() &&
       !raster_renderer.IsQuantisationFixed() &&
       old_bounds.IsValid() &&
@@ -438,8 +473,23 @@ TerrainRenderer::Generate(const WindowProjection &map_projection,
       !IsUserIdle(750))
     return true;
 
-#endif
+  terrain_serial = terrain.GetSerial();
+  compare_projection = CompareProjection(map_projection);
+  last_sun_azimuth = sunazimuth;
 
+  {
+    RasterTerrain::Lease map(terrain);
+    raster_renderer.ScanMap(map, map_projection);
+  }
+
+  raster_renderer.GenerateImage(do_shading, height_scale,
+                                settings.contrast, settings.brightness,
+                                sunazimuth,
+                                last_contour_spacing);
+
+  last_projection_scale = map_projection.GetScale();
+  return true;
+#else
   terrain_serial = terrain.GetSerial();
   compare_projection = CompareProjection(map_projection);
 
@@ -471,4 +521,5 @@ TerrainRenderer::Generate(const WindowProjection &map_projection,
   last_projection_scale = map_projection.GetScale();
 
   return true;
+#endif
 }

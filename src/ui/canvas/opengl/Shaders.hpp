@@ -77,6 +77,14 @@ extern GLint hillshade_projection, hillshade_translate,
   hillshade_height_texel;
 
 /**
+ * Copy a DEM height tile into an FBO (LA → RGBA as L,0,0,A),
+ * with bilinear filtering on decoded elevations.
+ */
+extern GLProgram *height_blit_shader;
+extern GLint height_blit_projection, height_blit_translate,
+  height_blit_texture, height_blit_texel;
+
+/**
  * Throws on error.
  */
 void InitShaders();

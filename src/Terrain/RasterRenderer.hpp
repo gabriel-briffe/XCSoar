@@ -7,6 +7,11 @@
 
 #ifdef ENABLE_OPENGL
 #include "Geo/GeoBounds.hpp"
+#include "Terrain/RasterProjection.hpp"
+#include "Terrain/RasterLocation.hpp"
+#include "ui/dim/Size.hpp"
+#include "ui/canvas/opengl/FrameBuffer.hpp"
+#include <vector>
 #endif
 
 #include <cstdint>
@@ -78,6 +83,22 @@ class RasterRenderer {
   double height_slope_factor_for_draw = 1;
   bool shading_for_draw = true;
   unsigned contour_div_for_draw = 0;
+
+  /** Spike: fine-tile textures composed into one height FBO. */
+  bool gpu_dem_tiles = false;
+  std::unique_ptr<GLTexture> overview_texture;
+  std::vector<std::unique_ptr<GLTexture>> tile_textures;
+  /** Indices uploaded in the last SyncGpuDemTileTextures(). */
+  std::vector<unsigned> tile_dirty;
+  unsigned tile_tex_active = 0;
+  bool tile_tex_dropped = false;
+  GeoBounds dem_map_bounds = GeoBounds::Invalid();
+  RasterProjection dem_projection{};
+  UnsignedPoint2D dem_tile_grid{0, 0};
+  std::vector<RasterLocation> tile_starts;
+  std::vector<RasterLocation> tile_ends;
+  std::unique_ptr<GLFrameBuffer> dem_fbo;
+  UnsignedPoint2D composed_size{0, 0};
 #endif
 
   HeightMatrix height_matrix;
@@ -119,6 +140,10 @@ public:
   }
 
   UnsignedPoint2D GetSize() const noexcept {
+#ifdef ENABLE_OPENGL
+    if (gpu_dem_tiles && composed_size.x > 0 && composed_size.y > 0)
+      return composed_size;
+#endif
     return height_matrix.GetSize();
   }
 
@@ -147,6 +172,7 @@ public:
 #ifdef ENABLE_OPENGL
   void Invalidate() noexcept {
     bounds.SetInvalid();
+    gpu_dem_tiles = false;
   }
 
   /**
@@ -212,6 +238,24 @@ public:
    * disable.  Applied in the hillshade shader without a CPU rebuild.
    */
   void SetContourSpacing(unsigned contour_spacing) noexcept;
+
+  [[gnu::pure]]
+  bool IsGpuDemTiles() const noexcept {
+    return gpu_dem_tiles;
+  }
+
+  /**
+   * Upload overview + loaded fine tiles; compose into height FBO.
+   * @param allow_incremental if true and coverage FBO is still valid,
+   *   blit only newly uploaded tiles (no clear).
+   * @return false → use ScanMap fallback.
+   */
+  bool PrepareGpuDemTiles(const RasterMap &map,
+                          const WindowProjection &projection,
+                          bool do_shading,
+                          unsigned height_scale,
+                          unsigned contour_spacing,
+                          bool allow_incremental=false) noexcept;
 #endif
 
   /**
@@ -296,7 +340,18 @@ private:
 #ifdef ENABLE_OPENGL
   void UploadHeightTexture() noexcept;
   void UploadRampTexture() noexcept;
+  void UploadHeightLATexture(const void *data, PixelSize ps,
+                             std::unique_ptr<GLTexture> &dest) noexcept;
+  void SyncGpuDemTileTextures(const RasterMap &map) noexcept;
+  void DrawHillshadeQuad(const WindowProjection &projection,
+                         const GLTexture &height_tex,
+                         const GeoPoint &nw, const GeoPoint &ne,
+                         const GeoPoint &sw, const GeoPoint &se,
+                         double height_slope_factor,
+                         float alpha) const noexcept;
   void DrawHillshade(const WindowProjection &projection,
                      float alpha) const noexcept;
+  void DrawGpuDemTiles(const WindowProjection &projection,
+                       float alpha) const noexcept;
 #endif
 };

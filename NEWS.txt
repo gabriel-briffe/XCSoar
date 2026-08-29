@@ -54,6 +54,11 @@ Version 7.46 - not yet released
     rebuilding the slope image; contour lines stay unshaded (also on
     older OpenGL ES 2 devices); faster devices use full terrain
     resolution immediately instead of waiting until the map is idle
+  - add an experimental GPU DEM path (expert Map Display → Terrain →
+    GPU DEM spike): builds the height map on the GPU from the DEM
+    overview plus loaded fine tiles instead of CPU sampling; on a
+    Pixel-class phone, full rebuilds drop from roughly 40–70 ms to
+    about 2–6 ms
   - add a waypoint type Display filter on the map Waypoints settings
     page (SeeYou CUP styles; task and watched waypoints stay visible),
     including a Non-ICAO airports toggle (hide airports whose short
