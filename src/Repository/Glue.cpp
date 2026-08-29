@@ -102,6 +102,28 @@ IsUserRepositoryFile(std::string_view name) noexcept
                        USER_REPOSITORY_FILE_PREFIX.size());
 }
 
+/**
+ * Extra download entries that are not (yet) in the official
+ * https://download.xcsoar.org/repository index.
+ */
+static void
+AppendBuiltinExtraFiles(FileRepository &repository) noexcept
+{
+  /* Dense ALPS topography test map for renderer work (PR #2895). */
+  static constexpr char ALPS_TEST_NAME[] = "ALPS_Test.xcm";
+  if (repository.FindByName(ALPS_TEST_NAME) == nullptr) {
+    AvailableFile file;
+    file.Clear();
+    file.name = ALPS_TEST_NAME;
+    file.uri = "https://download.xcsoar.org/beta/map/ALPS_Test.xcm";
+    file.description =
+      "Map of the Alps (beta dense topography test, ~501 MB)";
+    file.type = FileType::MAP;
+    file.update_date = BrokenDate(2026, 8, 25);
+    repository.files.emplace_back(std::move(file));
+  }
+}
+
 void
 LoadAllRepositories(FileRepository &repository)
 {
@@ -120,6 +142,8 @@ LoadAllRepositories(FileRepository &repository)
       /* not yet downloaded - ignore */
     }
   }
+
+  AppendBuiltinExtraFiles(repository);
 }
 
 void
