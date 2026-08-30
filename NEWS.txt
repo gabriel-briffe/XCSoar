@@ -50,6 +50,8 @@ Version 7.46 - not yet released
   - fix XC Therm preload span to start at the current UTC hour instead
     of the previous one (e.g. at 14:50 with a 6 h span → 14–20 UTC)
 * map
+  - list ALPS_Test.xcm (beta dense topography, ~501 MB) in the map
+    download picker from download.xcsoar.org/beta/map/
   - add terrain shading that follows sun and wind lighting without
     rebuilding the slope image; contour lines stay unshaded (also on
     older OpenGL ES 2 devices); faster devices use full terrain
