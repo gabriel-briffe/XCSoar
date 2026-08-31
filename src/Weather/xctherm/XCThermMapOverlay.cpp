@@ -463,12 +463,6 @@ ResumeDedicatedPageAfterPan() noexcept
   CommonInterface::SetUIState().weather.xctherm.ResumeAfterPan();
 }
 
-bool
-IsDedicatedPageSuspendedForPan() noexcept
-{
-  return CommonInterface::GetUIState().weather.xctherm.IsSuspendedForPan();
-}
-
 void
 FormatLayerTitleLabel(StaticString<64> &text) noexcept
 {

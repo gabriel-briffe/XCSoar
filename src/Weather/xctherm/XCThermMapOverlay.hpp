@@ -67,7 +67,6 @@ bool EnterDedicatedPage() noexcept;
 void LeaveDedicatedPage() noexcept;
 void SuspendDedicatedPageForPan() noexcept;
 void ResumeDedicatedPageAfterPan() noexcept;
-bool IsDedicatedPageSuspendedForPan() noexcept;
 
 /**
  * Short layer label for map page titles (e.g. @c "1500m AMSL"), or empty.

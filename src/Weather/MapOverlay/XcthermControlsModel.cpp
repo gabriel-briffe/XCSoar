@@ -27,16 +27,6 @@ XcthermControlsModel::OnShow() noexcept
 }
 
 void
-XcthermControlsModel::OnHide() noexcept
-{
-#ifdef HAVE_HTTP
-  WithBackend([&](XCTherm::XCThermControlsModel &backend) noexcept {
-    backend.OnHide();
-  });
-#endif
-}
-
-void
 XcthermControlsModel::FormatPrimaryLabel(StaticString<64> &text) const noexcept
 {
 #ifdef HAVE_HTTP

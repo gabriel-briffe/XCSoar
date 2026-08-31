@@ -109,7 +109,6 @@ public:
   void Prepare(std::function<void()> on_state_changed = nullptr) noexcept;
 
   void OnShow() noexcept;
-  void OnHide() noexcept;
 
   /** Periodic blackboard tick (auto-switch, settings sync). */
   void OnGPSUpdate(const MoreData &basic) noexcept;

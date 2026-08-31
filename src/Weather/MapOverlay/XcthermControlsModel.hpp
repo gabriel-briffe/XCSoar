@@ -35,7 +35,6 @@ class XcthermControlsModel final : public ControlsModel {
 
 public:
   void OnShow() noexcept override;
-  void OnHide() noexcept override;
 
   void FormatPrimaryLabel(StaticString<64> &text) const noexcept override;
   void FormatSecondaryLabel(StaticString<64> &text) const noexcept override;

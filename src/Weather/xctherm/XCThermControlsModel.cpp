@@ -170,13 +170,6 @@ XCThermControlsModel::OnShow() noexcept
 }
 
 void
-XCThermControlsModel::OnHide() noexcept
-{
-  if (!IsDedicatedPageSuspendedForPan())
-    ClearMapOverlay();
-}
-
-void
 XCThermControlsModel::OnGPSUpdate(const MoreData &basic) noexcept
 {
   auto_switch.SetEnabled(Settings().auto_switch);
