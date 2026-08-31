@@ -17,6 +17,8 @@ namespace XCTherm {
 
 /**
  * Parse @p geojson and install it as the main map XCTherm overlay.
+ * On OpenGL, parse/cleanup runs off the UI thread; the current overlay
+ * stays until the new layer is ready (no spinner).
  *
  * @param label user-visible layer name (e.g. @c "5000m AMSL")
  * @param parameter API parameter for map-item metadata (optional)

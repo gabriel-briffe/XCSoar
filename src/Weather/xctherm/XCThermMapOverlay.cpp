@@ -8,6 +8,7 @@
 #include "XCThermDownloadGlue.hpp"
 #include "XCThermDownloadJob.hpp"
 #include "XCThermGeoJSONOverlay.hpp"
+#include "ActionInterface.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "LogFile.hpp"
@@ -15,8 +16,15 @@
 #include "UIGlobals.hpp"
 #include "Weather/Settings.hpp"
 #include "net/http/Init.hpp"
+#include "ui/event/Notify.hpp"
+#include "util/Macros.hpp"
+#include "util/TruncateString.hpp"
 
+#include <atomic>
 #include <mutex>
+#include <optional>
+#include <thread>
+#include <utility>
 
 namespace XCTherm {
 
@@ -69,6 +77,155 @@ struct ParsedLayerCache {
 };
 
 static ParsedLayerCache parsed_layer_cache;
+
+/**
+ * Background GeoJSON parse/cleanup.  Keeps the current overlay until
+ * the latest request finishes, then swaps on the UI thread (no spinner).
+ * Rapid time/altitude steps keep only the newest pending request.
+ */
+struct AsyncParseRequest {
+  std::string geojson;
+  std::string label;
+  std::string parameter;
+  unsigned forecast_utc = 0;
+  unsigned generation = 0;
+};
+
+struct AsyncParseState {
+  std::mutex mutex;
+  std::atomic<unsigned> generation{0};
+  std::optional<AsyncParseRequest> pending;
+  bool worker_running = false;
+
+  unsigned result_generation = 0;
+  bool result_ok = false;
+  std::string result_label;
+  std::string result_parameter;
+  unsigned result_utc = 0;
+  XCThermGeoJSON::ForecastLayer result_forecast;
+};
+
+static AsyncParseState async_parse;
+
+static void OnAsyncParseNotify() noexcept;
+
+static UI::Notify async_parse_notify{[]{ OnAsyncParseNotify(); }};
+
+static void
+InvalidateAsyncParse() noexcept
+{
+  async_parse.generation.fetch_add(1, std::memory_order_relaxed);
+  {
+    const std::lock_guard lock{async_parse.mutex};
+    async_parse.pending.reset();
+    async_parse.result_ok = false;
+    async_parse.result_forecast = {};
+  }
+  async_parse_notify.ClearNotification();
+}
+
+static void
+AsyncParseWorker() noexcept
+{
+  for (;;) {
+    AsyncParseRequest request;
+    {
+      const std::lock_guard lock{async_parse.mutex};
+      if (!async_parse.pending.has_value()) {
+        async_parse.worker_running = false;
+        return;
+      }
+
+      request = std::move(*async_parse.pending);
+      async_parse.pending.reset();
+    }
+
+    if (request.generation !=
+        async_parse.generation.load(std::memory_order_relaxed))
+      continue;
+
+    auto forecast = XCThermGeoJSON::Parse(request.geojson, true);
+    if (request.generation !=
+        async_parse.generation.load(std::memory_order_relaxed))
+      continue;
+
+    if (!forecast.IsEmpty())
+      forecast.layer_name = request.label;
+
+    {
+      const std::lock_guard lock{async_parse.mutex};
+      if (request.generation !=
+          async_parse.generation.load(std::memory_order_relaxed))
+        continue;
+
+      async_parse.result_generation = request.generation;
+      async_parse.result_ok = !forecast.IsEmpty();
+      async_parse.result_label = std::move(request.label);
+      async_parse.result_parameter = std::move(request.parameter);
+      async_parse.result_utc = request.forecast_utc;
+      async_parse.result_forecast = std::move(forecast);
+    }
+
+    async_parse_notify.SendNotification();
+  }
+}
+
+static void
+ScheduleAsyncParse(std::string geojson, std::string label,
+                   std::string parameter, unsigned forecast_utc) noexcept
+{
+  AsyncParseRequest request;
+  request.geojson = std::move(geojson);
+  request.label = std::move(label);
+  request.parameter = std::move(parameter);
+  request.forecast_utc = forecast_utc;
+  request.generation =
+    async_parse.generation.fetch_add(1, std::memory_order_relaxed) + 1;
+
+  {
+    const std::lock_guard lock{async_parse.mutex};
+    async_parse.pending = std::move(request);
+    if (async_parse.worker_running)
+      return;
+
+    async_parse.worker_running = true;
+  }
+
+  std::thread(AsyncParseWorker).detach();
+}
+
+static void
+OnAsyncParseNotify() noexcept
+{
+  XCThermGeoJSON::ForecastLayer forecast;
+  std::string label;
+  std::string parameter;
+  unsigned forecast_utc = 0;
+  bool ok = false;
+
+  {
+    const std::lock_guard lock{async_parse.mutex};
+    if (async_parse.result_generation !=
+        async_parse.generation.load(std::memory_order_relaxed))
+      return;
+
+    ok = async_parse.result_ok;
+    label = std::move(async_parse.result_label);
+    parameter = std::move(async_parse.result_parameter);
+    forecast_utc = async_parse.result_utc;
+    forecast = std::move(async_parse.result_forecast);
+    async_parse.result_ok = false;
+  }
+
+  if (!ok) {
+    LogFmt("xctherm: async parse failed for {}", label);
+    return;
+  }
+
+  ApplyForecastLayerToMap(std::move(forecast), label.c_str(),
+                          parameter.empty() ? nullptr : parameter.c_str(),
+                          forecast_utc);
+}
 
 #endif /* ENABLE_OPENGL */
 
@@ -129,13 +286,19 @@ ApplyForecastToMap(const std::string &geojson, const char *label,
     XCThermGeoJSON::ForecastLayer cached_forecast;
     if (parsed_layer_cache.TakeIfMatches(parameter, forecast_utc,
                                          cached_forecast)) {
+      InvalidateAsyncParse();
       ApplyForecastLayerToMap(std::move(cached_forecast), label,
                               parameter, forecast_utc);
       return;
     }
   }
-#endif
 
+  /* Keep the current overlay; parse/cleanup off the UI thread, then swap. */
+  ScheduleAsyncParse(geojson,
+                     label != nullptr ? label : "",
+                     parameter != nullptr ? parameter : "",
+                     forecast_utc);
+#else
   auto forecast = XCThermGeoJSON::Parse(geojson, true);
   if (forecast.IsEmpty()) {
     LogFmt("xctherm: parse failed for {}", label);
@@ -144,6 +307,7 @@ ApplyForecastToMap(const std::string &geojson, const char *label,
 
   forecast.layer_name = label;
   ApplyForecastLayerToMap(std::move(forecast), label, parameter, forecast_utc);
+#endif
 }
 
 void
@@ -163,11 +327,24 @@ ApplyForecastLayerToMap(XCThermGeoJSON::ForecastLayer &&forecast,
     return;
 
 #ifdef ENABLE_OPENGL
+  InvalidateAsyncParse();
+
   auto overlay = std::make_unique<XCThermGeoJSONOverlay>();
   overlay->SetForecast(std::move(forecast), label, parameter, forecast_utc);
   overlay->SetOpacityPercent(
     CommonInterface::GetComputerSettings().weather.xctherm.opacity_percent);
   map->SetOverlay(std::move(overlay));
+
+  /* Map bottom title follows the installed overlay (not the cursor). */
+  auto &cursor = CommonInterface::SetUIState().weather.xctherm_cursor;
+  cursor.has_displayed = true;
+  cursor.displayed_utc_hour = forecast_utc;
+  if (label != nullptr && label[0] != '\0')
+    CopyTruncateString(cursor.displayed_label,
+                       ARRAY_SIZE(cursor.displayed_label), label);
+  else
+    cursor.displayed_label[0] = '\0';
+  ActionInterface::SendUIState(true);
 #else
   (void)label;
   (void)parameter;
@@ -198,6 +375,8 @@ void
 ClearMapOverlay() noexcept
 {
 #ifdef ENABLE_OPENGL
+  InvalidateAsyncParse();
+
   auto *map = UIGlobals::GetMap();
   if (map == nullptr)
     return;
@@ -216,6 +395,9 @@ ClearMapOverlay() noexcept
                                std::move(parameter), utc_hour);
 
   map->SetOverlay(nullptr);
+
+  CommonInterface::SetUIState().weather.xctherm_cursor.ClearDisplayed();
+  ActionInterface::SendUIState(true);
 #endif
 }
 

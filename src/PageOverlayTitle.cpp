@@ -22,6 +22,7 @@
 #include "Weather/SkySight/SkySightClient.hpp"
 #include "Weather/xctherm/XCThermCatalog.hpp"
 #include "time/Convert.hxx"
+#include "util/StringFormat.hpp"
 #endif
 
 void
@@ -73,10 +74,23 @@ AppendOverlayTitle(BasicStringBuilder<char> &builder,
     builder.Append(", XC Therm");
 #ifdef HAVE_HTTP
     {
-      builder.Append(' ');
-      if (layout.xctherm_layer == PageLayout::XCTHERM_LAYER_AUTO)
+      const auto &cursor =
+        CommonInterface::GetUIState().weather.xctherm_cursor;
+      /* Title follows the installed overlay, not the cursor selection,
+         so async parse keeps the previous altitude/time until swap. */
+      if (cursor.has_displayed && cursor.displayed_label[0] != '\0') {
+        builder.Append(' ');
+        builder.Append(cursor.displayed_label);
+
+        char time_buf[8];
+        StringFormatUnsafe(time_buf, "%02u:00",
+                           cursor.displayed_utc_hour % 24);
+        builder.Append(' ');
+        builder.Append(time_buf);
+      } else if (layout.xctherm_layer == PageLayout::XCTHERM_LAYER_AUTO) {
+        builder.Append(' ');
         builder.Append(C_("Status", "Auto"));
-      else {
+      } else {
         const auto &settings =
           CommonInterface::GetComputerSettings().weather.xctherm;
         const auto &region = XCTherm::GetRegion(settings.model);

@@ -172,11 +172,29 @@ struct WeatherUIState {
     bool altitude_manual_override = false;
     bool time_manual_override = false;
 
+    /**
+     * What the map overlay actually shows (updated only when a layer
+     * is installed).  Used for the map bottom title so async parse
+     * does not change the title until the swap.
+     */
+    bool has_displayed = false;
+    char displayed_label[40] = {};
+    unsigned displayed_utc_hour = 12;
+
     void Clear() noexcept {
       layer = 0;
       forecast_utc_hour = 12;
       altitude_manual_override = false;
       time_manual_override = false;
+      has_displayed = false;
+      displayed_label[0] = '\0';
+      displayed_utc_hour = 12;
+    }
+
+    void ClearDisplayed() noexcept {
+      has_displayed = false;
+      displayed_label[0] = '\0';
+      displayed_utc_hour = 12;
     }
   } xctherm_cursor;
 
