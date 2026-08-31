@@ -8,6 +8,7 @@
 #include <string>
 #include "XCThermAPI.hpp"
 
+#include "Geo/GeoBounds.hpp"
 #include "Look/Colors.hpp"
 #include "Projection/WindowProjection.hpp"
 #include "ui/canvas/Canvas.hpp"
@@ -245,7 +246,9 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
   std::vector<unsigned> ring_sizes;
   ring_sizes.reserve(8);
 
-  const auto screen_rect = projection.GetScreenRect();
+  /* Same idea as TopographyFileRenderer: cull in geo space against
+     GetScreenBounds(), which already covers a rotated viewport. */
+  const GeoBounds &screen_bounds = projection.GetScreenBounds();
   const unsigned alpha =
     (opacity_percent * 255u + 50u) / 100u;
 
@@ -263,20 +266,11 @@ XCThermGeoJSONOverlay::Draw(Canvas &canvas,
 
       const auto &exterior = polygon[0];
 
-      /* Quick bounding-box visibility check (exterior only). */
-      GeoPoint bb_min = exterior[0], bb_max = exterior[0];
-      for (const auto &pt : exterior) {
-        if (pt.longitude < bb_min.longitude) bb_min.longitude = pt.longitude;
-        if (pt.latitude < bb_min.latitude) bb_min.latitude = pt.latitude;
-        if (pt.longitude > bb_max.longitude) bb_max.longitude = pt.longitude;
-        if (pt.latitude > bb_max.latitude) bb_max.latitude = pt.latitude;
-      }
+      GeoBounds poly_bounds(exterior[0]);
+      for (std::size_t i = 1; i < exterior.size(); ++i)
+        poly_bounds.Extend(exterior[i]);
 
-      auto tl = projection.GeoToScreen(GeoPoint(bb_min.longitude, bb_max.latitude));
-      auto br = projection.GeoToScreen(GeoPoint(bb_max.longitude, bb_min.latitude));
-
-      if (br.x < screen_rect.left || tl.x > screen_rect.right ||
-          br.y < screen_rect.top || tl.y > screen_rect.bottom)
+      if (!poly_bounds.Overlaps(screen_bounds))
         continue;
 
       screen_points.clear();
