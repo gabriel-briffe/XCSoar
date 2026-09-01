@@ -695,7 +695,8 @@ PageCustomSettingsWidget::UpdateActionButtons() noexcept
     for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
       const auto &module = PageSettingModuleRegistry::Get(m);
       for (unsigned i = 0; i < module.count(); ++i) {
-        const auto &desc = module.get_by_index(i);
+        const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
+                                                  i));
         if (!overrides.Contains(desc.id)) {
           can_add = true;
           break;
@@ -721,7 +722,8 @@ ModuleHasAddable(const PageSettingModule &module,
                  const PageSettingOverrides &overrides) noexcept
 {
   for (unsigned i = 0; i < module.count(); ++i) {
-    const auto &desc = module.get_by_index(i);
+    const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
+                                                i));
     if (!overrides.Contains(desc.id))
       return true;
   }
@@ -761,7 +763,8 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
   ComboList list;
   StaticArray<PageSettingId, unsigned(PageSettingId::COUNT)> ids;
   for (unsigned i = 0; i < module.count(); ++i) {
-    const auto &desc = module.get_by_index(i);
+    const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
+                                                i));
     if (overrides.Contains(desc.id))
       continue;
     list.Append(ids.size(), gettext(desc.label));

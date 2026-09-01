@@ -8,6 +8,7 @@
 #include "PageSettingDescriptor.hpp"
 #include "Profile/Current.hpp"
 #include "Profile/Profile.hpp"
+#include "Terrain/TerrainDisplayChoices.hpp"
 #include "Terrain/TerrainRenderer.hpp"
 #include "Terrain/TerrainSettings.hpp"
 #include "util/Macros.hpp"

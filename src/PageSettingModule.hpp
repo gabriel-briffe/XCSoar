@@ -16,8 +16,7 @@ struct PageSettingModule {
   const char *label;
 
   unsigned (*count)() noexcept;
-  const PageSettingDescriptor &(*get_by_index)(unsigned index) noexcept;
-  const PageSettingDescriptor &(*get_by_id)(PageSettingId id) noexcept;
+  const PageSettingDescriptor &(*get)(PageSettingId id) noexcept;
 
   bool (*is_valid_value)(PageSettingId id, int value) noexcept;
   int (*get_live)(PageSettingId id) noexcept;

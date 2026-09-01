@@ -93,7 +93,7 @@ Count() noexcept
 const PageSettingDescriptor &
 Get(PageSettingId id) noexcept
 {
-  return PageSettingModuleRegistry::GetById(id).get_by_id(id);
+  return PageSettingModuleRegistry::GetById(id).get(id);
 }
 
 const PageSettingDescriptor &
@@ -104,7 +104,8 @@ Get(unsigned index) noexcept
     const auto &module = PageSettingModuleRegistry::Get(m);
     const unsigned n = module.count();
     if (index < offset + n)
-      return module.get_by_index(index - offset);
+      return module.get(PageSettingId(unsigned(module.id_start) + index -
+                                      offset));
     offset += n;
   }
 
@@ -128,7 +129,8 @@ Count(PageSettingGroup group) noexcept
 const PageSettingDescriptor &
 Get(PageSettingGroup group, unsigned index) noexcept
 {
-  return PageSettingModuleRegistry::Get(group).get_by_index(index);
+  const auto &module = PageSettingModuleRegistry::Get(group);
+  return module.get(PageSettingId(unsigned(module.id_start) + index));
 }
 
 } // namespace PageSettingRegistry
@@ -186,7 +188,7 @@ PageSettingSet(PageSettingId id, int value) noexcept
 
   const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
 
-  const auto &desc = module.get_by_id(id);
+  const auto &desc = module.get(id);
   LogFmt("perPage: Set global '{}' value={}", desc.label, value);
   module.set_live(id, value);
   module.save_global(id, value);
@@ -210,20 +212,10 @@ PageSettingSet(PageSettingId id, int value, unsigned page_index) noexcept
     return;
   }
 
-  const auto &desc = PageSettingModuleRegistry::GetById(id).get_by_id(id);
+  const auto &desc = PageSettingModuleRegistry::GetById(id).get(id);
   LogFmt("perPage: Set page={} '{}' value={}",
          page_index, desc.label, value);
   pages.overrides[page_index].SetValue(id, value);
-}
-
-void
-PageSettingApply(PageSettingId id, int value,
-                 std::optional<unsigned> page_index) noexcept
-{
-  if (!page_index.has_value())
-    PageSettingSet(id, value);
-  else
-    PageSettingSet(id, value, *page_index);
 }
 
 void
@@ -234,7 +226,8 @@ PageSettingApplyGlobalBaseline() noexcept
   for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
     const auto &module = PageSettingModuleRegistry::Get(m);
     for (unsigned i = 0; i < module.count(); ++i) {
-      const auto &desc = module.get_by_index(i);
+      const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
+                                                  i));
       const auto id = desc.id;
       const int value = module.load_global(id);
       const int live = module.get_live(id);
@@ -262,7 +255,7 @@ PageSettingApplyPageOverrides(unsigned page_index) noexcept
   for (unsigned i = 0; i < overrides.n_items; ++i) {
     const auto &item = overrides.items[i];
     const auto &module = PageSettingModuleRegistry::GetById(item.id);
-    const auto &desc = module.get_by_id(item.id);
+    const auto &desc = module.get(item.id);
 
     if (item.value == PageSettingOverrides::INHERIT) {
       LogFmt("perPage:   override '{}' inherit (skip)", desc.label);

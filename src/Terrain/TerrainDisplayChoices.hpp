@@ -63,13 +63,6 @@ static constexpr StaticEnumChoice terrain_contours_choices[] = {
   nullptr
 };
 
-/** On/Off for boolean page overrides and similar toggles. */
-static constexpr StaticEnumChoice enabled_disabled_choices[] = {
-  { 0, N_("Off") },
-  { 1, N_("On") },
-  nullptr
-};
-
 /** Convert terrain contrast/brightness byte (0..255) ↔ percent (0..100). */
 [[nodiscard]] [[gnu::const]]
 constexpr short

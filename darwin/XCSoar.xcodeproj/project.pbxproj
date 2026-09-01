@@ -3935,8 +3935,8 @@
 		5CBFE23F2D742FA600F05795 /* ScoringConfigPanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ScoringConfigPanel.cpp; sourceTree = "<group>"; };
 		5CBFE2402D742FA600F05795 /* SiteConfigPanel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SiteConfigPanel.hpp; sourceTree = "<group>"; };
 		5CBFE2412D742FA600F05795 /* SiteConfigPanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SiteConfigPanel.cpp; sourceTree = "<group>"; };
-		5CBFE2422D742FA600F05795 /* SymbolsConfigPanel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SymbolsConfigPanel.hpp; sourceTree = "<group>"; };
-		5CBFE2432D742FA600F05795 /* SymbolsConfigPanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SymbolsConfigPanel.cpp; sourceTree = "<group>"; };
+		5CBFE2422D742FA600F05795 /* ElementsConfigPanel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ElementsConfigPanel.hpp; sourceTree = "<group>"; };
+		5CBFE2432D742FA600F05795 /* ElementsConfigPanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ElementsConfigPanel.cpp; sourceTree = "<group>"; };
 		5CBFE2442D742FA600F05795 /* TaskDefaultsConfigPanel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = TaskDefaultsConfigPanel.hpp; sourceTree = "<group>"; };
 		5CBFE2452D742FA600F05795 /* TaskDefaultsConfigPanel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = TaskDefaultsConfigPanel.cpp; sourceTree = "<group>"; };
 		5CBFE2462D742FA600F05795 /* TaskRulesConfigPanel.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = TaskRulesConfigPanel.hpp; sourceTree = "<group>"; };
@@ -15829,8 +15829,8 @@
 				5CBFE23F2D742FA600F05795 /* ScoringConfigPanel.cpp */,
 				5CBFE2402D742FA600F05795 /* SiteConfigPanel.hpp */,
 				5CBFE2412D742FA600F05795 /* SiteConfigPanel.cpp */,
-				5CBFE2422D742FA600F05795 /* SymbolsConfigPanel.hpp */,
-				5CBFE2432D742FA600F05795 /* SymbolsConfigPanel.cpp */,
+				5CBFE2422D742FA600F05795 /* ElementsConfigPanel.hpp */,
+				5CBFE2432D742FA600F05795 /* ElementsConfigPanel.cpp */,
 				5CBFE2442D742FA600F05795 /* TaskDefaultsConfigPanel.hpp */,
 				5CBFE2452D742FA600F05795 /* TaskDefaultsConfigPanel.cpp */,
 				5CBFE2462D742FA600F05795 /* TaskRulesConfigPanel.hpp */,

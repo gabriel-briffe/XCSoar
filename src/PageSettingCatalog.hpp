@@ -4,7 +4,7 @@
 #pragma once
 
 #include "PageSettingDescriptor.hpp"
-#include "Terrain/TerrainDisplayChoices.hpp"
+#include "DisplaySettingChoices.hpp"
 
 class DataFieldEnum;
 

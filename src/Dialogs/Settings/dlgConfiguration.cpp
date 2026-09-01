@@ -25,7 +25,7 @@
 #include "Panels/SiteConfigPanel.hpp"
 #include "Panels/OrientationConfigPanel.hpp"
 #include "Panels/WaypointDisplayConfigPanel.hpp"
-#include "Panels/SymbolsConfigPanel.hpp"
+#include "Panels/ElementsConfigPanel.hpp"
 #include "Panels/TerrainDisplayConfigPanel.hpp"
 #include "Panels/GlideComputerConfigPanel.hpp"
 #include "Panels/WindConfigPanel.hpp"
@@ -98,7 +98,7 @@ static constexpr TabMenuPage files_pages[] = {
 
 static constexpr TabMenuPage map_pages[] = {
   { N_("Orientation"), CreateOrientationConfigPanel },
-  { N_("Elements"), CreateSymbolsConfigPanel },
+  { N_("Elements"), CreateElementsConfigPanel },
   { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
   { N_("Terrain"), CreateTerrainDisplayConfigPanel },
   { N_("Airspace"), CreateAirspaceConfigPanel },

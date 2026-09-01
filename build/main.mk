@@ -132,7 +132,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/RouteConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/SafetyFactorsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/SiteConfigPanel.cpp \
-	$(SRC)/Dialogs/Settings/Panels/SymbolsConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/ElementsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/TaskRulesConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/TaskDefaultsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/ScoringConfigPanel.cpp \

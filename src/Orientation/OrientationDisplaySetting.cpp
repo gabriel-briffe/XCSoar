@@ -213,13 +213,6 @@ ApplyLive(const Bundle &bundle) noexcept
 void
 LoadGlobal(Bundle &bundle) noexcept
 {
-  MapSettings defaults;
-  defaults.SetDefaults();
-  bundle.cruise_orientation = defaults.cruise_orientation;
-  bundle.circling_orientation = defaults.circling_orientation;
-  bundle.circle_zoom_enabled = defaults.circle_zoom_enabled;
-  bundle.map_shift_bias = defaults.map_shift_bias;
-  bundle.glider_screen_position = defaults.glider_screen_position;
   Impl::LoadGlobalBundle(bundle);
 }
 

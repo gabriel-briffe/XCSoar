@@ -313,22 +313,7 @@ ApplyLive(const Bundle &bundle) noexcept
 void
 LoadGlobal(Bundle &bundle) noexcept
 {
-  MapSettings defaults;
-  defaults.SetDefaults();
-  bundle.display_ground_track = defaults.display_ground_track;
-  bundle.show_flarm_on_map = defaults.show_flarm_on_map;
-  bundle.fade_traffic = defaults.fade_traffic;
-  bundle.trail = defaults.trail;
-  bundle.detour_cost_markers_enabled = defaults.detour_cost_markers_enabled;
-  bundle.aircraft_symbol = defaults.aircraft_symbol;
-  bundle.wind_arrow_style = defaults.wind_arrow_style;
-  bundle.online_traffic_map_mode = defaults.online_traffic_map_mode;
-  bundle.distance_rings_enabled = defaults.distance_rings_enabled;
-
-  for (unsigned i = 0; i < PageSettingElementsCount; ++i) {
-    const auto id = PageSettingId(PageSettingElementsStart + i);
-    SetValue(bundle, id, LoadGlobal(id));
-  }
+  Impl::LoadGlobalBundle(bundle);
 }
 
 bool

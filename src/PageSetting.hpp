@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
 #include <type_traits>
 
 struct TrailSettings;
@@ -168,17 +167,6 @@ const PageSettingDescriptor &
 Get(PageSettingGroup group, unsigned index) noexcept;
 
 } // namespace PageSettingRegistry
-
-/**
- * Apply a setting value (legacy; prefer #PageSettingSet).
- *
- * @param page_index nullopt writes the global MapSettings (+ profile)
- *   and notifies the map; a page index writes into that page's
- *   override list only (live apply happens on page switch).
- */
-void
-PageSettingApply(PageSettingId id, int value,
-                 std::optional<unsigned> page_index = std::nullopt) noexcept;
 
 /** Read the global profile value for @p id. */
 [[nodiscard]]
