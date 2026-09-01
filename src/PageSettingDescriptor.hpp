@@ -32,13 +32,31 @@ enum class TerrainBundleField : uint8_t {
   COUNT
 };
 
-/** Field within #MapDisplaySetting::Bundle. */
-enum class MapBundleField : uint8_t {
+/** Field within #OrientationDisplaySetting::Bundle. */
+enum class OrientationBundleField : uint8_t {
   CRUISE_ORIENTATION,
   CIRCLING_ORIENTATION,
   CIRCLING_ZOOM,
   MAP_SHIFT_BIAS,
   GLIDER_SCREEN_POSITION,
+
+  COUNT
+};
+
+/** Field within #ElementsDisplaySetting::Bundle. */
+enum class ElementsBundleField : uint8_t {
+  GROUND_TRACK,
+  FLARM_TRAFFIC,
+  FADE_TRAFFIC,
+  TRAIL_LENGTH,
+  TRAIL_DRIFT,
+  TRAIL_TYPE,
+  TRAIL_SCALED,
+  DETOUR_COST_MARKERS,
+  AIRCRAFT_SYMBOL,
+  WIND_ARROW_STYLE,
+  ONLINE_TRAFFIC_MAP_MODE,
+  DISTANCE_RINGS,
 
   COUNT
 };
@@ -49,19 +67,17 @@ enum class MapBundleField : uint8_t {
  */
 union PageSettingBundleField {
   TerrainBundleField terrain;
-  MapBundleField map;
+  OrientationBundleField orientation;
+  ElementsBundleField elements;
 };
 
 /** How a catalog value is stored in the profile file. */
 enum class ProfileWireFormat : uint8_t {
   BOOL,
   UNSIGNED,
-  UINT8_SLOPE,
-  UINT8_CONTOURS,
   SHORT_PERCENT,
-  UINT8_MAP_ORIENTATION,
-  UINT8_MAP_SHIFT_BIAS,
   INT,
+  UINT8_ENUM,
 
   COUNT
 };
@@ -72,7 +88,7 @@ enum class ProfileWireFormat : uint8_t {
  *
  * Adding a group: extend #PageSettingGroup and #PageSettingBundleField,
  * add #PageSettingId values, implement *DisplaySetting.cpp catalog rows
- * using {.terrain = ...} or {.map = ...} (or the new union member).
+ * using {.terrain = ...}, {.orientation = ...}, or {.elements = ...}.
  */
 struct PageSettingDescriptor {
   PageSettingId id;

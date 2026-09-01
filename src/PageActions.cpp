@@ -397,8 +397,11 @@ PageActions::ApplyPageDisplaySettings() noexcept
 
   LogFmt("perPage: ApplyPageDisplaySettings index={}",
          state.current_index);
+
+  const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
   PageSettingApplyGlobalBaseline();
   PageSettingApplyPageOverrides(state.current_index);
+  PageSettingReinitialiseTrailLookIfChanged(old_trail);
   PageSettingNotifyLive();
 }
 

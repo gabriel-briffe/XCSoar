@@ -48,6 +48,8 @@ Profile::Load(const ProfileMap &map, MapSettings &settings)
 
   map.Get(ProfileKeys::GliderScreenPosition, settings.glider_screen_position);
 
+  /* Legacy combined orientation key (DisplayUp).  Per-setting keys are
+     loaded via PageSettingProfile when applying page-setting catalogs. */
   bool orientation_found = false;
 
   if (unsigned Temp = (unsigned)MapOrientation::NORTH_UP;

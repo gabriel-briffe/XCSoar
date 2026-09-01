@@ -124,7 +124,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/InterfaceConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/LayoutConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/LoggerConfigPanel.cpp \
-	$(SRC)/Dialogs/Settings/Panels/MapDisplayConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/OrientationConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/NetworkConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/PagesConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/RaspConfigPanel.cpp \
@@ -358,7 +358,9 @@ XCSOAR_SOURCES := \
 	$(SRC)/PageSettingCatalog.cpp \
 	$(SRC)/PageSettingModule.cpp \
 	$(SRC)/PageSettingProfile.cpp \
-	$(SRC)/MapDisplaySetting.cpp \
+	$(SRC)/DisplaySettingConfigPanel.cpp \
+	$(SRC)/Orientation/OrientationDisplaySetting.cpp \
+	$(SRC)/Elements/ElementsDisplaySetting.cpp \
 	$(SRC)/Terrain/TerrainDisplaySetting.cpp \
 	$(SRC)/PageOverlayTitle.cpp \
 	$(SRC)/PageState.cpp \

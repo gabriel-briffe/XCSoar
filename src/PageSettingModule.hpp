@@ -9,6 +9,9 @@
 struct PageSettingModule {
   PageSettingGroup group;
 
+  /** First #PageSettingId owned by this module. */
+  PageSettingId id_start;
+
   /** UI label for the group (N_(); gettext when showing). */
   const char *label;
 
@@ -50,7 +53,5 @@ GetLabel(PageSettingGroup group) noexcept;
 [[nodiscard]] inline PageSettingGroup
 PageSettingGroupForId(PageSettingId id) noexcept
 {
-  return unsigned(id) < PageSettingTerrainCount
-    ? PageSettingGroup::TERRAIN
-    : PageSettingGroup::MAP;
+  return PageSettingModuleRegistry::GetById(id).group;
 }

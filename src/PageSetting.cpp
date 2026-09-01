@@ -6,6 +6,8 @@
 #include "ActionInterface.hpp"
 #include "Interface.hpp"
 #include "LogFile.hpp"
+#include "MainWindow.hpp"
+#include "MapSettings.hpp"
 #include "PageSettingModule.hpp"
 #include "PageSettings.hpp"
 #include "UISettings.hpp"
@@ -132,6 +134,18 @@ Get(PageSettingGroup group, unsigned index) noexcept
 } // namespace PageSettingRegistry
 
 void
+PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept
+{
+  const TrailSettings &after = CommonInterface::GetMapSettings().trail;
+  if (before.type == after.type &&
+      before.scaling_enabled == after.scaling_enabled)
+    return;
+
+  if (CommonInterface::main_window != nullptr)
+    CommonInterface::main_window->ReinitialiseLook();
+}
+
+void
 PageSettingNotifyLive() noexcept
 {
   ActionInterface::SendMapSettings(true);
@@ -170,10 +184,13 @@ PageSettingSet(PageSettingId id, int value) noexcept
   if (value == PageSettingOverrides::INHERIT)
     value = module.load_global(id);
 
+  const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
+
   const auto &desc = module.get_by_id(id);
   LogFmt("perPage: Set global '{}' value={}", desc.label, value);
   module.set_live(id, value);
   module.save_global(id, value);
+  PageSettingReinitialiseTrailLookIfChanged(old_trail);
   PageSettingNotifyLive();
 }
 

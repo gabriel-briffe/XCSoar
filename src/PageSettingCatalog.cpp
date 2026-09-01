@@ -12,6 +12,12 @@
 
 namespace PageSettingCatalog {
 
+const char *
+GettextOptional(const char *text) noexcept
+{
+  return text != nullptr ? gettext(text) : nullptr;
+}
+
 bool
 IsValidValue(const PageSettingDescriptor &desc, int value) noexcept
 {

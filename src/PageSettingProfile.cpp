@@ -4,13 +4,12 @@
 #include "PageSettingProfile.hpp"
 
 #include "MapSettings.hpp"
+#include "PageSettingCatalog.hpp"
 #include "PageSettingDescriptor.hpp"
 #include "Profile/Current.hpp"
 #include "Profile/Profile.hpp"
-#include "Terrain/TerrainDisplayChoices.hpp"
 #include "Terrain/TerrainRenderer.hpp"
 #include "Terrain/TerrainSettings.hpp"
-#include "util/Compiler.h"
 #include "util/Macros.hpp"
 
 #include <cstdint>
@@ -61,40 +60,6 @@ SaveUnsigned(const PageSettingDescriptor &desc, int value) noexcept
 
 [[nodiscard]]
 int
-LoadUint8Slope(const PageSettingDescriptor &desc) noexcept
-{
-  uint8_t value = uint8_t(desc.profile_default);
-  if (!Profile::Get(desc.profile_key, value) ||
-      value >= uint8_t(SlopeShading::COUNT))
-    value = uint8_t(desc.profile_default);
-  return int(value);
-}
-
-void
-SaveUint8Slope(const PageSettingDescriptor &desc, int value) noexcept
-{
-  Profile::SetEnum(desc.profile_key, SlopeShading(value));
-}
-
-[[nodiscard]]
-int
-LoadUint8Contours(const PageSettingDescriptor &desc) noexcept
-{
-  uint8_t value = uint8_t(desc.profile_default);
-  if (!Profile::Get(desc.profile_key, value) ||
-      value >= uint8_t(Contours::COUNT))
-    value = uint8_t(desc.profile_default);
-  return int(value);
-}
-
-void
-SaveUint8Contours(const PageSettingDescriptor &desc, int value) noexcept
-{
-  Profile::SetEnum(desc.profile_key, Contours(value));
-}
-
-[[nodiscard]]
-int
 LoadShortPercent(const PageSettingDescriptor &desc) noexcept
 {
   short value = short(desc.profile_default);
@@ -106,39 +71,6 @@ void
 SaveShortPercent(const PageSettingDescriptor &desc, int value) noexcept
 {
   Profile::Set(desc.profile_key, TerrainPercentToByte(short(value)));
-}
-
-[[nodiscard]]
-int
-LoadUint8MapOrientation(const PageSettingDescriptor &desc) noexcept
-{
-  unsigned value = unsigned(desc.profile_default);
-  if (!Profile::Get(desc.profile_key, value) ||
-      !IsValidMapOrientation(value))
-    value = unsigned(desc.profile_default);
-  return int(value);
-}
-
-void
-SaveUint8MapOrientation(const PageSettingDescriptor &desc, int value) noexcept
-{
-  Profile::Set(desc.profile_key, unsigned(value));
-}
-
-[[nodiscard]]
-int
-LoadUint8MapShiftBias(const PageSettingDescriptor &desc) noexcept
-{
-  MapShiftBias value = MapShiftBias(desc.profile_default);
-  if (!Profile::GetEnum(desc.profile_key, value))
-    value = MapShiftBias(desc.profile_default);
-  return int(value);
-}
-
-void
-SaveUint8MapShiftBias(const PageSettingDescriptor &desc, int value) noexcept
-{
-  Profile::SetEnum(desc.profile_key, MapShiftBias(value));
 }
 
 [[nodiscard]]
@@ -156,15 +88,29 @@ SaveInt(const PageSettingDescriptor &desc, int value) noexcept
   Profile::Set(desc.profile_key, value);
 }
 
+[[nodiscard]]
+int
+LoadUint8Enum(const PageSettingDescriptor &desc) noexcept
+{
+  unsigned value = unsigned(desc.profile_default);
+  if (!Profile::Get(desc.profile_key, value) ||
+      !PageSettingCatalog::IsValidValue(desc, int(value)))
+    value = unsigned(desc.profile_default);
+  return int(value);
+}
+
+void
+SaveUint8Enum(const PageSettingDescriptor &desc, int value) noexcept
+{
+  Profile::Set(desc.profile_key, unsigned(value));
+}
+
 static constexpr WireHandler handlers[] = {
   { LoadBool, SaveBool },
   { LoadUnsigned, SaveUnsigned },
-  { LoadUint8Slope, SaveUint8Slope },
-  { LoadUint8Contours, SaveUint8Contours },
   { LoadShortPercent, SaveShortPercent },
-  { LoadUint8MapOrientation, SaveUint8MapOrientation },
-  { LoadUint8MapShiftBias, SaveUint8MapShiftBias },
   { LoadInt, SaveInt },
+  { LoadUint8Enum, SaveUint8Enum },
 };
 
 static_assert(ARRAY_SIZE(handlers) == unsigned(ProfileWireFormat::COUNT),

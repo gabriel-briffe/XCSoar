@@ -11,6 +11,10 @@ class DataFieldEnum;
 namespace PageSettingCatalog {
 
 [[nodiscard]]
+const char *
+GettextOptional(const char *text) noexcept;
+
+[[nodiscard]]
 bool
 IsValidValue(const PageSettingDescriptor &desc, int value) noexcept;
 
@@ -49,86 +53,43 @@ SetLive(PageSettingId id, int value,
 
 [[nodiscard]]
 constexpr PageSettingDescriptor
-TerrainBool(PageSettingId id, const char *label, const char *help,
+CatalogBool(PageSettingId id, const char *label, const char *help,
             const char *override_key, std::string_view profile_key,
-            TerrainBundleField field, int profile_default = 1) noexcept
+            PageSettingBundleField bundle_field,
+            int profile_default = 1) noexcept
 {
   return {
     id, PageSettingType::BOOL, label, help, override_key, profile_key,
-    PageSettingBundleField{.terrain = field},
-    ProfileWireFormat::BOOL, profile_default,
+    bundle_field, ProfileWireFormat::BOOL, profile_default,
     enabled_disabled_choices, 0, 0, 0,
   };
 }
 
 [[nodiscard]]
 constexpr PageSettingDescriptor
-TerrainEnum(PageSettingId id, const char *label, const char *help,
-            const char *override_key, std::string_view profile_key,
-            TerrainBundleField field, ProfileWireFormat wire, int profile_default,
-            const StaticEnumChoice *choices) noexcept
+CatalogEnum(PageSettingId id, const char *label, const char *help,
+              const char *override_key, std::string_view profile_key,
+              PageSettingBundleField bundle_field, ProfileWireFormat wire,
+              int profile_default,
+              const StaticEnumChoice *choices) noexcept
 {
   return {
     id, PageSettingType::ENUM, label, help, override_key, profile_key,
-    PageSettingBundleField{.terrain = field},
-    wire, profile_default, choices, 0, 0, 0,
+    bundle_field, wire, profile_default, choices, 0, 0, 0,
   };
 }
 
 [[nodiscard]]
 constexpr PageSettingDescriptor
-TerrainInteger(PageSettingId id, const char *label, const char *help,
-                 const char *override_key, std::string_view profile_key,
-                 TerrainBundleField field, int profile_default,
-                 int int_min, int int_max, int int_step) noexcept
+CatalogInteger(PageSettingId id, const char *label, const char *help,
+               const char *override_key, std::string_view profile_key,
+               PageSettingBundleField bundle_field, ProfileWireFormat wire,
+               int profile_default,
+               int int_min, int int_max, int int_step) noexcept
 {
   return {
     id, PageSettingType::INTEGER, label, help, override_key, profile_key,
-    PageSettingBundleField{.terrain = field},
-    ProfileWireFormat::SHORT_PERCENT, profile_default,
-    nullptr, int_min, int_max, int_step,
-  };
-}
-
-[[nodiscard]]
-constexpr PageSettingDescriptor
-MapBool(PageSettingId id, const char *label, const char *help,
-        const char *override_key, std::string_view profile_key,
-        MapBundleField field, int profile_default = 1) noexcept
-{
-  return {
-    id, PageSettingType::BOOL, label, help, override_key, profile_key,
-    PageSettingBundleField{.map = field},
-    ProfileWireFormat::BOOL, profile_default,
-    enabled_disabled_choices, 0, 0, 0,
-  };
-}
-
-[[nodiscard]]
-constexpr PageSettingDescriptor
-MapEnum(PageSettingId id, const char *label, const char *help,
-        const char *override_key, std::string_view profile_key,
-        MapBundleField field, ProfileWireFormat wire, int profile_default,
-        const StaticEnumChoice *choices) noexcept
-{
-  return {
-    id, PageSettingType::ENUM, label, help, override_key, profile_key,
-    PageSettingBundleField{.map = field},
-    wire, profile_default, choices, 0, 0, 0,
-  };
-}
-
-[[nodiscard]]
-constexpr PageSettingDescriptor
-MapInteger(PageSettingId id, const char *label, const char *help,
-           const char *override_key, std::string_view profile_key,
-           MapBundleField field, int profile_default,
-           int int_min, int int_max, int int_step) noexcept
-{
-  return {
-    id, PageSettingType::INTEGER, label, help, override_key, profile_key,
-    PageSettingBundleField{.map = field},
-    ProfileWireFormat::INT, profile_default,
+    bundle_field, wire, profile_default,
     nullptr, int_min, int_max, int_step,
   };
 }

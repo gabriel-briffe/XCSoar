@@ -7,10 +7,10 @@
 #include "MapSettings.hpp"
 
 /**
- * Map Display orientation/shift settings: shared catalog and get/set for
- * global profile and live MapSettings.
+ * Map Display → Orientation: shared catalog and get/set for global profile
+ * and live MapSettings.
  */
-namespace MapDisplaySetting {
+namespace OrientationDisplaySetting {
 
 struct Bundle {
   MapOrientation cruise_orientation = MapOrientation::NORTH_UP;
@@ -73,4 +73,4 @@ LoadGlobal(Bundle &bundle) noexcept;
 bool
 SaveGlobal(const Bundle &current, const Bundle &initial) noexcept;
 
-} // namespace MapDisplaySetting
+} // namespace OrientationDisplaySetting

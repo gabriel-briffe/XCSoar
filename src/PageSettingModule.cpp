@@ -3,8 +3,9 @@
 
 #include "PageSettingModule.hpp"
 
+#include "Elements/ElementsDisplaySetting.hpp"
 #include "Language/Language.hpp"
-#include "MapDisplaySetting.hpp"
+#include "Orientation/OrientationDisplaySetting.hpp"
 #include "Terrain/TerrainDisplaySetting.hpp"
 #include "util/Macros.hpp"
 
@@ -17,6 +18,7 @@ namespace {
 static const PageSettingModule modules[] = {
   {
     PageSettingGroup::TERRAIN,
+    PageSettingId::TERRAIN_ENABLE,
     N_("Terrain"),
     TerrainDisplaySetting::Count,
     TerrainDisplaySetting::Get,
@@ -28,16 +30,30 @@ static const PageSettingModule modules[] = {
     TerrainDisplaySetting::SaveGlobal,
   },
   {
-    PageSettingGroup::MAP,
-    N_("Map display"),
-    MapDisplaySetting::Count,
-    MapDisplaySetting::Get,
-    MapDisplaySetting::Get,
-    MapDisplaySetting::IsValidValue,
-    MapDisplaySetting::GetLive,
-    MapDisplaySetting::SetLive,
-    MapDisplaySetting::LoadGlobal,
-    MapDisplaySetting::SaveGlobal,
+    PageSettingGroup::ORIENTATION,
+    PageSettingId::CRUISE_ORIENTATION,
+    N_("Orientation"),
+    OrientationDisplaySetting::Count,
+    OrientationDisplaySetting::Get,
+    OrientationDisplaySetting::Get,
+    OrientationDisplaySetting::IsValidValue,
+    OrientationDisplaySetting::GetLive,
+    OrientationDisplaySetting::SetLive,
+    OrientationDisplaySetting::LoadGlobal,
+    OrientationDisplaySetting::SaveGlobal,
+  },
+  {
+    PageSettingGroup::ELEMENTS,
+    PageSettingId::GROUND_TRACK,
+    N_("Elements"),
+    ElementsDisplaySetting::Count,
+    ElementsDisplaySetting::Get,
+    ElementsDisplaySetting::Get,
+    ElementsDisplaySetting::IsValidValue,
+    ElementsDisplaySetting::GetLive,
+    ElementsDisplaySetting::SetLive,
+    ElementsDisplaySetting::LoadGlobal,
+    ElementsDisplaySetting::SaveGlobal,
   },
 };
 
@@ -69,7 +85,16 @@ Get(PageSettingGroup group) noexcept
 const PageSettingModule &
 GetById(PageSettingId id) noexcept
 {
-  return Get(PageSettingGroupForId(id));
+  for (unsigned i = 0; i < Count(); ++i) {
+    const auto &module = modules[i];
+    const unsigned u = unsigned(id);
+    if (u >= unsigned(module.id_start) &&
+        u < unsigned(module.id_start) + module.count())
+      return module;
+  }
+
+  assert(false);
+  return modules[0];
 }
 
 const char *

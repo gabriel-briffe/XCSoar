@@ -7,6 +7,8 @@
 #include "MapSettings.hpp"
 #include "PageSetting.hpp"
 #include "PageSettingCatalog.hpp"
+#include "PageSettingFieldAccessors.hpp"
+#include "PageSettingModuleImpl.hpp"
 #include "PageSettingProfile.hpp"
 #include "Profile/Current.hpp"
 #include "Profile/Keys.hpp"
@@ -21,32 +23,37 @@
 
 namespace TerrainDisplaySetting {
 
+void ReadLive(Bundle &) noexcept;
+void ApplyLive(const Bundle &) noexcept;
+
 namespace {
 
+using Bundle = TerrainDisplaySetting::Bundle;
+
 static constexpr PageSettingDescriptor catalog[] = {
-  PageSettingCatalog::TerrainBool(
+  PageSettingCatalog::CatalogBool(
     PageSettingId::TERRAIN_ENABLE,
     N_("Terrain Display"),
     N_("Draw a digital elevation terrain on the map."),
     "OverrideTerrainEnable",
     ProfileKeys::DrawTerrain,
-    TerrainBundleField::TERRAIN_ENABLE),
-  PageSettingCatalog::TerrainBool(
+    {.terrain = TerrainBundleField::TERRAIN_ENABLE}),
+  PageSettingCatalog::CatalogBool(
     PageSettingId::TOPOGRAPHY_ENABLE,
     N_("Topography display"),
     N_("Draw topographical features (roads, rivers, lakes etc.) on the map."),
     "OverrideTopographyEnable",
     ProfileKeys::DrawTopography,
-    TerrainBundleField::TOPOGRAPHY_ENABLE),
-  PageSettingCatalog::TerrainEnum(
+    {.terrain = TerrainBundleField::TOPOGRAPHY_ENABLE}),
+  PageSettingCatalog::CatalogEnum(
     PageSettingId::TERRAIN_COLORS,
     N_("Terrain colors"),
     N_("Defines the color ramp used in terrain rendering."),
     "OverrideTerrainColors",
     ProfileKeys::TerrainRamp,
-    TerrainBundleField::TERRAIN_RAMP,
+    {.terrain = TerrainBundleField::TERRAIN_RAMP},
     ProfileWireFormat::UNSIGNED, 0, terrain_ramp_choices),
-  PageSettingCatalog::TerrainEnum(
+  PageSettingCatalog::CatalogEnum(
     PageSettingId::TERRAIN_SLOPE_SHADING,
     N_("Slope shading"),
     N_("The terrain can be shaded among slopes to indicate either "
@@ -54,10 +61,10 @@ static constexpr PageSettingDescriptor catalog[] = {
        "North-West, or a screen-relative fixed shading from top left."),
     "OverrideTerrainSlopeShading",
     ProfileKeys::SlopeShadingType,
-    TerrainBundleField::TERRAIN_SLOPE_SHADING,
-    ProfileWireFormat::UINT8_SLOPE, int(SlopeShading::FIXED),
+    {.terrain = TerrainBundleField::TERRAIN_SLOPE_SHADING},
+    ProfileWireFormat::UINT8_ENUM, int(SlopeShading::FIXED),
     terrain_slope_shading_choices),
-  PageSettingCatalog::TerrainInteger(
+  PageSettingCatalog::CatalogInteger(
     PageSettingId::TERRAIN_CONTRAST,
     N_("Terrain contrast"),
     N_("Defines the amount of Phong shading in the terrain rendering. "
@@ -65,24 +72,26 @@ static constexpr PageSettingDescriptor catalog[] = {
        "flying in steep mountains."),
     "OverrideTerrainContrast",
     ProfileKeys::TerrainContrast,
-    TerrainBundleField::TERRAIN_CONTRAST, 65, 0, 100, 5),
-  PageSettingCatalog::TerrainInteger(
+    {.terrain = TerrainBundleField::TERRAIN_CONTRAST},
+    ProfileWireFormat::SHORT_PERCENT, 65, 0, 100, 5),
+  PageSettingCatalog::CatalogInteger(
     PageSettingId::TERRAIN_BRIGHTNESS,
     N_("Terrain brightness"),
     N_("Defines the brightness (whiteness) of the terrain rendering. "
        "This controls the average illumination of the terrain."),
     "OverrideTerrainBrightness",
     ProfileKeys::TerrainBrightness,
-    TerrainBundleField::TERRAIN_BRIGHTNESS, 192, 0, 100, 5),
-  PageSettingCatalog::TerrainEnum(
+    {.terrain = TerrainBundleField::TERRAIN_BRIGHTNESS},
+    ProfileWireFormat::SHORT_PERCENT, 192, 0, 100, 5),
+  PageSettingCatalog::CatalogEnum(
     PageSettingId::TERRAIN_CONTOURS,
     N_("Contours"),
     N_("Draw contour lines on the terrain. Contour mode "
        "controls density of contour lines."),
     "OverrideTerrainContours",
     ProfileKeys::TerrainContours,
-    TerrainBundleField::TERRAIN_CONTOURS,
-    ProfileWireFormat::UINT8_CONTOURS, int(Contours::OFF),
+    {.terrain = TerrainBundleField::TERRAIN_CONTOURS},
+    ProfileWireFormat::UINT8_ENUM, int(Contours::OFF),
     terrain_contours_choices),
 };
 
@@ -94,57 +103,11 @@ struct FieldAccessor {
   void (*set)(Bundle &, int) noexcept;
 };
 
-[[nodiscard]]
-int
-GetTerrainEnable(const Bundle &bundle) noexcept
-{
-  return bundle.terrain.enable ? 1 : 0;
-}
-
-void
-SetTerrainEnable(Bundle &bundle, int value) noexcept
-{
-  bundle.terrain.enable = value != 0;
-}
-
-[[nodiscard]]
-int
-GetTopographyEnable(const Bundle &bundle) noexcept
-{
-  return bundle.topography_enabled ? 1 : 0;
-}
-
-void
-SetTopographyEnable(Bundle &bundle, int value) noexcept
-{
-  bundle.topography_enabled = value != 0;
-}
-
-[[nodiscard]]
-int
-GetTerrainRamp(const Bundle &bundle) noexcept
-{
-  return int(bundle.terrain.ramp);
-}
-
-void
-SetTerrainRamp(Bundle &bundle, int value) noexcept
-{
-  bundle.terrain.ramp = unsigned(value);
-}
-
-[[nodiscard]]
-int
-GetTerrainSlopeShading(const Bundle &bundle) noexcept
-{
-  return int(bundle.terrain.slope_shading);
-}
-
-void
-SetTerrainSlopeShading(Bundle &bundle, int value) noexcept
-{
-  bundle.terrain.slope_shading = SlopeShading(value);
-}
+PAGE_SETTING_FIELD_BOOL(TerrainEnable, terrain.enable)
+PAGE_SETTING_FIELD_BOOL(TopographyEnable, topography_enabled)
+PAGE_SETTING_FIELD_ENUM(TerrainRamp, terrain.ramp, unsigned)
+PAGE_SETTING_FIELD_ENUM(TerrainSlopeShading, terrain.slope_shading,
+                          SlopeShading)
 
 [[nodiscard]]
 int
@@ -172,32 +135,27 @@ SetTerrainBrightness(Bundle &bundle, int value) noexcept
   bundle.terrain.brightness = TerrainPercentToByte(short(value));
 }
 
-[[nodiscard]]
-int
-GetTerrainContours(const Bundle &bundle) noexcept
-{
-  return int(bundle.terrain.contours);
-}
-
-void
-SetTerrainContours(Bundle &bundle, int value) noexcept
-{
-  bundle.terrain.contours = Contours(value);
-}
+PAGE_SETTING_FIELD_ENUM(TerrainContours, terrain.contours, Contours)
 
 static constexpr FieldAccessor field_accessors[] = {
-  { GetTerrainEnable, SetTerrainEnable },
-  { GetTopographyEnable, SetTopographyEnable },
-  { GetTerrainRamp, SetTerrainRamp },
-  { GetTerrainSlopeShading, SetTerrainSlopeShading },
+  PAGE_SETTING_FIELD_ROW(TerrainEnable),
+  PAGE_SETTING_FIELD_ROW(TopographyEnable),
+  PAGE_SETTING_FIELD_ROW(TerrainRamp),
+  PAGE_SETTING_FIELD_ROW(TerrainSlopeShading),
   { GetTerrainContrast, SetTerrainContrast },
   { GetTerrainBrightness, SetTerrainBrightness },
-  { GetTerrainContours, SetTerrainContours },
+  PAGE_SETTING_FIELD_ROW(TerrainContours),
 };
 
-static_assert(ARRAY_SIZE(field_accessors) ==
-              unsigned(TerrainBundleField::COUNT),
+static_assert(ARRAY_SIZE(field_accessors) == unsigned(TerrainBundleField::COUNT),
               "Terrain field accessors must match TerrainBundleField::COUNT");
+
+[[nodiscard]]
+TerrainBundleField
+FieldFromDescriptor(const PageSettingDescriptor &desc) noexcept
+{
+  return desc.bundle_field.terrain;
+}
 
 [[nodiscard]]
 int
@@ -212,75 +170,70 @@ SetBundleField(Bundle &bundle, TerrainBundleField field, int value) noexcept
   field_accessors[unsigned(field)].set(bundle, value);
 }
 
+using Impl = PageSettingModuleImpl::Module<
+  Bundle, TerrainBundleField, catalog, PageSettingTerrainCount, 0,
+  FieldFromDescriptor, GetBundleField, SetBundleField, ReadLive, ApplyLive>;
+
 } // namespace
 
 unsigned
 Count() noexcept
 {
-  return PageSettingTerrainCount;
+  return Impl::Count();
 }
 
 const PageSettingDescriptor &
 Get(PageSettingId id) noexcept
 {
-  assert(unsigned(id) < PageSettingTerrainCount);
-  return catalog[unsigned(id)];
+  return Impl::Get(id);
 }
 
 const PageSettingDescriptor &
 Get(unsigned index) noexcept
 {
-  assert(index < PageSettingTerrainCount);
-  return catalog[index];
+  return Impl::Get(index);
 }
 
 bool
 IsValidValue(PageSettingId id, int value) noexcept
 {
-  return PageSettingCatalog::IsValidValue(Get(id), value);
+  return Impl::IsValidValue(id, value);
 }
 
 int
 GetLive(PageSettingId id) noexcept
 {
-  return PageSettingCatalog::GetLive<Bundle>(id, ReadLive, GetValue);
+  return Impl::GetLive(id);
 }
 
 void
 SetLive(PageSettingId id, int value) noexcept
 {
-  PageSettingCatalog::SetLive<Bundle>(id, value, ReadLive, ApplyLive,
-                                      SetValue, IsValidValue);
+  Impl::SetLive(id, value);
 }
 
 int
 LoadGlobal(PageSettingId id) noexcept
 {
-  return PageSettingProfile::Load(Get(id));
+  return Impl::LoadGlobal(id);
 }
 
 void
 SaveGlobal(PageSettingId id, int value) noexcept
 {
-  if (!IsValidValue(id, value))
-    return;
-
-  PageSettingProfile::Save(Get(id), value);
+  Impl::SaveGlobal(id, value);
 }
 
 int
 GetValue(const Bundle &bundle, PageSettingId id) noexcept
 {
-  return GetBundleField(bundle, Get(id).bundle_field.terrain);
+  return Impl::GetValue(bundle, id);
 }
 
 void
 SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
 {
-  if (!IsValidValue(id, value))
-    return;
-
-  SetBundleField(bundle, Get(id).bundle_field.terrain, value);
+  Impl::SetValue(bundle, id, value);
 }
 
 void

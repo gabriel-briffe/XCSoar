@@ -4,14 +4,15 @@
 #pragma once
 
 /**
- * Shared Map Display choice lists (Config panel and page overrides).
+ * Shared Map Display → Orientation choice lists (Config panel and page
+ * overrides).
  */
 
 #include "Form/DataField/Enum.hpp"
 #include "Language/Language.hpp"
 #include "MapSettings.hpp"
 
-static constexpr StaticEnumChoice map_orientation_choices[] = {
+static constexpr StaticEnumChoice orientation_choices[] = {
   { MapOrientation::TRACK_UP, N_("Track up"),
     N_("The moving map display will be rotated so the glider's track is "
        "oriented up.") },

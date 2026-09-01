@@ -853,7 +853,9 @@ PageCustomSettingsWidget::Prepare(ContainerWindow &parent,
 
   for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
     const auto &desc = PageSettingRegistry::Get(i);
-    AddEnum(gettext(desc.label), gettext(desc.help_global), this);
+    AddEnum(PageSettingCatalog::GettextOptional(desc.label),
+            PageSettingCatalog::GettextOptional(desc.help_global),
+            this);
     auto &control = GetControl(i);
     control.GetDataField()->EnableItemHelp(true);
     control.SetCaptionClickSelects(true, [this, i](){

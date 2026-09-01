@@ -2,6 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "TerrainDisplayConfigPanel.hpp"
+#include "DisplaySettingConfigPanel.hpp"
 #include "Terrain/TerrainDisplaySetting.hpp"
 #include "Form/DataField/Listener.hpp"
 #include "Form/DataField/Enum.hpp"
@@ -226,55 +227,50 @@ TerrainDisplayConfigPanel::Prepare(ContainerWindow &parent,
 
   const auto &terrain_enable =
     TerrainDisplaySetting::Get(PageSettingId::TERRAIN_ENABLE);
-  AddBoolean(gettext(terrain_enable.label),
-             gettext(terrain_enable.help_global),
-             bundle.terrain.enable);
+  DisplaySettingConfigPanel::AddBooleanRow(*this, terrain_enable,
+                                           bundle.terrain.enable);
   GetDataField(EnableTerrain).SetListener(this);
 
   const auto &topography_enable =
     TerrainDisplaySetting::Get(PageSettingId::TOPOGRAPHY_ENABLE);
-  AddBoolean(gettext(topography_enable.label),
-             gettext(topography_enable.help_global),
-             bundle.topography_enabled);
+  DisplaySettingConfigPanel::AddBooleanRow(*this, topography_enable,
+                                           bundle.topography_enabled);
   GetDataField(EnableTopography).SetListener(this);
 
   const auto &colors =
     TerrainDisplaySetting::Get(PageSettingId::TERRAIN_COLORS);
-  AddEnum(gettext(colors.label), gettext(colors.help_global),
-          colors.choices, bundle.terrain.ramp);
+  DisplaySettingConfigPanel::AddEnumRow(*this, colors, bundle.terrain.ramp);
   GetDataField(TerrainColors).SetListener(this);
 
   const auto &slope =
     TerrainDisplaySetting::Get(PageSettingId::TERRAIN_SLOPE_SHADING);
-  AddEnum(gettext(slope.label), gettext(slope.help_global),
-          slope.choices, unsigned(bundle.terrain.slope_shading));
+  DisplaySettingConfigPanel::AddEnumRow(*this, slope,
+                                        unsigned(bundle.terrain.slope_shading));
   GetDataField(TerrainSlopeShading).SetListener(this);
   SetExpertRow(TerrainSlopeShading);
 
   const auto &contrast =
     TerrainDisplaySetting::Get(PageSettingId::TERRAIN_CONTRAST);
-  AddInteger(gettext(contrast.label), gettext(contrast.help_global),
-             "%d %%", "%d %%", contrast.int_min, contrast.int_max,
-             contrast.int_step,
-             TerrainDisplaySetting::GetValue(bundle,
-                                             PageSettingId::TERRAIN_CONTRAST));
+  DisplaySettingConfigPanel::AddIntegerRow(
+    *this, contrast,
+    TerrainDisplaySetting::GetValue(bundle,
+                                    PageSettingId::TERRAIN_CONTRAST));
   GetDataField(TerrainContrast).SetListener(this);
   SetExpertRow(TerrainContrast);
 
   const auto &brightness =
     TerrainDisplaySetting::Get(PageSettingId::TERRAIN_BRIGHTNESS);
-  AddInteger(gettext(brightness.label), gettext(brightness.help_global),
-             "%d %%", "%d %%", brightness.int_min, brightness.int_max,
-             brightness.int_step,
-             TerrainDisplaySetting::GetValue(bundle,
-                                             PageSettingId::TERRAIN_BRIGHTNESS));
+  DisplaySettingConfigPanel::AddIntegerRow(
+    *this, brightness,
+    TerrainDisplaySetting::GetValue(bundle,
+                                    PageSettingId::TERRAIN_BRIGHTNESS));
   GetDataField(TerrainBrightness).SetListener(this);
   SetExpertRow(TerrainBrightness);
 
   const auto &contours =
     TerrainDisplaySetting::Get(PageSettingId::TERRAIN_CONTOURS);
-  AddEnum(gettext(contours.label), gettext(contours.help_global),
-          contours.choices, unsigned(bundle.terrain.contours));
+  DisplaySettingConfigPanel::AddEnumRow(*this, contours,
+                                        unsigned(bundle.terrain.contours));
   GetDataField(TerrainContours).SetListener(this);
   SetExpertRow(TerrainContours);
 

@@ -23,7 +23,7 @@
 #include "Panels/LoggerConfigPanel.hpp"
 #include "Panels/AirspaceConfigPanel.hpp"
 #include "Panels/SiteConfigPanel.hpp"
-#include "Panels/MapDisplayConfigPanel.hpp"
+#include "Panels/OrientationConfigPanel.hpp"
 #include "Panels/WaypointDisplayConfigPanel.hpp"
 #include "Panels/SymbolsConfigPanel.hpp"
 #include "Panels/TerrainDisplayConfigPanel.hpp"
@@ -97,7 +97,7 @@ static constexpr TabMenuPage files_pages[] = {
 };
 
 static constexpr TabMenuPage map_pages[] = {
-  { N_("Orientation"), CreateMapDisplayConfigPanel },
+  { N_("Orientation"), CreateOrientationConfigPanel },
   { N_("Elements"), CreateSymbolsConfigPanel },
   { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
   { N_("Terrain"), CreateTerrainDisplayConfigPanel },

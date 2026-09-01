@@ -7,17 +7,20 @@
 #include <optional>
 #include <type_traits>
 
+struct TrailSettings;
+
 enum class PageSettingGroup : uint8_t {
   TERRAIN,
-  MAP,
+  ORIENTATION,
+  ELEMENTS,
 
   COUNT
 };
 
 /**
  * Identifiers for settings that may be overridden per page.
- * The registry in PageSetting.cpp is the catalog (terrain, then map
- * display orientation/shift settings).
+ * The registry in PageSetting.cpp is the catalog (terrain, orientation,
+ * then elements).
  */
 enum class PageSettingId : uint8_t {
   TERRAIN_ENABLE = 0,
@@ -34,13 +37,32 @@ enum class PageSettingId : uint8_t {
   MAP_SHIFT_BIAS,
   GLIDER_SCREEN_POSITION,
 
+  GROUND_TRACK,
+  FLARM_TRAFFIC,
+  FADE_TRAFFIC,
+  TRAIL_LENGTH,
+  TRAIL_DRIFT,
+  TRAIL_TYPE,
+  TRAIL_SCALED,
+  DETOUR_COST_MARKERS,
+  AIRCRAFT_SYMBOL,
+  WIND_ARROW_STYLE,
+  ONLINE_TRAFFIC_MAP_MODE,
+  DISTANCE_RINGS,
+
   COUNT
 };
 
 constexpr unsigned PageSettingTerrainCount =
   unsigned(PageSettingId::CRUISE_ORIENTATION);
-constexpr unsigned PageSettingMapCount =
-  unsigned(PageSettingId::COUNT) - PageSettingTerrainCount;
+constexpr unsigned PageSettingOrientationStart =
+  unsigned(PageSettingId::CRUISE_ORIENTATION);
+constexpr unsigned PageSettingElementsStart =
+  unsigned(PageSettingId::GROUND_TRACK);
+constexpr unsigned PageSettingOrientationCount =
+  PageSettingElementsStart - PageSettingOrientationStart;
+constexpr unsigned PageSettingElementsCount =
+  unsigned(PageSettingId::COUNT) - PageSettingElementsStart;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items
@@ -193,6 +215,14 @@ PageSettingApplyGlobalBaseline() noexcept;
  */
 void
 PageSettingApplyPageOverrides(unsigned page_index) noexcept;
+
+/**
+ * Rebuild trail pens/brushes when @p before differs from live trail
+ * settings (type or scaled width).  Trail rendering reads #MapSettings
+ * for behaviour but colours come from #TrailLook.
+ */
+void
+PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept;
 
 /** Push live MapSettings to the map (one FullRedraw). */
 void
