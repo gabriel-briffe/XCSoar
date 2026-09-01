@@ -38,6 +38,10 @@ enum class MapShiftBias : uint8_t {
   TARGET
 };
 
+[[nodiscard]]
+bool
+IsValidMapOrientation(unsigned value) noexcept;
+
 enum class DisplayGroundTrack: uint8_t {
   OFF,
   ON,

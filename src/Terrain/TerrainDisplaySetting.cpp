@@ -6,6 +6,8 @@
 #include "Interface.hpp"
 #include "MapSettings.hpp"
 #include "PageSetting.hpp"
+#include "PageSettingCatalog.hpp"
+#include "PageSettingProfile.hpp"
 #include "Profile/Current.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
@@ -22,48 +24,30 @@ namespace TerrainDisplaySetting {
 namespace {
 
 static constexpr PageSettingDescriptor catalog[] = {
-  {
+  PageSettingCatalog::TerrainBool(
     PageSettingId::TERRAIN_ENABLE,
-    PageSettingType::BOOL,
     N_("Terrain Display"),
     N_("Draw a digital elevation terrain on the map."),
     "OverrideTerrainEnable",
     ProfileKeys::DrawTerrain,
-    TerrainBundleField::TERRAIN_ENABLE,
-    ProfileWireFormat::BOOL,
-    1,
-    terrain_enable_choices,
-    0, 0, 0,
-  },
-  {
+    TerrainBundleField::TERRAIN_ENABLE),
+  PageSettingCatalog::TerrainBool(
     PageSettingId::TOPOGRAPHY_ENABLE,
-    PageSettingType::BOOL,
     N_("Topography display"),
     N_("Draw topographical features (roads, rivers, lakes etc.) on the map."),
     "OverrideTopographyEnable",
     ProfileKeys::DrawTopography,
-    TerrainBundleField::TOPOGRAPHY_ENABLE,
-    ProfileWireFormat::BOOL,
-    1,
-    terrain_enable_choices,
-    0, 0, 0,
-  },
-  {
+    TerrainBundleField::TOPOGRAPHY_ENABLE),
+  PageSettingCatalog::TerrainEnum(
     PageSettingId::TERRAIN_COLORS,
-    PageSettingType::ENUM,
     N_("Terrain colors"),
     N_("Defines the color ramp used in terrain rendering."),
     "OverrideTerrainColors",
     ProfileKeys::TerrainRamp,
     TerrainBundleField::TERRAIN_RAMP,
-    ProfileWireFormat::UNSIGNED,
-    0,
-    terrain_ramp_choices,
-    0, 0, 0,
-  },
-  {
+    ProfileWireFormat::UNSIGNED, 0, terrain_ramp_choices),
+  PageSettingCatalog::TerrainEnum(
     PageSettingId::TERRAIN_SLOPE_SHADING,
-    PageSettingType::ENUM,
     N_("Slope shading"),
     N_("The terrain can be shaded among slopes to indicate either "
        "wind direction, sun position, a geographically fixed shading from "
@@ -71,176 +55,161 @@ static constexpr PageSettingDescriptor catalog[] = {
     "OverrideTerrainSlopeShading",
     ProfileKeys::SlopeShadingType,
     TerrainBundleField::TERRAIN_SLOPE_SHADING,
-    ProfileWireFormat::UINT8_SLOPE,
-    int(SlopeShading::FIXED),
-    terrain_slope_shading_choices,
-    0, 0, 0,
-  },
-  {
+    ProfileWireFormat::UINT8_SLOPE, int(SlopeShading::FIXED),
+    terrain_slope_shading_choices),
+  PageSettingCatalog::TerrainInteger(
     PageSettingId::TERRAIN_CONTRAST,
-    PageSettingType::INTEGER,
     N_("Terrain contrast"),
     N_("Defines the amount of Phong shading in the terrain rendering. "
        "Use large values to emphasise terrain slope, smaller values if "
        "flying in steep mountains."),
     "OverrideTerrainContrast",
     ProfileKeys::TerrainContrast,
-    TerrainBundleField::TERRAIN_CONTRAST,
-    ProfileWireFormat::SHORT_PERCENT,
-    65,
-    nullptr,
-    0, 100, 5,
-  },
-  {
+    TerrainBundleField::TERRAIN_CONTRAST, 65, 0, 100, 5),
+  PageSettingCatalog::TerrainInteger(
     PageSettingId::TERRAIN_BRIGHTNESS,
-    PageSettingType::INTEGER,
     N_("Terrain brightness"),
     N_("Defines the brightness (whiteness) of the terrain rendering. "
        "This controls the average illumination of the terrain."),
     "OverrideTerrainBrightness",
     ProfileKeys::TerrainBrightness,
-    TerrainBundleField::TERRAIN_BRIGHTNESS,
-    ProfileWireFormat::SHORT_PERCENT,
-    192,
-    nullptr,
-    0, 100, 5,
-  },
-  {
+    TerrainBundleField::TERRAIN_BRIGHTNESS, 192, 0, 100, 5),
+  PageSettingCatalog::TerrainEnum(
     PageSettingId::TERRAIN_CONTOURS,
-    PageSettingType::ENUM,
     N_("Contours"),
     N_("Draw contour lines on the terrain. Contour mode "
        "controls density of contour lines."),
     "OverrideTerrainContours",
     ProfileKeys::TerrainContours,
     TerrainBundleField::TERRAIN_CONTOURS,
-    ProfileWireFormat::UINT8_CONTOURS,
-    int(Contours::OFF),
-    terrain_contours_choices,
-    0, 0, 0,
-  },
+    ProfileWireFormat::UINT8_CONTOURS, int(Contours::OFF),
+    terrain_contours_choices),
 };
 
-static_assert(ARRAY_SIZE(catalog) == unsigned(PageSettingId::COUNT),
-              "Catalog size must match PageSettingId::COUNT");
+static_assert(ARRAY_SIZE(catalog) == PageSettingTerrainCount,
+              "Catalog size must match terrain PageSettingId count");
+
+struct FieldAccessor {
+  int (*get)(const Bundle &) noexcept;
+  void (*set)(Bundle &, int) noexcept;
+};
+
+[[nodiscard]]
+int
+GetTerrainEnable(const Bundle &bundle) noexcept
+{
+  return bundle.terrain.enable ? 1 : 0;
+}
+
+void
+SetTerrainEnable(Bundle &bundle, int value) noexcept
+{
+  bundle.terrain.enable = value != 0;
+}
+
+[[nodiscard]]
+int
+GetTopographyEnable(const Bundle &bundle) noexcept
+{
+  return bundle.topography_enabled ? 1 : 0;
+}
+
+void
+SetTopographyEnable(Bundle &bundle, int value) noexcept
+{
+  bundle.topography_enabled = value != 0;
+}
+
+[[nodiscard]]
+int
+GetTerrainRamp(const Bundle &bundle) noexcept
+{
+  return int(bundle.terrain.ramp);
+}
+
+void
+SetTerrainRamp(Bundle &bundle, int value) noexcept
+{
+  bundle.terrain.ramp = unsigned(value);
+}
+
+[[nodiscard]]
+int
+GetTerrainSlopeShading(const Bundle &bundle) noexcept
+{
+  return int(bundle.terrain.slope_shading);
+}
+
+void
+SetTerrainSlopeShading(Bundle &bundle, int value) noexcept
+{
+  bundle.terrain.slope_shading = SlopeShading(value);
+}
+
+[[nodiscard]]
+int
+GetTerrainContrast(const Bundle &bundle) noexcept
+{
+  return TerrainByteToPercent(bundle.terrain.contrast);
+}
+
+void
+SetTerrainContrast(Bundle &bundle, int value) noexcept
+{
+  bundle.terrain.contrast = TerrainPercentToByte(short(value));
+}
+
+[[nodiscard]]
+int
+GetTerrainBrightness(const Bundle &bundle) noexcept
+{
+  return TerrainByteToPercent(bundle.terrain.brightness);
+}
+
+void
+SetTerrainBrightness(Bundle &bundle, int value) noexcept
+{
+  bundle.terrain.brightness = TerrainPercentToByte(short(value));
+}
+
+[[nodiscard]]
+int
+GetTerrainContours(const Bundle &bundle) noexcept
+{
+  return int(bundle.terrain.contours);
+}
+
+void
+SetTerrainContours(Bundle &bundle, int value) noexcept
+{
+  bundle.terrain.contours = Contours(value);
+}
+
+static constexpr FieldAccessor field_accessors[] = {
+  { GetTerrainEnable, SetTerrainEnable },
+  { GetTopographyEnable, SetTopographyEnable },
+  { GetTerrainRamp, SetTerrainRamp },
+  { GetTerrainSlopeShading, SetTerrainSlopeShading },
+  { GetTerrainContrast, SetTerrainContrast },
+  { GetTerrainBrightness, SetTerrainBrightness },
+  { GetTerrainContours, SetTerrainContours },
+};
+
+static_assert(ARRAY_SIZE(field_accessors) ==
+              unsigned(TerrainBundleField::COUNT),
+              "Terrain field accessors must match TerrainBundleField::COUNT");
 
 [[nodiscard]]
 int
 GetBundleField(const Bundle &bundle, TerrainBundleField field) noexcept
 {
-  switch (field) {
-  case TerrainBundleField::TERRAIN_ENABLE:
-    return bundle.terrain.enable ? 1 : 0;
-  case TerrainBundleField::TOPOGRAPHY_ENABLE:
-    return bundle.topography_enabled ? 1 : 0;
-  case TerrainBundleField::TERRAIN_RAMP:
-    return int(bundle.terrain.ramp);
-  case TerrainBundleField::TERRAIN_SLOPE_SHADING:
-    return int(bundle.terrain.slope_shading);
-  case TerrainBundleField::TERRAIN_CONTRAST:
-    return TerrainByteToPercent(bundle.terrain.contrast);
-  case TerrainBundleField::TERRAIN_BRIGHTNESS:
-    return TerrainByteToPercent(bundle.terrain.brightness);
-  case TerrainBundleField::TERRAIN_CONTOURS:
-    return int(bundle.terrain.contours);
-  }
-
-  gcc_unreachable();
+  return field_accessors[unsigned(field)].get(bundle);
 }
 
 void
 SetBundleField(Bundle &bundle, TerrainBundleField field, int value) noexcept
 {
-  switch (field) {
-  case TerrainBundleField::TERRAIN_ENABLE:
-    bundle.terrain.enable = value != 0;
-    return;
-  case TerrainBundleField::TOPOGRAPHY_ENABLE:
-    bundle.topography_enabled = value != 0;
-    return;
-  case TerrainBundleField::TERRAIN_RAMP:
-    bundle.terrain.ramp = unsigned(value);
-    return;
-  case TerrainBundleField::TERRAIN_SLOPE_SHADING:
-    bundle.terrain.slope_shading = SlopeShading(value);
-    return;
-  case TerrainBundleField::TERRAIN_CONTRAST:
-    bundle.terrain.contrast = TerrainPercentToByte(short(value));
-    return;
-  case TerrainBundleField::TERRAIN_BRIGHTNESS:
-    bundle.terrain.brightness = TerrainPercentToByte(short(value));
-    return;
-  case TerrainBundleField::TERRAIN_CONTOURS:
-    bundle.terrain.contours = Contours(value);
-    return;
-  }
-
-  gcc_unreachable();
-}
-
-[[nodiscard]]
-int
-LoadProfileValue(const PageSettingDescriptor &desc) noexcept
-{
-  switch (desc.profile_wire) {
-  case ProfileWireFormat::BOOL: {
-    bool value = desc.profile_default != 0;
-    Profile::Get(desc.profile_key, value);
-    return value ? 1 : 0;
-  }
-  case ProfileWireFormat::UNSIGNED: {
-    unsigned value = unsigned(desc.profile_default);
-    if (!Profile::Get(desc.profile_key, value) ||
-        value >= TerrainRendererSettings::NUM_RAMPS)
-      value = unsigned(desc.profile_default);
-    return int(value);
-  }
-  case ProfileWireFormat::UINT8_SLOPE: {
-    uint8_t value = uint8_t(desc.profile_default);
-    if (!Profile::Get(desc.profile_key, value) ||
-        value >= uint8_t(SlopeShading::COUNT))
-      value = uint8_t(desc.profile_default);
-    return int(value);
-  }
-  case ProfileWireFormat::UINT8_CONTOURS: {
-    uint8_t value = uint8_t(desc.profile_default);
-    if (!Profile::Get(desc.profile_key, value) ||
-        value >= uint8_t(Contours::COUNT))
-      value = uint8_t(desc.profile_default);
-    return int(value);
-  }
-  case ProfileWireFormat::SHORT_PERCENT: {
-    short value = short(desc.profile_default);
-    Profile::Get(desc.profile_key, value);
-    return TerrainByteToPercent(value);
-  }
-  }
-
-  gcc_unreachable();
-}
-
-void
-SaveProfileValue(const PageSettingDescriptor &desc, int value) noexcept
-{
-  switch (desc.profile_wire) {
-  case ProfileWireFormat::BOOL:
-    Profile::Set(desc.profile_key, value != 0);
-    return;
-  case ProfileWireFormat::UNSIGNED:
-    Profile::Set(desc.profile_key, unsigned(value));
-    return;
-  case ProfileWireFormat::UINT8_SLOPE:
-    Profile::SetEnum(desc.profile_key, SlopeShading(value));
-    return;
-  case ProfileWireFormat::UINT8_CONTOURS:
-    Profile::SetEnum(desc.profile_key, Contours(value));
-    return;
-  case ProfileWireFormat::SHORT_PERCENT:
-    Profile::Set(desc.profile_key, TerrainPercentToByte(short(value)));
-    return;
-  }
-
-  gcc_unreachable();
+  field_accessors[unsigned(field)].set(bundle, value);
 }
 
 } // namespace
@@ -248,71 +217,46 @@ SaveProfileValue(const PageSettingDescriptor &desc, int value) noexcept
 unsigned
 Count() noexcept
 {
-  return unsigned(PageSettingId::COUNT);
+  return PageSettingTerrainCount;
 }
 
 const PageSettingDescriptor &
 Get(PageSettingId id) noexcept
 {
-  assert(unsigned(id) < unsigned(PageSettingId::COUNT));
+  assert(unsigned(id) < PageSettingTerrainCount);
   return catalog[unsigned(id)];
 }
 
 const PageSettingDescriptor &
 Get(unsigned index) noexcept
 {
-  assert(index < unsigned(PageSettingId::COUNT));
+  assert(index < PageSettingTerrainCount);
   return catalog[index];
 }
 
 bool
 IsValidValue(PageSettingId id, int value) noexcept
 {
-  if (value == PageSettingOverrides::INHERIT)
-    return true;
-
-  const auto &desc = Get(id);
-
-  if (desc.type == PageSettingType::INTEGER) {
-    if (value < desc.int_min || value > desc.int_max)
-      return false;
-    if (desc.int_step <= 0)
-      return true;
-    return (value - desc.int_min) % desc.int_step == 0;
-  }
-
-  assert(desc.choices != nullptr);
-  for (const StaticEnumChoice *c = desc.choices;
-       c->display_string != nullptr; ++c)
-    if (int(c->id) == value)
-      return true;
-  return false;
+  return PageSettingCatalog::IsValidValue(Get(id), value);
 }
 
 int
 GetLive(PageSettingId id) noexcept
 {
-  Bundle bundle;
-  ReadLive(bundle);
-  return GetValue(bundle, id);
+  return PageSettingCatalog::GetLive<Bundle>(id, ReadLive, GetValue);
 }
 
 void
 SetLive(PageSettingId id, int value) noexcept
 {
-  if (!IsValidValue(id, value))
-    return;
-
-  Bundle bundle;
-  ReadLive(bundle);
-  SetValue(bundle, id, value);
-  ApplyLive(bundle);
+  PageSettingCatalog::SetLive<Bundle>(id, value, ReadLive, ApplyLive,
+                                      SetValue, IsValidValue);
 }
 
 int
 LoadGlobal(PageSettingId id) noexcept
 {
-  return LoadProfileValue(Get(id));
+  return PageSettingProfile::Load(Get(id));
 }
 
 void
@@ -321,13 +265,13 @@ SaveGlobal(PageSettingId id, int value) noexcept
   if (!IsValidValue(id, value))
     return;
 
-  SaveProfileValue(Get(id), value);
+  PageSettingProfile::Save(Get(id), value);
 }
 
 int
 GetValue(const Bundle &bundle, PageSettingId id) noexcept
 {
-  return GetBundleField(bundle, Get(id).bundle_field);
+  return GetBundleField(bundle, Get(id).bundle_field.terrain);
 }
 
 void
@@ -336,7 +280,7 @@ SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
   if (!IsValidValue(id, value))
     return;
 
-  SetBundleField(bundle, Get(id).bundle_field, value);
+  SetBundleField(bundle, Get(id).bundle_field.terrain, value);
 }
 
 void

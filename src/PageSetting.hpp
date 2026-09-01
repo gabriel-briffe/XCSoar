@@ -7,10 +7,17 @@
 #include <optional>
 #include <type_traits>
 
+enum class PageSettingGroup : uint8_t {
+  TERRAIN,
+  MAP,
+
+  COUNT
+};
+
 /**
  * Identifiers for settings that may be overridden per page.
- * The registry in PageSetting.cpp is the catalog (Map Display →
- * Terrain pilot group first).
+ * The registry in PageSetting.cpp is the catalog (terrain, then map
+ * display orientation/shift settings).
  */
 enum class PageSettingId : uint8_t {
   TERRAIN_ENABLE = 0,
@@ -21,8 +28,19 @@ enum class PageSettingId : uint8_t {
   TERRAIN_BRIGHTNESS,
   TERRAIN_CONTOURS,
 
+  CRUISE_ORIENTATION,
+  CIRCLING_ORIENTATION,
+  CIRCLING_ZOOM,
+  MAP_SHIFT_BIAS,
+  GLIDER_SCREEN_POSITION,
+
   COUNT
 };
+
+constexpr unsigned PageSettingTerrainCount =
+  unsigned(PageSettingId::CRUISE_ORIENTATION);
+constexpr unsigned PageSettingMapCount =
+  unsigned(PageSettingId::COUNT) - PageSettingTerrainCount;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items
@@ -118,6 +136,14 @@ Get(unsigned index) noexcept;
 [[nodiscard]]
 bool
 IsValidValue(const PageSettingDescriptor &desc, int value) noexcept;
+
+[[nodiscard]]
+unsigned
+Count(PageSettingGroup group) noexcept;
+
+[[nodiscard]]
+const PageSettingDescriptor &
+Get(PageSettingGroup group, unsigned index) noexcept;
 
 } // namespace PageSettingRegistry
 

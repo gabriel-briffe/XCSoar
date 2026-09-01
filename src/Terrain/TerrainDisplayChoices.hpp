@@ -63,8 +63,8 @@ static constexpr StaticEnumChoice terrain_contours_choices[] = {
   nullptr
 };
 
-/** On/Off for terrain (and similar) boolean page overrides. */
-static constexpr StaticEnumChoice terrain_enable_choices[] = {
+/** On/Off for boolean page overrides and similar toggles. */
+static constexpr StaticEnumChoice enabled_disabled_choices[] = {
   { 0, N_("Off") },
   { 1, N_("On") },
   nullptr

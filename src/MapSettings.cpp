@@ -3,6 +3,27 @@
 
 #include "MapSettings.hpp"
 
+namespace {
+
+static constexpr unsigned valid_map_orientations[] = {
+  unsigned(MapOrientation::TRACK_UP),
+  unsigned(MapOrientation::NORTH_UP),
+  unsigned(MapOrientation::TARGET_UP),
+  unsigned(MapOrientation::HEADING_UP),
+  unsigned(MapOrientation::WIND_UP),
+};
+
+} // namespace
+
+bool
+IsValidMapOrientation(unsigned value) noexcept
+{
+  for (unsigned orientation : valid_map_orientations)
+    if (value == orientation)
+      return true;
+  return false;
+}
+
 void
 MapItemListSettings::SetDefaults() noexcept
 {

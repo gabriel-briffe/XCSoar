@@ -6,8 +6,8 @@
 #include "ActionInterface.hpp"
 #include "Interface.hpp"
 #include "LogFile.hpp"
+#include "PageSettingModule.hpp"
 #include "PageSettings.hpp"
-#include "Terrain/TerrainDisplaySetting.hpp"
 #include "UISettings.hpp"
 
 #include <cassert>
@@ -82,25 +82,51 @@ namespace PageSettingRegistry {
 unsigned
 Count() noexcept
 {
-  return TerrainDisplaySetting::Count();
+  unsigned total = 0;
+  for (unsigned i = 0; i < PageSettingModuleRegistry::Count(); ++i)
+    total += PageSettingModuleRegistry::Get(i).count();
+  return total;
 }
 
 const PageSettingDescriptor &
 Get(PageSettingId id) noexcept
 {
-  return TerrainDisplaySetting::Get(id);
+  return PageSettingModuleRegistry::GetById(id).get_by_id(id);
 }
 
 const PageSettingDescriptor &
 Get(unsigned index) noexcept
 {
-  return TerrainDisplaySetting::Get(index);
+  unsigned offset = 0;
+  for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
+    const auto &module = PageSettingModuleRegistry::Get(m);
+    const unsigned n = module.count();
+    if (index < offset + n)
+      return module.get_by_index(index - offset);
+    offset += n;
+  }
+
+  assert(index < Count());
+  gcc_unreachable();
 }
 
 bool
 IsValidValue(const PageSettingDescriptor &desc, int value) noexcept
 {
-  return TerrainDisplaySetting::IsValidValue(desc.id, value);
+  return PageSettingModuleRegistry::GetById(desc.id).is_valid_value(desc.id,
+                                                                  value);
+}
+
+unsigned
+Count(PageSettingGroup group) noexcept
+{
+  return PageSettingModuleRegistry::Get(group).count();
+}
+
+const PageSettingDescriptor &
+Get(PageSettingGroup group, unsigned index) noexcept
+{
+  return PageSettingModuleRegistry::Get(group).get_by_index(index);
 }
 
 } // namespace PageSettingRegistry
@@ -114,7 +140,7 @@ PageSettingNotifyLive() noexcept
 int
 PageSettingGet(PageSettingId id) noexcept
 {
-  return TerrainDisplaySetting::LoadGlobal(id);
+  return PageSettingModuleRegistry::GetById(id).load_global(id);
 }
 
 int
@@ -128,32 +154,33 @@ PageSettingGet(PageSettingId id, unsigned page_index) noexcept
       return *value;
   }
 
-  return TerrainDisplaySetting::LoadGlobal(id);
+  return PageSettingGet(id);
 }
 
 void
 PageSettingSet(PageSettingId id, int value) noexcept
 {
-  if (!TerrainDisplaySetting::IsValidValue(id, value)) {
+  const auto &module = PageSettingModuleRegistry::GetById(id);
+  if (!module.is_valid_value(id, value)) {
     LogFmt("perPage: Set global reject id={} value={} (invalid)",
            unsigned(id), value);
     return;
   }
 
   if (value == PageSettingOverrides::INHERIT)
-    value = TerrainDisplaySetting::LoadGlobal(id);
+    value = module.load_global(id);
 
-  const auto &desc = TerrainDisplaySetting::Get(id);
+  const auto &desc = module.get_by_id(id);
   LogFmt("perPage: Set global '{}' value={}", desc.label, value);
-  TerrainDisplaySetting::SetLive(id, value);
-  TerrainDisplaySetting::SaveGlobal(id, value);
+  module.set_live(id, value);
+  module.save_global(id, value);
   PageSettingNotifyLive();
 }
 
 void
 PageSettingSet(PageSettingId id, int value, unsigned page_index) noexcept
 {
-  if (!TerrainDisplaySetting::IsValidValue(id, value)) {
+  if (!PageSettingModuleRegistry::GetById(id).is_valid_value(id, value)) {
     LogFmt("perPage: Set page reject index={} id={} value={} (invalid)",
            page_index, unsigned(id), value);
     return;
@@ -166,7 +193,7 @@ PageSettingSet(PageSettingId id, int value, unsigned page_index) noexcept
     return;
   }
 
-  const auto &desc = TerrainDisplaySetting::Get(id);
+  const auto &desc = PageSettingModuleRegistry::GetById(id).get_by_id(id);
   LogFmt("perPage: Set page={} '{}' value={}",
          page_index, desc.label, value);
   pages.overrides[page_index].SetValue(id, value);
@@ -187,14 +214,17 @@ PageSettingApplyGlobalBaseline() noexcept
 {
   LogFmt("perPage: ApplyGlobalBaseline ({} settings)",
          PageSettingRegistry::Count());
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
-    const auto id = PageSettingId(i);
-    const auto &desc = TerrainDisplaySetting::Get(id);
-    const int value = TerrainDisplaySetting::LoadGlobal(id);
-    const int live = TerrainDisplaySetting::GetLive(id);
-    LogFmt("perPage:   baseline '{}' = {} (live was {})",
-           desc.label, value, live);
-    TerrainDisplaySetting::SetLive(id, value);
+  for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
+    const auto &module = PageSettingModuleRegistry::Get(m);
+    for (unsigned i = 0; i < module.count(); ++i) {
+      const auto &desc = module.get_by_index(i);
+      const auto id = desc.id;
+      const int value = module.load_global(id);
+      const int live = module.get_live(id);
+      LogFmt("perPage:   baseline '{}' = {} (live was {})",
+             desc.label, value, live);
+      module.set_live(id, value);
+    }
   }
 }
 
@@ -214,20 +244,21 @@ PageSettingApplyPageOverrides(unsigned page_index) noexcept
 
   for (unsigned i = 0; i < overrides.n_items; ++i) {
     const auto &item = overrides.items[i];
-    const auto &desc = TerrainDisplaySetting::Get(item.id);
+    const auto &module = PageSettingModuleRegistry::GetById(item.id);
+    const auto &desc = module.get_by_id(item.id);
 
     if (item.value == PageSettingOverrides::INHERIT) {
       LogFmt("perPage:   override '{}' inherit (skip)", desc.label);
       continue;
     }
 
-    if (!TerrainDisplaySetting::IsValidValue(item.id, item.value)) {
+    if (!module.is_valid_value(item.id, item.value)) {
       LogFmt("perPage:   override '{}' value={} invalid (skip)",
              desc.label, item.value);
       continue;
     }
 
     LogFmt("perPage:   override '{}' = {}", desc.label, item.value);
-    TerrainDisplaySetting::SetLive(item.id, item.value);
+    module.set_live(item.id, item.value);
   }
 }

@@ -17,7 +17,8 @@
 #include "Form/DataField/Listener.hpp"
 #include "PageActions.hpp"
 #include "PageSetting.hpp"
-#include "PageSettingDescriptor.hpp"
+#include "PageSettingCatalog.hpp"
+#include "PageSettingModule.hpp"
 #include "Language/Language.hpp"
 #include "Profile/PageProfile.hpp"
 #include "Profile/Current.hpp"
@@ -677,28 +678,12 @@ void
 PageCustomSettingsWidget::FillControl(PageSettingId id,
                                       unsigned control) noexcept
 {
-  auto &df = (DataFieldEnum &)GetDataField(control);
-  df.ClearChoices();
-
   const auto &desc = PageSettingRegistry::Get(id);
-  if (desc.type == PageSettingType::INTEGER) {
-    char label[16];
-    for (int v = desc.int_min; v <= desc.int_max; v += desc.int_step) {
-      StringFormat(label, sizeof(label), "%d %%", v);
-      df.AddChoice(unsigned(v), label);
-    }
-  } else {
-    assert(desc.choices != nullptr);
-    for (const StaticEnumChoice *c = desc.choices;
-         c->display_string != nullptr; ++c)
-      df.AddChoice(c->id, gettext(c->display_string), nullptr,
-                   c->help != nullptr ? gettext(c->help) : nullptr);
-  }
-
   const int *v = overrides.FindValue(id);
   assert(v != nullptr);
 
-  df.SetValue(unsigned(*v));
+  auto &df = (DataFieldEnum &)GetDataField(control);
+  PageSettingCatalog::FillDataFieldEnum(df, desc, *v);
   GetControl(control).RefreshDisplay();
 }
 
@@ -707,17 +692,100 @@ PageCustomSettingsWidget::UpdateActionButtons() noexcept
 {
   if (add_button != nullptr) {
     bool can_add = false;
-    for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i)
-      if (!overrides.Contains(PageSettingId(i))) {
-        can_add = true;
-        break;
+    for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
+      const auto &module = PageSettingModuleRegistry::Get(m);
+      for (unsigned i = 0; i < module.count(); ++i) {
+        const auto &desc = module.get_by_index(i);
+        if (!overrides.Contains(desc.id)) {
+          can_add = true;
+          break;
+        }
       }
+      if (can_add)
+        break;
+    }
     add_button->SetEnabled(can_add);
   }
 
   if (delete_button != nullptr)
     delete_button->SetEnabled(selected_control >= 0 &&
-                              overrides.Contains(PageSettingId(selected_control)));
+                              overrides.Contains(
+                                PageSettingRegistry::Get(unsigned(selected_control)).id));
+}
+
+namespace {
+
+[[nodiscard]]
+bool
+ModuleHasAddable(const PageSettingModule &module,
+                 const PageSettingOverrides &overrides) noexcept
+{
+  for (unsigned i = 0; i < module.count(); ++i) {
+    const auto &desc = module.get_by_index(i);
+    if (!overrides.Contains(desc.id))
+      return true;
+  }
+  return false;
+}
+
+} // namespace
+
+void
+PageCustomSettingsWidget::OnAddClicked() noexcept
+{
+  ComboList group_list;
+  StaticArray<PageSettingGroup, unsigned(PageSettingGroup::COUNT)> groups;
+  for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
+    const auto &module = PageSettingModuleRegistry::Get(m);
+    if (!ModuleHasAddable(module, overrides))
+      continue;
+    group_list.Append(int(module.group), gettext(module.label));
+    groups.append(module.group);
+  }
+
+  if (group_list.empty())
+    return;
+
+  PageSettingGroup setting_group;
+  if (groups.size() == 1) {
+    setting_group = groups[0];
+  } else {
+    const int group_result = ComboPicker(_("Add"), group_list, nullptr);
+    if (group_result < 0 || unsigned(group_result) >= groups.size())
+      return;
+    setting_group = groups[group_result];
+  }
+
+  const auto &module = PageSettingModuleRegistry::Get(setting_group);
+
+  ComboList list;
+  StaticArray<PageSettingId, unsigned(PageSettingId::COUNT)> ids;
+  for (unsigned i = 0; i < module.count(); ++i) {
+    const auto &desc = module.get_by_index(i);
+    if (overrides.Contains(desc.id))
+      continue;
+    list.Append(ids.size(), gettext(desc.label));
+    ids.append(desc.id);
+  }
+
+  if (list.empty())
+    return;
+
+  StaticString<64> caption;
+  caption.Format("%s: %s", _("Add"), gettext(module.label));
+
+  const int result = ComboPicker(caption, list, nullptr);
+  if (result < 0 || unsigned(result) >= ids.size())
+    return;
+
+  const auto id = ids[result];
+  overrides.Add(id, PageSettingGet(id));
+  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i)
+    if (PageSettingRegistry::Get(i).id == id) {
+      selected_control = int(i);
+      break;
+    }
+  SyncRows();
 }
 
 void
@@ -737,7 +805,7 @@ void
 PageCustomSettingsWidget::SyncRows() noexcept
 {
   for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
-    const auto id = PageSettingId(i);
+    const auto id = PageSettingRegistry::Get(i).id;
     const bool present = overrides.Contains(id);
     SetRowAvailable(i, present);
     if (present)
@@ -746,7 +814,7 @@ PageCustomSettingsWidget::SyncRows() noexcept
   }
 
   if (selected_control >= 0 &&
-      !overrides.Contains(PageSettingId(selected_control)))
+      !overrides.Contains(PageSettingRegistry::Get(unsigned(selected_control)).id))
     selected_control = -1;
 
   UpdateLayout();
@@ -763,39 +831,12 @@ PageCustomSettingsWidget::SyncRows() noexcept
 }
 
 void
-PageCustomSettingsWidget::OnAddClicked() noexcept
-{
-  ComboList list;
-  StaticArray<PageSettingId, unsigned(PageSettingId::COUNT)> ids;
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
-    const auto id = PageSettingId(i);
-    if (overrides.Contains(id))
-      continue;
-    const auto &desc = PageSettingRegistry::Get(id);
-    list.Append(ids.size(), gettext(desc.label));
-    ids.append(id);
-  }
-
-  if (list.empty())
-    return;
-
-  const int result = ComboPicker(_("Add"), list, nullptr);
-  if (result < 0 || unsigned(result) >= ids.size())
-    return;
-
-  const auto id = ids[result];
-  overrides.Add(id, PageSettingGet(id));
-  selected_control = int(id);
-  SyncRows();
-}
-
-void
 PageCustomSettingsWidget::OnDeleteClicked() noexcept
 {
   if (selected_control < 0)
     return;
 
-  const auto id = PageSettingId(selected_control);
+  const auto id = PageSettingRegistry::Get(unsigned(selected_control)).id;
   if (!overrides.Contains(id))
     return;
 
@@ -833,7 +874,7 @@ PageCustomSettingsWidget::OnModified(DataField &df) noexcept
 
     SelectControl(i);
 
-    const auto id = PageSettingId(i);
+    const auto id = PageSettingRegistry::Get(i).id;
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
     overrides.SetValue(id, int(dfe.GetValue()));
     return;

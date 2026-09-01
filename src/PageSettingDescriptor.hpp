@@ -6,6 +6,7 @@
 #include "PageSetting.hpp"
 #include "Form/DataField/Enum.hpp"
 
+#include <cassert>
 #include <string_view>
 
 /**
@@ -27,6 +28,28 @@ enum class TerrainBundleField : uint8_t {
   TERRAIN_CONTRAST,
   TERRAIN_BRIGHTNESS,
   TERRAIN_CONTOURS,
+
+  COUNT
+};
+
+/** Field within #MapDisplaySetting::Bundle. */
+enum class MapBundleField : uint8_t {
+  CRUISE_ORIENTATION,
+  CIRCLING_ORIENTATION,
+  CIRCLING_ZOOM,
+  MAP_SHIFT_BIAS,
+  GLIDER_SCREEN_POSITION,
+
+  COUNT
+};
+
+/**
+ * Active bundle field for a catalog row.  #PageSettingGroup selects which
+ * member is valid; add a member here when introducing a new settings group.
+ */
+union PageSettingBundleField {
+  TerrainBundleField terrain;
+  MapBundleField map;
 };
 
 /** How a catalog value is stored in the profile file. */
@@ -36,11 +59,20 @@ enum class ProfileWireFormat : uint8_t {
   UINT8_SLOPE,
   UINT8_CONTOURS,
   SHORT_PERCENT,
+  UINT8_MAP_ORIENTATION,
+  UINT8_MAP_SHIFT_BIAS,
+  INT,
+
+  COUNT
 };
 
 /**
  * One catalog entry: UI metadata and profile keys.
- * Get/set logic lives in TerrainDisplaySetting.
+ * Get/set logic lives in each group's *DisplaySetting module.
+ *
+ * Adding a group: extend #PageSettingGroup and #PageSettingBundleField,
+ * add #PageSettingId values, implement *DisplaySetting.cpp catalog rows
+ * using {.terrain = ...} or {.map = ...} (or the new union member).
  */
 struct PageSettingDescriptor {
   PageSettingId id;
@@ -62,7 +94,7 @@ struct PageSettingDescriptor {
   /** Global profile key (Map Display → profile). */
   std::string_view profile_key;
 
-  TerrainBundleField bundle_field;
+  PageSettingBundleField bundle_field;
 
   ProfileWireFormat profile_wire;
 

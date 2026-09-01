@@ -11,22 +11,7 @@
 
 #include <algorithm> // for std::clamp()
 
-static bool
-IsValidMapOrientation(unsigned value)
-{
-  switch (value) {
-  case (unsigned)MapOrientation::TRACK_UP:
-  case (unsigned)MapOrientation::NORTH_UP:
-  case (unsigned)MapOrientation::TARGET_UP:
-  case (unsigned)MapOrientation::HEADING_UP:
-  case (unsigned)MapOrientation::WIND_UP:
-    return true;
-  }
-
-  return false;
-}
-
-static void
+void
 Load(const ProfileMap &map, FAITriangleSettings &settings)
 {
   FAITriangleSettings::Threshold threshold;
