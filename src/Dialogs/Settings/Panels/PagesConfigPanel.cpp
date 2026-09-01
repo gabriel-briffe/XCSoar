@@ -50,8 +50,6 @@
 #undef DELETE
 #endif
 
-static constexpr unsigned CHOICE_GLOBAL = 0xffff;
-
 class PageCustomSettingsWidget;
 
 static void
@@ -681,7 +679,6 @@ PageCustomSettingsWidget::FillControl(PageSettingId id,
 {
   auto &df = (DataFieldEnum &)GetDataField(control);
   df.ClearChoices();
-  df.AddChoice(CHOICE_GLOBAL, _("Global setting"));
 
   const auto &desc = PageSettingRegistry::Get(id);
   if (desc.type == PageSettingType::INTEGER) {
@@ -698,12 +695,10 @@ PageCustomSettingsWidget::FillControl(PageSettingId id,
                    c->help != nullptr ? gettext(c->help) : nullptr);
   }
 
-  unsigned selected = CHOICE_GLOBAL;
-  if (const int *v = overrides.FindValue(id); v != nullptr &&
-      *v != PageSettingOverrides::INHERIT)
-    selected = unsigned(*v);
+  const int *v = overrides.FindValue(id);
+  assert(v != nullptr);
 
-  df.SetValue(selected);
+  df.SetValue(unsigned(*v));
   GetControl(control).RefreshDisplay();
 }
 
@@ -789,7 +784,7 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
     return;
 
   const auto id = ids[result];
-  overrides.Add(id, PageSettingOverrides::INHERIT);
+  overrides.Add(id, PageSettingGet(id));
   selected_control = int(id);
   SyncRows();
 }
@@ -817,7 +812,7 @@ PageCustomSettingsWidget::Prepare(ContainerWindow &parent,
 
   for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
     const auto &desc = PageSettingRegistry::Get(i);
-    AddEnum(gettext(desc.label), gettext(desc.help), this);
+    AddEnum(gettext(desc.label), gettext(desc.help_global), this);
     auto &control = GetControl(i);
     control.GetDataField()->EnableItemHelp(true);
     control.SetCaptionClickSelects(true, [this, i](){
@@ -840,11 +835,7 @@ PageCustomSettingsWidget::OnModified(DataField &df) noexcept
 
     const auto id = PageSettingId(i);
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    const unsigned choice = dfe.GetValue();
-    if (choice == CHOICE_GLOBAL)
-      overrides.SetValue(id, PageSettingOverrides::INHERIT);
-    else
-      overrides.SetValue(id, int(choice));
+    overrides.SetValue(id, int(dfe.GetValue()));
     return;
   }
 

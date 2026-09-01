@@ -6,6 +6,8 @@
 #include "PageSetting.hpp"
 #include "Form/DataField/Enum.hpp"
 
+#include <string_view>
+
 /**
  * Value shape for a catalog setting.  Storage remains #int
  * (bool 0/1, enum choice id, or integer range value).
@@ -16,9 +18,29 @@ enum class PageSettingType : uint8_t {
   INTEGER,
 };
 
+/** Field within #TerrainDisplaySetting::Bundle. */
+enum class TerrainBundleField : uint8_t {
+  TERRAIN_ENABLE,
+  TOPOGRAPHY_ENABLE,
+  TERRAIN_RAMP,
+  TERRAIN_SLOPE_SHADING,
+  TERRAIN_CONTRAST,
+  TERRAIN_BRIGHTNESS,
+  TERRAIN_CONTOURS,
+};
+
+/** How a catalog value is stored in the profile file. */
+enum class ProfileWireFormat : uint8_t {
+  BOOL,
+  UNSIGNED,
+  UINT8_SLOPE,
+  UINT8_CONTOURS,
+  SHORT_PERCENT,
+};
+
 /**
- * One catalog entry: UI, profile keys, and live get/set.
- * Map Display → Terrain is the pilot group; extend by adding rows.
+ * One catalog entry: UI metadata and profile keys.
+ * Get/set logic lives in TerrainDisplaySetting.
  */
 struct PageSettingDescriptor {
   PageSettingId id;
@@ -28,8 +50,8 @@ struct PageSettingDescriptor {
   /** UI label (N_(); gettext when showing). */
   const char *label;
 
-  /** Short help for the Pages editor (N_()). */
-  const char *help;
+  /** Help text for Config and Pages editors (N_()). */
+  const char *help_global;
 
   /**
    * Profile key suffix after "PageN" for per-page overrides
@@ -37,9 +59,22 @@ struct PageSettingDescriptor {
    */
   const char *override_key;
 
+  /** Global profile key (Map Display → profile). */
+  std::string_view profile_key;
+
+  TerrainBundleField bundle_field;
+
+  ProfileWireFormat profile_wire;
+
   /**
-   * Choice list for ENUM/BOOL editors.  Pages UI prepends Global /
-   * Remove.  nullptr for INTEGER (range filled from int_*).
+   * Default when the profile key is missing: 0/1 for #ProfileWireFormat::BOOL,
+   * choice id for enums, byte 0..255 for #ProfileWireFormat::SHORT_PERCENT.
+   */
+  int profile_default;
+
+  /**
+   * Choice list for ENUM/BOOL editors.  nullptr for INTEGER (range
+   * filled from int_*).
    */
   const StaticEnumChoice *choices;
 
@@ -47,19 +82,4 @@ struct PageSettingDescriptor {
   int int_min;
   int int_max;
   int int_step;
-
-  /** Read live MapSettings (or equivalent). */
-  int (*GetLive)() noexcept;
-
-  /**
-   * Write live MapSettings only — no profile, no SendMapSettings.
-   * Callers batch a single notify after apply.
-   */
-  void (*SetLive)(int value) noexcept;
-
-  /** Persist the global profile value. */
-  void (*SaveGlobalProfile)(int value) noexcept;
-
-  /** Load the global profile value (or a safe default). */
-  int (*LoadGlobalProfile)() noexcept;
 };

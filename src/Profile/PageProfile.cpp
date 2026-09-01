@@ -144,7 +144,8 @@ LoadOverrides(const ProfileMap &map, PageSettingOverrides &overrides,
       continue;
 
     if (!PageSettingRegistry::IsValidValue(desc, value))
-      value = PageSettingOverrides::INHERIT;
+      continue;
+
     overrides.Add(desc.id, value);
   }
 }

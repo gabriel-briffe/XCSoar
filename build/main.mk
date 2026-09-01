@@ -355,6 +355,7 @@ XCSOAR_SOURCES := \
 	$(SRC)/Input/TaskEventObserver.cpp \
 	$(SRC)/PageSettings.cpp \
 	$(SRC)/PageSetting.cpp \
+	$(SRC)/Terrain/TerrainDisplaySetting.cpp \
 	$(SRC)/PageOverlayTitle.cpp \
 	$(SRC)/PageState.cpp \
 	$(SRC)/PageActions.cpp \

@@ -2,14 +2,11 @@
 // Copyright The XCSoar Project
 
 #include "TerrainDisplayConfigPanel.hpp"
-#include "Profile/Keys.hpp"
-#include "Profile/Profile.hpp"
+#include "Terrain/TerrainDisplaySetting.hpp"
 #include "Form/DataField/Listener.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Form/DataField/Boolean.hpp"
 #include "Language/Language.hpp"
-#include "MapSettings.hpp"
-#include "Terrain/TerrainDisplayChoices.hpp"
 #include "Terrain/TerrainRenderer.hpp"
 #include "Topography/TopographyRenderer.hpp"
 #include "Topography/TopographyStore.hpp"
@@ -55,9 +52,6 @@ public:
      topography_enabled(_topography_enabled)
   {
 #ifdef ENABLE_OPENGL
-    /* always render at full resolution in the preview;
-       the default idle-based quantisation would produce a
-       blocky image while the user interacts with the dialog */
     renderer.SetQuantisationPixels(1);
 #endif
     if (topo_store != nullptr)
@@ -82,41 +76,62 @@ public:
 class TerrainDisplayConfigPanel final
   : public RowFormWidget, DataFieldListener {
 
-  bool have_terrain_preview;
+  bool have_terrain_preview = false;
 
-protected:
-  /** Current dialog values (may be previewed live). */
-  TerrainRendererSettings terrain_settings;
+  /** Working copy edited by the form controls. */
+  TerrainDisplaySetting::Bundle bundle;
 
-  /** Values when the panel was opened; used so Save() does not write
-      unchanged defaults into a profile that lacked those keys (#1793). */
-  TerrainRendererSettings initial_terrain_settings;
+  /** Snapshot at panel open (#1793: omit unchanged profile keys). */
+  TerrainDisplaySetting::Bundle initial_bundle;
+
+  void SyncBundleFromForm() noexcept;
+  void ApplyBundleLive() noexcept;
+  void UpdateTerrainPreview() noexcept;
+  void ShowTerrainControls() noexcept;
 
 public:
   TerrainDisplayConfigPanel()
     :RowFormWidget(UIGlobals::GetDialogLook()) {}
 
-  void ShowTerrainControls();
-
-  /* methods from Widget */
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
   bool Save(bool &changed) noexcept override;
 
-protected:
-  void UpdateTerrainPreview();
-
-  /* methods from DataFieldListener */
+private:
   void OnModified(DataField &df) noexcept override;
 };
 
-/** XXX this hack is needed because the form callbacks don't get a
-    context pointer - please refactor! */
-static TerrainDisplayConfigPanel *instance;
+void
+TerrainDisplayConfigPanel::SyncBundleFromForm() noexcept
+{
+  using Id = PageSettingId;
+
+  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_ENABLE,
+                                  GetValueBoolean(EnableTerrain) ? 1 : 0);
+  TerrainDisplaySetting::SetValue(bundle, Id::TOPOGRAPHY_ENABLE,
+                                  GetValueBoolean(EnableTopography) ? 1 : 0);
+  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_COLORS,
+                                  int(GetValueEnum(TerrainColors)));
+  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_SLOPE_SHADING,
+                                  int(GetValueEnum(TerrainSlopeShading)));
+  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_CONTRAST,
+                                  GetValueInteger(TerrainContrast));
+  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_BRIGHTNESS,
+                                  GetValueInteger(TerrainBrightness));
+  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_CONTOURS,
+                                  int(GetValueEnum(TerrainContours)));
+}
 
 void
-TerrainDisplayConfigPanel::ShowTerrainControls()
+TerrainDisplayConfigPanel::ApplyBundleLive() noexcept
 {
-  bool show = terrain_settings.enable;
+  TerrainDisplaySetting::ApplyLive(bundle);
+  ActionInterface::SendMapSettings(true);
+}
+
+void
+TerrainDisplayConfigPanel::ShowTerrainControls() noexcept
+{
+  const bool show = bundle.terrain.enable;
   SetRowVisible(TerrainColors, show);
   SetRowVisible(TerrainSlopeShading, show);
   SetRowVisible(TerrainContrast, show);
@@ -128,62 +143,44 @@ TerrainDisplayConfigPanel::ShowTerrainControls()
   }
 }
 
-static short
-ByteToPercent(short byte)
-{
-  return TerrainByteToPercent(byte);
-}
-
-static short
-PercentToByte(short percent)
-{
-  return TerrainPercentToByte(percent);
-}
-
 void
-TerrainDisplayConfigPanel::UpdateTerrainPreview()
+TerrainDisplayConfigPanel::UpdateTerrainPreview() noexcept
 {
-  terrain_settings.slope_shading = (SlopeShading)
-    GetValueEnum(TerrainSlopeShading);
-  terrain_settings.contrast = PercentToByte(GetValueInteger(TerrainContrast));
-  terrain_settings.brightness =
-    PercentToByte(GetValueInteger(TerrainBrightness));
-  terrain_settings.ramp = GetValueEnum(TerrainColors);
-  terrain_settings.contours = (Contours)
-    GetValueEnum(TerrainContours);
+  if (!have_terrain_preview)
+    return;
 
-  // Invalidate terrain preview
-  if (have_terrain_preview)
-    ((TerrainPreviewWindow &)GetRow(TerrainPreview)).SetSettings(terrain_settings);
+  ((TerrainPreviewWindow &)GetRow(TerrainPreview))
+    .SetSettings(bundle.terrain);
 }
 
 void
 TerrainDisplayConfigPanel::OnModified(DataField &df) noexcept
 {
+  SyncBundleFromForm();
+
   if (IsDataField(EnableTerrain, df)) {
-    const DataFieldBoolean &dfb = (const DataFieldBoolean &)df;
-    const bool terrain_enabled = dfb.GetValue();
-    terrain_settings.enable = terrain_enabled;
-    CommonInterface::SetMapSettings().terrain.enable = terrain_enabled;
-    Message::AddMessage(terrain_enabled
+    Message::AddMessage(bundle.terrain.enable
                         ? _("Terrain shown")
                         : _("Terrain hidden"));
-    ActionInterface::SendMapSettings(true);
+    ApplyBundleLive();
     ShowTerrainControls();
-  } else if (IsDataField(EnableTopography, df)) {
-    const DataFieldBoolean &dfb = (const DataFieldBoolean &)df;
-    const bool topography_enabled = dfb.GetValue();
-    CommonInterface::SetMapSettings().topography_enabled = topography_enabled;
-    Message::AddMessage(topography_enabled
+    UpdateTerrainPreview();
+    return;
+  }
+
+  if (IsDataField(EnableTopography, df)) {
+    Message::AddMessage(bundle.topography_enabled
                         ? _("Topography shown")
                         : _("Topography hidden"));
-    ActionInterface::SendMapSettings(true);
+    ApplyBundleLive();
     if (have_terrain_preview)
       ((TerrainPreviewWindow &)GetRow(TerrainPreview))
-        .SetTopographyEnabled(topography_enabled);
-  } else {
-    UpdateTerrainPreview();
+        .SetTopographyEnabled(bundle.topography_enabled);
+    return;
   }
+
+  ApplyBundleLive();
+  UpdateTerrainPreview();
 }
 
 void
@@ -195,8 +192,6 @@ TerrainPreviewWindow::OnPaint(Canvas &canvas) noexcept
 
   MapWindowProjection projection = map->VisibleProjection();
   if (!projection.IsValid()) {
-    /* TODO: initialise projection to middle of map instead of bailing
-       out */
     canvas.Clear(UIGlobals::GetDialogLook().background_color);
     return;
   }
@@ -212,8 +207,6 @@ TerrainPreviewWindow::OnPaint(Canvas &canvas) noexcept
   renderer.Generate(projection, sun_azimuth);
 
 #ifdef ENABLE_OPENGL
-  /* enable clipping because the OpenGL terrain renderer uses a large
-     texture that exceeds the window dimensions */
   GLCanvasScissor scissor(canvas);
 #endif
 
@@ -227,54 +220,61 @@ void
 TerrainDisplayConfigPanel::Prepare(ContainerWindow &parent,
                                    const PixelRect &rc) noexcept
 {
-  instance = this;
-
   RowFormWidget::Prepare(parent, rc);
 
-  const MapSettings &settings_map = CommonInterface::GetMapSettings();
-  const TerrainRendererSettings &terrain = settings_map.terrain;
+  TerrainDisplaySetting::ReadLive(bundle);
 
-  AddBoolean(_("Terrain Display"),
-             _("Draw a digital elevation terrain on the map."),
-             terrain.enable);
+  const auto &terrain_enable =
+    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_ENABLE);
+  AddBoolean(gettext(terrain_enable.label),
+             gettext(terrain_enable.help_global),
+             bundle.terrain.enable);
   GetDataField(EnableTerrain).SetListener(this);
 
-  AddBoolean(_("Topography display"),
-             _("Draw topographical features (roads, rivers, lakes etc.) on the map."),
-             settings_map.topography_enabled);
+  const auto &topography_enable =
+    TerrainDisplaySetting::Get(PageSettingId::TOPOGRAPHY_ENABLE);
+  AddBoolean(gettext(topography_enable.label),
+             gettext(topography_enable.help_global),
+             bundle.topography_enabled);
   GetDataField(EnableTopography).SetListener(this);
 
-  AddEnum(_("Terrain colors"),
-          _("Defines the color ramp used in terrain rendering."),
-          terrain_ramp_choices, terrain.ramp);
+  const auto &colors =
+    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_COLORS);
+  AddEnum(gettext(colors.label), gettext(colors.help_global),
+          colors.choices, bundle.terrain.ramp);
   GetDataField(TerrainColors).SetListener(this);
 
-  AddEnum(_("Slope shading"),
-          _("The terrain can be shaded among slopes to indicate either "
-            "wind direction, sun position, a geographically fixed shading from "
-            "North-West, or a screen-relative fixed shading from top left."),
-          terrain_slope_shading_choices, (unsigned)terrain.slope_shading);
+  const auto &slope =
+    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_SLOPE_SHADING);
+  AddEnum(gettext(slope.label), gettext(slope.help_global),
+          slope.choices, unsigned(bundle.terrain.slope_shading));
   GetDataField(TerrainSlopeShading).SetListener(this);
   SetExpertRow(TerrainSlopeShading);
 
-  AddInteger(_("Terrain contrast"),
-             _("Defines the amount of Phong shading in the terrain rendering. Use large values to emphasise terrain slope, smaller values if flying in steep mountains."),
-             "%d %%", "%d %%", 0, 100, 5,
-             ByteToPercent(terrain.contrast));
+  const auto &contrast =
+    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_CONTRAST);
+  AddInteger(gettext(contrast.label), gettext(contrast.help_global),
+             "%d %%", "%d %%", contrast.int_min, contrast.int_max,
+             contrast.int_step,
+             TerrainDisplaySetting::GetValue(bundle,
+                                             PageSettingId::TERRAIN_CONTRAST));
   GetDataField(TerrainContrast).SetListener(this);
   SetExpertRow(TerrainContrast);
 
-  AddInteger(_("Terrain brightness"),
-             _("Defines the brightness (whiteness) of the terrain rendering. This controls the average illumination of the terrain."),
-             "%d %%", "%d %%", 0, 100, 5,
-             ByteToPercent(terrain.brightness));
+  const auto &brightness =
+    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_BRIGHTNESS);
+  AddInteger(gettext(brightness.label), gettext(brightness.help_global),
+             "%d %%", "%d %%", brightness.int_min, brightness.int_max,
+             brightness.int_step,
+             TerrainDisplaySetting::GetValue(bundle,
+                                             PageSettingId::TERRAIN_BRIGHTNESS));
   GetDataField(TerrainBrightness).SetListener(this);
   SetExpertRow(TerrainBrightness);
 
-  AddEnum(_("Contours"),
-          _("Draw contour lines on the terrain. Contour mode "
-            "controls density of contour lines."),
-          terrain_contours_choices, (unsigned)terrain.contours);
+  const auto &contours =
+    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_CONTOURS);
+  AddEnum(gettext(contours.label), gettext(contours.help_global),
+          contours.choices, unsigned(bundle.terrain.contours));
   GetDataField(TerrainContours).SetListener(this);
   SetExpertRow(TerrainContours);
 
@@ -290,47 +290,23 @@ TerrainDisplayConfigPanel::Prepare(ContainerWindow &parent,
       *data_components->terrain,
       data_components->topography.get(),
       map_look.topography,
-      settings_map.topography_enabled);
+      bundle.topography_enabled);
     preview->Create((ContainerWindow &)GetWindow(), {0, 0, 100, 100}, style);
     AddRemaining(std::move(preview));
   }
 
-  terrain_settings = terrain;
   ShowTerrainControls();
   UpdateTerrainPreview();
-  /* Capture after UpdateTerrainPreview(): contrast/brightness go through
-     ByteToPercent ↔ PercentToByte, which is lossy for some values. */
-  initial_terrain_settings = terrain_settings;
+  SyncBundleFromForm();
+  initial_bundle = bundle;
 }
 
 bool
 TerrainDisplayConfigPanel::Save(bool &_changed) noexcept
 {
-  MapSettings &settings_map = CommonInterface::SetMapSettings();
-
-  bool changed = false;
-
-  /* Always apply in-memory map settings (EnableTerrain may already
-     have updated settings_map live).  Persist only when values differ
-     from the panel-open snapshot so missing profile defaults stay
-     absent (#1793). */
-  settings_map.terrain = terrain_settings;
-  if (terrain_settings != initial_terrain_settings) {
-    Profile::Set(ProfileKeys::DrawTerrain, terrain_settings.enable);
-    Profile::Set(ProfileKeys::TerrainContrast, terrain_settings.contrast);
-    Profile::Set(ProfileKeys::TerrainBrightness, terrain_settings.brightness);
-    Profile::Set(ProfileKeys::TerrainRamp, terrain_settings.ramp);
-    Profile::SetEnum(ProfileKeys::SlopeShadingType,
-                     terrain_settings.slope_shading);
-    Profile::SetEnum(ProfileKeys::TerrainContours, terrain_settings.contours);
-    changed = true;
-  }
-
-  changed |= SaveValue(EnableTopography, ProfileKeys::DrawTopography,
-                       settings_map.topography_enabled);
-
-  _changed |= changed;
-
+  SyncBundleFromForm();
+  TerrainDisplaySetting::ApplyLive(bundle);
+  _changed |= TerrainDisplaySetting::SaveGlobal(bundle, initial_bundle);
   return true;
 }
 

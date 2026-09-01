@@ -122,7 +122,7 @@ IsValidValue(const PageSettingDescriptor &desc, int value) noexcept;
 } // namespace PageSettingRegistry
 
 /**
- * Apply a setting value.
+ * Apply a setting value (legacy; prefer #PageSettingSet).
  *
  * @param page_index nullopt writes the global MapSettings (+ profile)
  *   and notifies the map; a page index writes into that page's
@@ -131,6 +131,27 @@ IsValidValue(const PageSettingDescriptor &desc, int value) noexcept;
 void
 PageSettingApply(PageSettingId id, int value,
                  std::optional<unsigned> page_index = std::nullopt) noexcept;
+
+/** Read the global profile value for @p id. */
+[[nodiscard]]
+int
+PageSettingGet(PageSettingId id) noexcept;
+
+/**
+ * Read @p id for @p page_index: page override if present, else global
+ * profile value.
+ */
+[[nodiscard]]
+int
+PageSettingGet(PageSettingId id, unsigned page_index) noexcept;
+
+/** Write global profile + live map and notify. */
+void
+PageSettingSet(PageSettingId id, int value) noexcept;
+
+/** Write a per-page override only (no live apply). */
+void
+PageSettingSet(PageSettingId id, int value, unsigned page_index) noexcept;
 
 /**
  * Reload live MapSettings from the global profile for all catalog
