@@ -39,7 +39,8 @@ class Button;
  */
 class RowFormWidget : public WindowWidget {
 public:
-  /** Largest form in the app (Pages custom settings). */
+  /** Largest row count in any single form (Pages custom settings uses up
+   * to #PageSettingOverrides::MAX_ITEMS sparse rows). */
   static constexpr unsigned MAX_ROWS = 128u;
 
 private:
@@ -497,6 +498,12 @@ public:
    * Modify the "available" flag on this row.
    */
   void SetRowAvailable(unsigned i, bool available) noexcept;
+
+  /**
+   * Remove all rows and destroy their controls.  Only valid after
+   * Prepare() and before Unprepare().
+   */
+  void ClearRows() noexcept;
 
   void SetRowVisible(unsigned i, bool visible) noexcept;
 

@@ -115,8 +115,8 @@ constexpr unsigned PageSettingAirspaceBaseCount =
  * appear in the Pages editor; value #INHERIT means "use the global
  * setting" while keeping the field on this page.
  *
- * #MAX_ITEMS caps overrides per page; it is independent of catalog
- * #PageSettingId::COUNT.
+ * #MAX_ITEMS caps overrides per page (typical use is small; the catalog
+ * may grow much larger).  Keep #RowFormWidget::MAX_ROWS >= MAX_ITEMS.
  */
 struct PageSettingOverrides {
   static constexpr unsigned MAX_ITEMS = 128;
@@ -178,9 +178,8 @@ struct PageSettingOverrides {
 };
 
 static_assert(std::is_trivial_v<PageSettingOverrides>);
-static_assert(PageSettingOverrides::MAX_ITEMS >=
-              unsigned(PageSettingId::COUNT),
-              "MAX_ITEMS must allow one of each catalog setting");
+/* Keep RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS
+   (asserted in Dialogs/Settings/Panels/PagesConfigPanel.cpp). */
 
 struct PageSettingDescriptor;
 

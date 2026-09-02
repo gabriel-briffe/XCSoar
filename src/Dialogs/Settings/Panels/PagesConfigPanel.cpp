@@ -20,6 +20,11 @@
 #include "PageSetting.hpp"
 #include "PageSettingCatalog.hpp"
 #include "PageSettingModule.hpp"
+#include "Widget/RowFormWidget.hpp"
+
+static_assert(RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS,
+              "RowFormWidget::MAX_ROWS must fit per-page override rows");
+
 #include "Language/Language.hpp"
 #include "Profile/PageProfile.hpp"
 #include "Profile/Current.hpp"
@@ -33,11 +38,6 @@
 #include "Weather/EDL/Levels.hpp"
 #include "Weather/EDL/StateController.hpp"
 #endif
-#include "Widget/RowFormWidget.hpp"
-
-static_assert(unsigned(PageSettingId::COUNT) <= RowFormWidget::MAX_ROWS,
-              "RowFormWidget::MAX_ROWS must fit page settings catalog");
-
 #include "Widget/ListWidget.hpp"
 #include "Widget/TwoWidgets.hpp"
 #include "Widget/ButtonPanelWidget.hpp"
@@ -63,7 +63,7 @@ ShowPageCustomSettingsDialog(PageSettingOverrides &overrides) noexcept;
 
 /**
  * Hosts a scrollable custom-settings form and can remeasure after rows
- * are shown or hidden.
+ * are added or removed.
  */
 class PageCustomSettingsHost final : public NullWidget {
   std::unique_ptr<VScrollWidget> scroll;
@@ -148,9 +148,11 @@ class PageCustomSettingsWidget final
   Button *add_button = nullptr;
   Button *delete_button = nullptr;
   int selected_control = -1;
+  StaticArray<PageSettingId, PageSettingOverrides::MAX_ITEMS> row_ids;
 
   void FillControl(PageSettingId id, unsigned control) noexcept;
-  void SyncRows() noexcept;
+  void AppendRow(PageSettingId id) noexcept;
+  void RebuildRows() noexcept;
   void UpdateActionButtons() noexcept;
   void OnAddClicked() noexcept;
   void OnDeleteClicked() noexcept;
@@ -715,8 +717,7 @@ PageCustomSettingsWidget::UpdateActionButtons() noexcept
 
   if (delete_button != nullptr)
     delete_button->SetEnabled(selected_control >= 0 &&
-                              overrides.Contains(
-                                PageSettingRegistry::Get(unsigned(selected_control)).id));
+                              unsigned(selected_control) < row_ids.size());
 }
 
 namespace {
@@ -817,12 +818,44 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
 
   const auto id = ids[choice];
   overrides.Add(id, PageSettingGet(id));
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i)
-    if (PageSettingRegistry::Get(i).id == id) {
-      selected_control = int(i);
-      break;
-    }
-  SyncRows();
+  AppendRow(id);
+  UpdateActionButtons();
+  if (host != nullptr)
+    host->RefreshLayout();
+}
+
+void
+PageCustomSettingsWidget::AppendRow(PageSettingId id) noexcept
+{
+  const auto &desc = PageSettingRegistry::Get(id);
+  const unsigned control = row_ids.size();
+  row_ids.append(id);
+
+  AddEnum(PageSettingCatalog::GettextOptional(desc.label),
+          PageSettingCatalog::GettextOptional(desc.help_global),
+          this);
+  auto &wnd = GetControl(control);
+  wnd.GetDataField()->EnableItemHelp(true);
+  wnd.SetCaptionClickSelects(true, [this, control](){
+    SelectControl(control);
+  });
+  FillControl(id, control);
+}
+
+void
+PageCustomSettingsWidget::RebuildRows() noexcept
+{
+  ClearRows();
+  row_ids.clear();
+  selected_control = -1;
+
+  for (unsigned i = 0; i < overrides.n_items; ++i)
+    AppendRow(overrides.items[i].id);
+
+  UpdateLayout();
+  if (host != nullptr)
+    host->RefreshLayout();
+  UpdateActionButtons();
 }
 
 void
@@ -839,47 +872,18 @@ PageCustomSettingsWidget::SelectControl(unsigned control) noexcept
 }
 
 void
-PageCustomSettingsWidget::SyncRows() noexcept
-{
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
-    const auto id = PageSettingRegistry::Get(i).id;
-    const bool present = overrides.Contains(id);
-    SetRowAvailable(i, present);
-    if (present)
-      FillControl(id, i);
-    GetControl(i).SetCaptionSelected(false);
-  }
-
-  if (selected_control >= 0 &&
-      !overrides.Contains(PageSettingRegistry::Get(unsigned(selected_control)).id))
-    selected_control = -1;
-
-  UpdateLayout();
-  if (host != nullptr)
-    host->RefreshLayout();
-
-  UpdateActionButtons();
-
-  if (selected_control >= 0) {
-    auto &control = GetControl(unsigned(selected_control));
-    control.SetCaptionSelected(true);
-    control.SetFocus();
-  }
-}
-
-void
 PageCustomSettingsWidget::OnDeleteClicked() noexcept
 {
-  if (selected_control < 0)
+  if (selected_control < 0 ||
+      unsigned(selected_control) >= row_ids.size())
     return;
 
-  const auto id = PageSettingRegistry::Get(unsigned(selected_control)).id;
+  const auto id = row_ids[unsigned(selected_control)];
   if (!overrides.Contains(id))
     return;
 
   overrides.Remove(id);
-  selected_control = -1;
-  SyncRows();
+  RebuildRows();
 }
 
 void
@@ -887,35 +891,20 @@ PageCustomSettingsWidget::Prepare(ContainerWindow &parent,
                                   const PixelRect &rc) noexcept
 {
   RowFormWidget::Prepare(parent, rc);
-
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
-    const auto &desc = PageSettingRegistry::Get(i);
-    AddEnum(PageSettingCatalog::GettextOptional(desc.label),
-            PageSettingCatalog::GettextOptional(desc.help_global),
-            this);
-    auto &control = GetControl(i);
-    control.GetDataField()->EnableItemHelp(true);
-    control.SetCaptionClickSelects(true, [this, i](){
-      SelectControl(i);
-    });
-    SetRowAvailable(i, false);
-  }
-
-  SyncRows();
+  RebuildRows();
 }
 
 void
 PageCustomSettingsWidget::OnModified(DataField &df) noexcept
 {
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
+  for (unsigned i = 0; i < row_ids.size(); ++i) {
     if (&df != &GetDataField(i))
       continue;
 
     SelectControl(i);
 
-    const auto id = PageSettingRegistry::Get(i).id;
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    overrides.SetValue(id, int(dfe.GetValue()));
+    overrides.SetValue(row_ids[i], int(dfe.GetValue()));
     return;
   }
 
