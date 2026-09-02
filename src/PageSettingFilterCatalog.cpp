@@ -42,32 +42,21 @@ MakeEnumFilter(PageSettingId id, const char *label, const char *help,
 }
 
 void
-SortByLabel(PageSettingId *begin, PageSettingId *end,
-            FilterLabelFn label) noexcept
+FillConsecutiveIds(PageSettingId *order, PageSettingId first_id,
+                   unsigned count) noexcept
 {
-  std::sort(begin, end,
-            [label](PageSettingId a, PageSettingId b) noexcept {
-              const char *const la = label(a);
-              const char *const lb = label(b);
-              if (la == nullptr || lb == nullptr)
-                return la != nullptr;
-#ifdef _MSC_VER
-              return _stricmp(la, lb) < 0;
-#else
-              return strcasecmp(la, lb) < 0;
-#endif
-            });
+  for (unsigned i = 0; i < count; ++i)
+    order[i] = PageSettingId(unsigned(first_id) + i);
 }
 
-[[nodiscard]]
-static int
-CompareCStringCaseInsensitive(const char *a, const char *b) noexcept
+void
+InitSortedOrder(PageSettingId *order, unsigned count,
+                FilterLabelFn label) noexcept
 {
-#ifdef _MSC_VER
-  return _stricmp(a, b);
-#else
-  return strcasecmp(a, b);
-#endif
+  std::sort(order, order + count,
+            [label](PageSettingId a, PageSettingId b) noexcept {
+              return StringCompareIgnoreCase(label(a), label(b)) < 0;
+            });
 }
 
 int
@@ -77,11 +66,11 @@ CompareSectionAndLabel(const char *section_a, const char *label_a,
   const char *const key_a = section_a != nullptr ? section_a : "";
   const char *const key_b = section_b != nullptr ? section_b : "";
 
-  const int section_cmp = CompareCStringCaseInsensitive(key_a, key_b);
+  const int section_cmp = StringCompareIgnoreCase(key_a, key_b);
   if (section_cmp != 0)
     return section_cmp;
 
-  return CompareCStringCaseInsensitive(label_a, label_b);
+  return StringCompareIgnoreCase(label_a, label_b);
 }
 
 } // namespace PageSettingFilterCatalog

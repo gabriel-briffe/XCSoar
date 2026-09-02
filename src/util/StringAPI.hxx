@@ -160,6 +160,23 @@ StringIsEqualIgnoreCase(const char *a, const char *b) noexcept
 #endif
 }
 
+[[gnu::pure]]
+static inline int
+StringCompareIgnoreCase(const char *a, const char *b) noexcept
+{
+	if (a == nullptr || b == nullptr) {
+		if (a == b)
+			return 0;
+		return a != nullptr ? 1 : -1;
+	}
+
+#ifdef _MSC_VER
+	return _stricmp(a, b);
+#else
+	return strcasecmp(a, b);
+#endif
+}
+
 [[gnu::pure]] [[gnu::nonnull]]
 static inline bool
 StringIsEqualIgnoreCase(const char *a, const char *b, size_t size) noexcept

@@ -28,19 +28,26 @@
 
 namespace {
 
-enum ControlIndex : unsigned {
-  CATALOG_END = PageSettingTerrainCount,
+constexpr unsigned PageSettingTerrainStart = 0;
 
-  TerrainSpacer = CATALOG_END,
-  TerrainPreview,
+enum class NonCatalogRow : unsigned {
+  Spacer = 0,
+  Preview,
 };
 
 [[nodiscard]]
 bool
 IsExpertRow(unsigned control) noexcept
 {
-  return control >= unsigned(PageSettingId::TERRAIN_SLOPE_SHADING) &&
-         control < PageSettingTerrainCount;
+  switch (PageSettingId(PageSettingTerrainStart + control)) {
+  case PageSettingId::TERRAIN_SLOPE_SHADING:
+  case PageSettingId::TERRAIN_CONTRAST:
+  case PageSettingId::TERRAIN_BRIGHTNESS:
+  case PageSettingId::TERRAIN_CONTOURS:
+    return true;
+  default:
+    return false;
+  }
 }
 
 [[nodiscard]]
@@ -91,6 +98,7 @@ class TerrainDisplayConfigPanel final
   : public RowFormWidget, DataFieldListener {
 
   bool have_terrain_preview = false;
+  unsigned non_catalog_start = 0;
 
   /** Working copy edited by the form controls. */
   TerrainDisplaySetting::Bundle bundle;
@@ -102,6 +110,13 @@ class TerrainDisplayConfigPanel final
   void ApplyBundleLive() noexcept;
   void UpdateTerrainPreview() noexcept;
   void ShowTerrainControls() noexcept;
+
+  [[nodiscard]]
+  unsigned
+  NonCatalogControl(NonCatalogRow row) const noexcept
+  {
+    return non_catalog_start + unsigned(row);
+  }
 
 public:
   TerrainDisplayConfigPanel()
@@ -118,7 +133,7 @@ void
 TerrainDisplayConfigPanel::SyncBundleFromForm() noexcept
 {
   DisplaySettingConfigPanel::SyncBundleFromForm(
-    *this, bundle, 0, PageSettingTerrainCount,
+    *this, bundle, PageSettingTerrainStart, PageSettingTerrainCount,
     TerrainDisplaySetting::Get, TerrainDisplaySetting::SetValue);
 }
 
@@ -132,15 +147,22 @@ TerrainDisplayConfigPanel::ApplyBundleLive() noexcept
 void
 TerrainDisplayConfigPanel::ShowTerrainControls() noexcept
 {
+  using DisplaySettingConfigPanel::CatalogRow;
+
   const bool show = bundle.terrain.enable;
-  SetRowVisible(unsigned(PageSettingId::TERRAIN_COLORS), show);
-  SetRowVisible(unsigned(PageSettingId::TERRAIN_SLOPE_SHADING), show);
-  SetRowVisible(unsigned(PageSettingId::TERRAIN_CONTRAST), show);
-  SetRowVisible(unsigned(PageSettingId::TERRAIN_BRIGHTNESS), show);
-  SetRowVisible(unsigned(PageSettingId::TERRAIN_CONTOURS), show);
+  SetRowVisible(CatalogRow(PageSettingId::TERRAIN_COLORS,
+                           PageSettingTerrainStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::TERRAIN_SLOPE_SHADING,
+                           PageSettingTerrainStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::TERRAIN_CONTRAST,
+                           PageSettingTerrainStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::TERRAIN_BRIGHTNESS,
+                           PageSettingTerrainStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::TERRAIN_CONTOURS,
+                           PageSettingTerrainStart), show);
   if (have_terrain_preview) {
-    SetRowVisible(TerrainSpacer, show);
-    SetRowVisible(TerrainPreview, show);
+    SetRowVisible(NonCatalogControl(NonCatalogRow::Spacer), show);
+    SetRowVisible(NonCatalogControl(NonCatalogRow::Preview), show);
   }
 }
 
@@ -150,16 +172,19 @@ TerrainDisplayConfigPanel::UpdateTerrainPreview() noexcept
   if (!have_terrain_preview)
     return;
 
-  ((TerrainPreviewWindow &)GetRow(TerrainPreview))
+  ((TerrainPreviewWindow &)GetRow(NonCatalogControl(NonCatalogRow::Preview)))
     .SetSettings(bundle.terrain);
 }
 
 void
 TerrainDisplayConfigPanel::OnModified(DataField &df) noexcept
 {
+  using DisplaySettingConfigPanel::CatalogRow;
+
   SyncBundleFromForm();
 
-  if (IsDataField(unsigned(PageSettingId::TERRAIN_ENABLE), df)) {
+  if (IsDataField(CatalogRow(PageSettingId::TERRAIN_ENABLE,
+                             PageSettingTerrainStart), df)) {
     Message::AddMessage(bundle.terrain.enable
                         ? _("Terrain shown")
                         : _("Terrain hidden"));
@@ -169,13 +194,14 @@ TerrainDisplayConfigPanel::OnModified(DataField &df) noexcept
     return;
   }
 
-  if (IsDataField(unsigned(PageSettingId::TOPOGRAPHY_ENABLE), df)) {
+  if (IsDataField(CatalogRow(PageSettingId::TOPOGRAPHY_ENABLE,
+                             PageSettingTerrainStart), df)) {
     Message::AddMessage(bundle.topography_enabled
                         ? _("Topography shown")
                         : _("Topography hidden"));
     ApplyBundleLive();
     if (have_terrain_preview)
-      ((TerrainPreviewWindow &)GetRow(TerrainPreview))
+      ((TerrainPreviewWindow &)GetRow(NonCatalogControl(NonCatalogRow::Preview)))
         .SetTopographyEnabled(bundle.topography_enabled);
     return;
   }
@@ -225,27 +251,31 @@ TerrainDisplayConfigPanel::Prepare(ContainerWindow &parent,
 
   TerrainDisplaySetting::ReadLive(bundle);
 
-  DisplaySettingConfigPanel::AddCatalogRows(
-    *this, bundle, 0, PageSettingTerrainCount,
+  non_catalog_start = DisplaySettingConfigPanel::AddCatalogRows(
+    *this, bundle, PageSettingTerrainStart, PageSettingTerrainCount,
     TerrainDisplaySetting::Get, TerrainDisplaySetting::GetValue,
     IsExpertRow, this, NeedsListener);
 
   have_terrain_preview = data_components->terrain != nullptr;
-  if (have_terrain_preview) {
-    AddSpacer();
+  DisplaySettingConfigPanel::AddNonCatalogRowsAfter(
+    non_catalog_start, [this](unsigned) {
+      if (!have_terrain_preview)
+        return;
 
-    WindowStyle style;
-    style.Border();
+      AddSpacer();
 
-    const auto &map_look = UIGlobals::GetMapLook();
-    auto preview = std::make_unique<TerrainPreviewWindow>(
-      *data_components->terrain,
-      data_components->topography.get(),
-      map_look.topography,
-      bundle.topography_enabled);
-    preview->Create((ContainerWindow &)GetWindow(), {0, 0, 100, 100}, style);
-    AddRemaining(std::move(preview));
-  }
+      WindowStyle style;
+      style.Border();
+
+      const auto &map_look = UIGlobals::GetMapLook();
+      auto preview = std::make_unique<TerrainPreviewWindow>(
+        *data_components->terrain,
+        data_components->topography.get(),
+        map_look.topography,
+        bundle.topography_enabled);
+      preview->Create((ContainerWindow &)GetWindow(), {0, 0, 100, 100}, style);
+      AddRemaining(std::move(preview));
+    });
 
   ShowTerrainControls();
   UpdateTerrainPreview();

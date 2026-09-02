@@ -244,14 +244,13 @@ FilterDialogLabel(PageSettingId id) noexcept
 void
 InitFilterDialogOrder() noexcept
 {
-  for (unsigned i = 0; i < PageSettingAirspaceClassFilterCount; ++i)
-    filter_dialog_order[i] =
-      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) + i);
-
-  PageSettingFilterCatalog::SortByLabel(
+  PageSettingFilterCatalog::FillConsecutiveIds(
     filter_dialog_order,
-    filter_dialog_order + FilterDialogRowCount(),
-    FilterDialogLabel);
+    PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN,
+    PageSettingAirspaceClassFilterCount);
+
+  PageSettingFilterCatalog::InitSortedOrder(
+    filter_dialog_order, FilterDialogRowCount(), FilterDialogLabel);
 }
 
 void

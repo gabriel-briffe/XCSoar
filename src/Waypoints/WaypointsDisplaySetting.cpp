@@ -186,16 +186,15 @@ FilterDialogLabel(PageSettingId id) noexcept
 void
 InitFilterDialogOrder() noexcept
 {
-  for (unsigned i = 0; i < PageSettingWaypointTypeFilterCount; ++i)
-    filter_dialog_order[i] =
-      PageSettingId(unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN) + i);
+  PageSettingFilterCatalog::FillConsecutiveIds(
+    filter_dialog_order,
+    PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN,
+    PageSettingWaypointTypeFilterCount);
   filter_dialog_order[PageSettingWaypointTypeFilterCount] =
     PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS;
 
-  PageSettingFilterCatalog::SortByLabel(
-    filter_dialog_order,
-    filter_dialog_order + FilterDialogRowCount(),
-    FilterDialogLabel);
+  PageSettingFilterCatalog::InitSortedOrder(
+    filter_dialog_order, FilterDialogRowCount(), FilterDialogLabel);
 }
 
 void

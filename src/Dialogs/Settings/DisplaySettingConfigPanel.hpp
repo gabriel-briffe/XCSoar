@@ -77,7 +77,7 @@ SyncBundleFromForm(RowFormWidget &form, Bundle &bundle,
  *        only to this control index (~0u = none)
  */
 template<typename Bundle>
-void
+unsigned
 AddCatalogRows(RowFormWidget &form, const Bundle &bundle,
                unsigned id_start, unsigned count,
                const PageSettingDescriptor &(*get)(PageSettingId) noexcept,
@@ -106,6 +106,20 @@ AddCatalogRows(RowFormWidget &form, const Bundle &bundle,
     if (is_expert_row != nullptr && is_expert_row(i))
       form.SetExpertRow(i);
   }
+
+  return count;
+}
+
+/**
+ * Append controls after a catalog block.  @p after_control is the
+ * value returned by #AddCatalogRows (index of the first non-catalog
+ * row).  @p add receives that base index for offset enums.
+ */
+template<typename Fn>
+void
+AddNonCatalogRowsAfter(unsigned after_control, Fn &&add) noexcept
+{
+  std::forward<Fn>(add)(after_control);
 }
 
 } // namespace DisplaySettingConfigPanel

@@ -37,13 +37,17 @@ MakeEnumFilter(PageSettingId id, const char *label, const char *help,
 
 using FilterLabelFn = const char *(*)(PageSettingId id) noexcept;
 
+void
+FillConsecutiveIds(PageSettingId *order, PageSettingId first_id,
+                   unsigned count) noexcept;
+
 /**
- * Sort @p ids [@p begin, @p end) alphabetically by @p label (case
- * insensitive).  Used for filter dialog display order only.
+ * Sort @p order[0, @p count) alphabetically by @p label (case
+ * insensitive).  Populate @p order before calling.
  */
 void
-SortByLabel(PageSettingId *begin, PageSettingId *end,
-            FilterLabelFn label) noexcept;
+InitSortedOrder(PageSettingId *order, unsigned count,
+                FilterLabelFn label) noexcept;
 
 /**
  * Compare two catalog entries for picker / list ordering: section name
