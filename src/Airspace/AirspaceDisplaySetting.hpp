@@ -78,119 +78,132 @@ SaveGlobal(const Bundle &current, const Bundle &initial) noexcept;
 
 [[nodiscard]]
 constexpr bool
+IdInHalfOpenRange(PageSettingId id, PageSettingId begin,
+                  PageSettingId end) noexcept
+{
+  return unsigned(id) >= unsigned(begin) && unsigned(id) < unsigned(end);
+}
+
+[[nodiscard]]
+constexpr AirspaceClass
+ClassFromRangeId(PageSettingId id, PageSettingId begin) noexcept
+{
+  return AirspaceClass(unsigned(id) - unsigned(begin) + 1);
+}
+
+[[nodiscard]]
+constexpr PageSettingId
+IdFromClass(PageSettingId begin, AirspaceClass cls) noexcept
+{
+  return PageSettingId(unsigned(begin) + unsigned(cls) - 1);
+}
+
+[[nodiscard]]
+constexpr bool
 IsClassFilter(PageSettingId id) noexcept
 {
-  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) &&
-         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN);
+  return IdInHalfOpenRange(id,
+                           PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN,
+                           PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN);
 }
 
 [[nodiscard]]
 constexpr bool
 IsClassFillColor(PageSettingId id) noexcept
 {
-  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) &&
-         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN);
+  return IdInHalfOpenRange(id,
+                           PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN,
+                           PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN);
 }
 
 [[nodiscard]]
 constexpr bool
 IsClassBorderColor(PageSettingId id) noexcept
 {
-  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) &&
-         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN);
+  return IdInHalfOpenRange(id,
+                           PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN,
+                           PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN);
 }
 
 [[nodiscard]]
 constexpr bool
 IsClassBorderWidth(PageSettingId id) noexcept
 {
-  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) &&
-         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN);
+  return IdInHalfOpenRange(id,
+                           PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN,
+                           PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN);
 }
 
 [[nodiscard]]
 constexpr bool
 IsClassFillMode(PageSettingId id) noexcept
 {
-  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) &&
-         unsigned(id) < unsigned(PageSettingId::COUNT);
+  return IdInHalfOpenRange(id,
+                           PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN,
+                           PageSettingId::COUNT);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
 ClassFromFilterId(PageSettingId id) noexcept
 {
-  return AirspaceClass(unsigned(id) -
-                       unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) +
-                       1);
+  return ClassFromRangeId(id, PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
 ClassFromFillColorId(PageSettingId id) noexcept
 {
-  return AirspaceClass(unsigned(id) -
-                       unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) +
-                       1);
+  return ClassFromRangeId(id, PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
 ClassFromBorderColorId(PageSettingId id) noexcept
 {
-  return AirspaceClass(unsigned(id) -
-                       unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) +
-                       1);
+  return ClassFromRangeId(id, PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
 ClassFromBorderWidthId(PageSettingId id) noexcept
 {
-  return AirspaceClass(unsigned(id) -
-                       unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) +
-                       1);
+  return ClassFromRangeId(id, PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
 ClassFromFillModeId(PageSettingId id) noexcept
 {
-  return AirspaceClass(unsigned(id) -
-                       unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) +
-                       1);
+  return ClassFromRangeId(id, PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN);
 }
 
 [[nodiscard]]
 constexpr PageSettingId
 FillColorId(AirspaceClass cls) noexcept
 {
-  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) +
-                       unsigned(cls) - 1);
+  return IdFromClass(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN, cls);
 }
 
 [[nodiscard]]
 constexpr PageSettingId
 BorderColorId(AirspaceClass cls) noexcept
 {
-  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) +
-                       unsigned(cls) - 1);
+  return IdFromClass(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN, cls);
 }
 
 [[nodiscard]]
 constexpr PageSettingId
 BorderWidthId(AirspaceClass cls) noexcept
 {
-  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) +
-                       unsigned(cls) - 1);
+  return IdFromClass(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN, cls);
 }
 
 [[nodiscard]]
 constexpr PageSettingId
 FillModeId(AirspaceClass cls) noexcept
 {
-  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) +
-                       unsigned(cls) - 1);
+  return IdFromClass(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN, cls);
 }
 
 /**
@@ -230,6 +243,14 @@ AddColorOverrides(PageSettingOverrides &overrides,
 void
 RemoveColorOverrides(PageSettingOverrides &overrides,
                      AirspaceClass cls) noexcept;
+
+/**
+ * Number of rows shown in the Pages custom-settings list (class colour
+ * / style ids collapse to one row per class).
+ */
+[[nodiscard]]
+unsigned
+CountVisibleCustomRows(const PageSettingOverrides &overrides) noexcept;
 
 [[nodiscard]]
 constexpr unsigned

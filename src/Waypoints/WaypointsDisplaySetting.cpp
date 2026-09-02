@@ -337,29 +337,7 @@ FilterDialogRowId(unsigned row) noexcept
   return filter_dialog_order[row];
 }
 
-unsigned
-Count() noexcept
-{
-  return Dyn::Count();
-}
-
-const PageSettingDescriptor &
-Get(PageSettingId id) noexcept
-{
-  return Dyn::Get(id);
-}
-
-const PageSettingDescriptor &
-Get(unsigned index) noexcept
-{
-  return Dyn::Get(index);
-}
-
-bool
-IsValidValue(PageSettingId id, int value) noexcept
-{
-  return Dyn::IsValidValue(id, value);
-}
+PAGE_SETTING_DYNAMIC_MODULE_FORWARD_API(Dyn)
 
 int
 GetValue(const Bundle &bundle, PageSettingId id) noexcept
@@ -371,30 +349,6 @@ void
 SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
 {
   SetValueImpl(bundle, id, value);
-}
-
-int
-GetLive(PageSettingId id) noexcept
-{
-  return Dyn::GetLive(id);
-}
-
-void
-SetLive(PageSettingId id, int value) noexcept
-{
-  Dyn::SetLive(id, value);
-}
-
-int
-LoadGlobal(PageSettingId id) noexcept
-{
-  return Dyn::LoadGlobal(id);
-}
-
-void
-SaveGlobal(PageSettingId id, int value) noexcept
-{
-  Dyn::SaveGlobal(id, value);
 }
 
 void

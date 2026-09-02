@@ -80,6 +80,21 @@ PageSettingOverrides::SetValue(PageSettingId id, int value) noexcept
   Add(id, value);
 }
 
+bool
+PageSettingOverrides::EqualsUnordered(const PageSettingOverrides &other) const noexcept
+{
+  if (n_items != other.n_items)
+    return false;
+
+  for (unsigned i = 0; i < n_items; ++i) {
+    const int *v = other.FindValue(items[i].id);
+    if (v == nullptr || *v != items[i].value)
+      return false;
+  }
+
+  return true;
+}
+
 namespace PageSettingRegistry {
 
 unsigned
@@ -170,7 +185,9 @@ PageSettingReinitialiseAirspaceLookIfChanged(
 
   for (unsigned i = 1; i < AIRSPACECLASSCOUNT; ++i) {
     if (before.classes[i].fill_color != after.classes[i].fill_color ||
-        before.classes[i].border_color != after.classes[i].border_color) {
+        before.classes[i].border_color != after.classes[i].border_color ||
+        before.classes[i].border_width != after.classes[i].border_width ||
+        before.classes[i].fill_mode != after.classes[i].fill_mode) {
       if (CommonInterface::main_window != nullptr)
         CommonInterface::main_window->ReinitialiseLook();
       return;

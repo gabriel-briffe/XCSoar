@@ -668,35 +668,7 @@ FilterDialogRowId(unsigned row) noexcept
   return filter_dialog_order[row];
 }
 
-unsigned
-Count() noexcept
-{
-  return Dyn::Count();
-}
-
-const PageSettingDescriptor &
-Get(PageSettingId id) noexcept
-{
-  return Dyn::Get(id);
-}
-
-const PageSettingDescriptor &
-Get(unsigned index) noexcept
-{
-  return Dyn::Get(index);
-}
-
-bool
-IsValidValue(PageSettingId id, int value) noexcept
-{
-  if (value == PageSettingOverrides::INHERIT)
-    return true;
-
-  if (IsClassFillColor(id) || IsClassBorderColor(id))
-    return AirspaceClassColorProfile::IsValid(value);
-
-  return Dyn::IsValidValue(id, value);
-}
+PAGE_SETTING_DYNAMIC_MODULE_FORWARD_API(Dyn)
 
 int
 GetValue(const Bundle &bundle, PageSettingId id) noexcept
@@ -708,30 +680,6 @@ void
 SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
 {
   SetValueImpl(bundle, id, value);
-}
-
-int
-GetLive(PageSettingId id) noexcept
-{
-  return Dyn::GetLive(id);
-}
-
-void
-SetLive(PageSettingId id, int value) noexcept
-{
-  Dyn::SetLive(id, value);
-}
-
-int
-LoadGlobal(PageSettingId id) noexcept
-{
-  return Dyn::LoadGlobal(id);
-}
-
-void
-SaveGlobal(PageSettingId id, int value) noexcept
-{
-  Dyn::SaveGlobal(id, value);
 }
 
 void
@@ -828,18 +776,24 @@ void
 AddColorOverrides(PageSettingOverrides &overrides,
                   AirspaceClass cls) noexcept
 {
-  const PageSettingId fill_id = FillColorId(cls);
-  const PageSettingId border_id = BorderColorId(cls);
-  const PageSettingId width_id = BorderWidthId(cls);
-  const PageSettingId mode_id = FillModeId(cls);
-  if (!overrides.Contains(fill_id))
-    overrides.Add(fill_id, PageSettingGet(fill_id));
-  if (!overrides.Contains(border_id))
-    overrides.Add(border_id, PageSettingGet(border_id));
-  if (!overrides.Contains(width_id))
-    overrides.Add(width_id, PageSettingGet(width_id));
-  if (!overrides.Contains(mode_id))
-    overrides.Add(mode_id, PageSettingGet(mode_id));
+  const PageSettingId ids[] = {
+    FillColorId(cls),
+    BorderColorId(cls),
+    BorderWidthId(cls),
+    FillModeId(cls),
+  };
+
+  unsigned needed = 0;
+  for (const PageSettingId id : ids)
+    if (!overrides.Contains(id))
+      ++needed;
+
+  if (overrides.n_items + needed > PageSettingOverrides::MAX_ITEMS)
+    return;
+
+  for (const PageSettingId id : ids)
+    if (!overrides.Contains(id))
+      overrides.Add(id, PageSettingGet(id));
 }
 
 void
@@ -850,6 +804,27 @@ RemoveColorOverrides(PageSettingOverrides &overrides,
   overrides.Remove(BorderColorId(cls));
   overrides.Remove(BorderWidthId(cls));
   overrides.Remove(FillModeId(cls));
+}
+
+[[nodiscard]]
+unsigned
+CountVisibleCustomRows(const PageSettingOverrides &overrides) noexcept
+{
+  unsigned n = 0;
+  bool color_class_shown[AIRSPACECLASSCOUNT]{};
+
+  for (unsigned i = 0; i < overrides.n_items; ++i) {
+    const PageSettingId id = overrides.items[i].id;
+    if (IsClassColor(id)) {
+      const AirspaceClass cls = ClassFromColorId(id);
+      if (color_class_shown[unsigned(cls)])
+        continue;
+      color_class_shown[unsigned(cls)] = true;
+    }
+    ++n;
+  }
+
+  return n;
 }
 
 } // namespace AirspaceDisplaySetting

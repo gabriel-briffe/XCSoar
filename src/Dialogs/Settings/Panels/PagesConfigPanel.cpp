@@ -3,6 +3,7 @@
 
 #include "PagesConfigPanel.hpp"
 #include "PageCustomSettingsWidget.hpp"
+#include "Airspace/AirspaceDisplaySetting.hpp"
 #include "Dialogs/Message.hpp"
 #include "Dialogs/ComboPicker.hpp"
 #include "Dialogs/WidgetDialog.hpp"
@@ -526,7 +527,9 @@ void
 PageLayoutEditWidget::UpdateCustomSettingsButton() noexcept
 {
   StaticString<64> caption;
-  const unsigned n = overrides != nullptr ? overrides->n_items : 0;
+  const unsigned n = overrides != nullptr
+    ? AirspaceDisplaySetting::CountVisibleCustomRows(*overrides)
+    : 0;
   if (n == 0)
     caption = _("Custom settings");
   else

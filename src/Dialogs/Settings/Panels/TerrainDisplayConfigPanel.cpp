@@ -28,8 +28,6 @@
 
 namespace {
 
-constexpr unsigned PageSettingTerrainStart = 0;
-
 enum class NonCatalogRow : unsigned {
   Spacer = 0,
   Preview,

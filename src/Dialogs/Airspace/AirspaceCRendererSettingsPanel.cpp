@@ -6,6 +6,7 @@
 #include "../ColorListDialog.hpp"
 #include "../WidgetDialog.hpp"
 #include "Airspace/AirspaceClassColorProfile.hpp"
+#include "Airspace/AirspaceDisplayChoices.hpp"
 #include "Airspace/AirspaceDisplaySetting.hpp"
 #include "PageSetting.hpp"
 #include "PageSettings.hpp"
@@ -25,19 +26,19 @@
 
 namespace {
 
+/**
+ * Persist @p value for @p id: draft page overrides, else current-page
+ * override if present, else @p save_global.
+ */
+template<typename SaveGlobalFn>
 void
-SaveClassColor(AirspaceClass type, const RGB8Color &color, bool fill,
-               const PageAirspaceRendererSettingsContext &page_context,
-               bool &changed) noexcept
+SavePageOrGlobal(PageSettingId id, int value,
+                 const PageAirspaceRendererSettingsContext &page_context,
+                 bool &changed, SaveGlobalFn save_global) noexcept
 {
-  const PageSettingId id = fill
-    ? AirspaceDisplaySetting::FillColorId(type)
-    : AirspaceDisplaySetting::BorderColorId(type);
-  const int packed = AirspaceClassColorProfile::Pack(color);
-
   if (page_context.overrides != nullptr) {
     /* Draft only — Pages panel persists overrides on its own save. */
-    page_context.overrides->SetValue(id, packed);
+    page_context.overrides->SetValue(id, value);
     changed = true;
     return;
   }
@@ -47,82 +48,16 @@ SaveClassColor(AirspaceClass type, const RGB8Color &color, bool fill,
   if (!state.special_page.IsDefined()) {
     auto &overrides =
       CommonInterface::SetUISettings().pages.overrides[state.current_index];
-    if (const int *value = overrides.FindValue(id);
-        value != nullptr && *value != PageSettingOverrides::INHERIT) {
-      overrides.SetValue(id, packed);
+    if (const int *existing = overrides.FindValue(id);
+        existing != nullptr && *existing != PageSettingOverrides::INHERIT) {
+      overrides.SetValue(id, value);
       Profile::Save(Profile::map, overrides, state.current_index);
       changed = true;
       return;
     }
   }
 
-  if (fill)
-    Profile::SetAirspaceFillColor(Profile::map, type, color);
-  else
-    Profile::SetAirspaceBorderColor(Profile::map, type, color);
-  changed = true;
-}
-
-void
-SaveClassBorderWidth(AirspaceClass type, unsigned border_width,
-                     const PageAirspaceRendererSettingsContext &page_context,
-                     bool &changed) noexcept
-{
-  const PageSettingId id = AirspaceDisplaySetting::BorderWidthId(type);
-
-  if (page_context.overrides != nullptr) {
-    page_context.overrides->SetValue(id, int(border_width));
-    changed = true;
-    return;
-  }
-
-  const PagesState &state = CommonInterface::GetUIState().pages;
-
-  if (!state.special_page.IsDefined()) {
-    auto &overrides =
-      CommonInterface::SetUISettings().pages.overrides[state.current_index];
-    if (const int *value = overrides.FindValue(id);
-        value != nullptr && *value != PageSettingOverrides::INHERIT) {
-      overrides.SetValue(id, int(border_width));
-      Profile::Save(Profile::map, overrides, state.current_index);
-      changed = true;
-      return;
-    }
-  }
-
-  Profile::SetAirspaceBorderWidth(Profile::map, type, border_width);
-  changed = true;
-}
-
-void
-SaveClassFillMode(AirspaceClass type,
-                  AirspaceClassRendererSettings::FillMode fill_mode,
-                  const PageAirspaceRendererSettingsContext &page_context,
-                  bool &changed) noexcept
-{
-  const PageSettingId id = AirspaceDisplaySetting::FillModeId(type);
-
-  if (page_context.overrides != nullptr) {
-    page_context.overrides->SetValue(id, int(fill_mode));
-    changed = true;
-    return;
-  }
-
-  const PagesState &state = CommonInterface::GetUIState().pages;
-
-  if (!state.special_page.IsDefined()) {
-    auto &overrides =
-      CommonInterface::SetUISettings().pages.overrides[state.current_index];
-    if (const int *value = overrides.FindValue(id);
-        value != nullptr && *value != PageSettingOverrides::INHERIT) {
-      overrides.SetValue(id, int(fill_mode));
-      Profile::Save(Profile::map, overrides, state.current_index);
-      changed = true;
-      return;
-    }
-  }
-
-  Profile::SetAirspaceFillMode(Profile::map, type, uint8_t(fill_mode));
+  save_global();
   changed = true;
 }
 
@@ -212,32 +147,47 @@ AirspaceClassRendererSettingsPanel::Prepare(ContainerWindow &parent,
                "Set this value to zero to hide the border."),
              "%d", "%d", 0, 5, 1, settings.border_width);
 
-  static constexpr StaticEnumChoice fill_mode_list[] = {
-    { AirspaceClassRendererSettings::FillMode::ALL, N_("Filled"), },
-    { AirspaceClassRendererSettings::FillMode::PADDING, N_("Only padding"), },
-    { AirspaceClassRendererSettings::FillMode::NONE, N_("Not filled"), },
-    nullptr
-  };
-
   AddEnum(_("Fill Mode"),
           _("Defines how the airspace is filled with the configured color."),
-          fill_mode_list, (unsigned)settings.fill_mode);
+          airspace_class_fill_mode_choices, (unsigned)settings.fill_mode);
 }
 
 bool
 AirspaceClassRendererSettingsPanel::Save(bool &changed) noexcept
 {
   if (border_color_changed)
-    SaveClassColor(type, settings.border_color, false, page_context, changed);
+    SavePageOrGlobal(AirspaceDisplaySetting::BorderColorId(type),
+                     AirspaceClassColorProfile::Pack(settings.border_color),
+                     page_context, changed,
+                     [this]() {
+                       Profile::SetAirspaceBorderColor(Profile::map, type,
+                                                       settings.border_color);
+                     });
 
   if (fill_color_changed)
-    SaveClassColor(type, settings.fill_color, true, page_context, changed);
+    SavePageOrGlobal(AirspaceDisplaySetting::FillColorId(type),
+                     AirspaceClassColorProfile::Pack(settings.fill_color),
+                     page_context, changed,
+                     [this]() {
+                       Profile::SetAirspaceFillColor(Profile::map, type,
+                                                     settings.fill_color);
+                     });
 
   if (SaveValueInteger(BorderWidth, settings.border_width))
-    SaveClassBorderWidth(type, settings.border_width, page_context, changed);
+    SavePageOrGlobal(AirspaceDisplaySetting::BorderWidthId(type),
+                     int(settings.border_width), page_context, changed,
+                     [this]() {
+                       Profile::SetAirspaceBorderWidth(Profile::map, type,
+                                                       settings.border_width);
+                     });
 
   if (SaveValueEnum(FillMode, settings.fill_mode))
-    SaveClassFillMode(type, settings.fill_mode, page_context, changed);
+    SavePageOrGlobal(AirspaceDisplaySetting::FillModeId(type),
+                     int(settings.fill_mode), page_context, changed,
+                     [this]() {
+                       Profile::SetAirspaceFillMode(Profile::map, type,
+                                                    uint8_t(settings.fill_mode));
+                     });
 
   if (page_context.overrides == nullptr) {
 #ifdef HAVE_HATCHED_BRUSH

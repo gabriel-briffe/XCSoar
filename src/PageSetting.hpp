@@ -113,6 +113,7 @@ static_assert(unsigned(PageSettingId::COUNT) <= 65535,
 
 constexpr unsigned PageSettingTerrainCount =
   unsigned(PageSettingId::CRUISE_ORIENTATION);
+constexpr unsigned PageSettingTerrainStart = 0;
 constexpr unsigned PageSettingOrientationStart =
   unsigned(PageSettingId::CRUISE_ORIENTATION);
 constexpr unsigned PageSettingElementsStart =
@@ -157,11 +158,11 @@ constexpr unsigned PageSettingAirspaceBaseCount =
  * appear in the Pages editor; value #INHERIT means "use the global
  * setting" while keeping the field on this page.
  *
- * #MAX_ITEMS caps overrides per page (typical use is small; the catalog
- * may grow much larger).
+ * #MAX_ITEMS must hold a full catalog of overrides for one page
+ * (colour styles use four ids per class).
  */
 struct PageSettingOverrides {
-  static constexpr unsigned MAX_ITEMS = 256;
+  static constexpr unsigned MAX_ITEMS = unsigned(PageSettingId::COUNT);
 
   /** Sentinel: follow the global / profile value. */
   static constexpr int INHERIT = -1;
@@ -202,19 +203,19 @@ struct PageSettingOverrides {
 
   void SetValue(PageSettingId id, int value) noexcept;
 
+  /**
+   * True when @p other has the same id→value pairs (order ignored).
+   */
   [[nodiscard]]
-  constexpr bool operator==(const PageSettingOverrides &other) const noexcept {
-    if (n_items != other.n_items)
-      return false;
-    for (unsigned i = 0; i < n_items; ++i)
-      if (items[i].id != other.items[i].id ||
-          items[i].value != other.items[i].value)
-        return false;
-    return true;
+  bool EqualsUnordered(const PageSettingOverrides &other) const noexcept;
+
+  [[nodiscard]]
+  bool operator==(const PageSettingOverrides &other) const noexcept {
+    return EqualsUnordered(other);
   }
 
   [[nodiscard]]
-  constexpr bool operator!=(const PageSettingOverrides &other) const noexcept {
+  bool operator!=(const PageSettingOverrides &other) const noexcept {
     return !(*this == other);
   }
 };

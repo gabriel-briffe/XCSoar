@@ -34,6 +34,7 @@
 #include "util/StaticString.hxx"
 #include "util/StringCompare.hxx"
 #include "util/StringFormat.hpp"
+#include "util/TruncateString.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -128,25 +129,31 @@ namespace {
 
 [[nodiscard]]
 bool
+IsAddableCatalogEntry(const PageSettingDescriptor &desc,
+                      const PageSettingOverrides &overrides) noexcept
+{
+  if (AirspaceDisplaySetting::IsClassBorderColor(desc.id) ||
+      AirspaceDisplaySetting::IsClassBorderWidth(desc.id) ||
+      AirspaceDisplaySetting::IsClassFillMode(desc.id))
+    return false;
+
+  if (AirspaceDisplaySetting::IsClassFillColor(desc.id))
+    return !AirspaceDisplaySetting::HasColorOverride(
+      overrides, AirspaceDisplaySetting::ClassFromFillColorId(desc.id));
+
+  return !overrides.Contains(desc.id);
+}
+
+[[nodiscard]]
+bool
 ModuleHasAddable(const PageSettingModule &module,
                  const PageSettingOverrides &overrides) noexcept
 {
   for (unsigned i = 0; i < module.count(); ++i) {
     const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
                                                 i));
-    if (AirspaceDisplaySetting::IsClassBorderColor(desc.id) ||
-        AirspaceDisplaySetting::IsClassBorderWidth(desc.id) ||
-        AirspaceDisplaySetting::IsClassFillMode(desc.id))
-      continue;
-
-    if (AirspaceDisplaySetting::IsClassFillColor(desc.id)) {
-      if (AirspaceDisplaySetting::HasColorOverride(
-            overrides, AirspaceDisplaySetting::ClassFromFillColorId(desc.id)))
-        continue;
-    } else if (overrides.Contains(desc.id))
-      continue;
-
-    return true;
+    if (IsAddableCatalogEntry(desc, overrides))
+      return true;
   }
   return false;
 }
@@ -160,6 +167,21 @@ SameSection(const char *a, const char *b) noexcept
   if (a == nullptr || b == nullptr)
     return false;
   return StringIsEqual(a, b);
+}
+
+void
+FormatGroupHeader(char *buffer, size_t size, const char *label) noexcept
+{
+  StringFormat(buffer, size, "---------------- %s ----------------",
+               gettext(label));
+}
+
+void
+FormatClassColoursLabel(char *buffer, size_t size,
+                        AirspaceClass cls) noexcept
+{
+  StringFormat(buffer, size, _("%s colours"),
+               gettext(AirspaceFormatter::GetClass(cls)));
 }
 
 static char color_picker_labels[PageSettingAirspaceClassFillColorCount][64];
@@ -230,24 +252,16 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
   for (unsigned i = 0; i < module.count(); ++i) {
     const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
                                                 i));
-    if (AirspaceDisplaySetting::IsClassBorderColor(desc.id) ||
-        AirspaceDisplaySetting::IsClassBorderWidth(desc.id) ||
-        AirspaceDisplaySetting::IsClassFillMode(desc.id))
+    if (!IsAddableCatalogEntry(desc, overrides))
       continue;
 
     if (AirspaceDisplaySetting::IsClassFillColor(desc.id)) {
       const AirspaceClass cls =
         AirspaceDisplaySetting::ClassFromFillColorId(desc.id);
-      if (AirspaceDisplaySetting::HasColorOverride(overrides, cls))
-        continue;
-
-      StaticString<64> label;
-      label.Format(_("%s colours"),
-                   gettext(AirspaceFormatter::GetClass(cls)));
       const unsigned label_index = unsigned(cls) - 1;
-      StringFormat(color_picker_labels[label_index],
-                   sizeof(color_picker_labels[label_index]),
-                   "%s", label.c_str());
+      FormatClassColoursLabel(color_picker_labels[label_index],
+                              sizeof(color_picker_labels[label_index]),
+                              cls);
 
       auto &item = items.append();
       item.id = desc.id;
@@ -255,9 +269,6 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
       item.label = color_picker_labels[label_index];
       continue;
     }
-
-    if (overrides.Contains(desc.id))
-      continue;
 
     auto &item = items.append();
     item.id = desc.id;
@@ -280,10 +291,9 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
   for (const auto &item : items) {
     if (!SameSection(item.section, prev_section)) {
       if (item.section != nullptr) {
-        StaticString<96> header;
-        header.Format("---------------- %s ----------------",
-                      gettext(item.section));
-        list.Append(SECTION_HEADER, header.c_str());
+        FormatGroupHeader(header_display_buffer,
+                          sizeof(header_display_buffer), item.section);
+        list.Append(SECTION_HEADER, header_display_buffer);
       }
       prev_section = item.section;
     }
@@ -404,30 +414,29 @@ PageCustomSettingsWidget::RebuildRows() noexcept
               if (group_a != group_b)
                 return unsigned(group_a) < unsigned(group_b);
 
-              StaticString<96> label_a;
-              StaticString<96> label_b;
+              char label_a[96];
+              char label_b[96];
               if (AirspaceDisplaySetting::IsClassColor(a)) {
                 const AirspaceClass cls =
                   AirspaceDisplaySetting::ClassFromColorId(a);
-                label_a.Format(_("%s colours"),
-                               gettext(AirspaceFormatter::GetClass(cls)));
+                FormatClassColoursLabel(label_a, sizeof(label_a), cls);
               } else {
-                label_a = PageSettingCatalog::GettextOptional(
-                  PageSettingRegistry::Get(a).label);
+                CopyTruncateString(label_a, sizeof(label_a),
+                                   PageSettingCatalog::GettextOptional(
+                                     PageSettingRegistry::Get(a).label));
               }
 
               if (AirspaceDisplaySetting::IsClassColor(b)) {
                 const AirspaceClass cls =
                   AirspaceDisplaySetting::ClassFromColorId(b);
-                label_b.Format(_("%s colours"),
-                               gettext(AirspaceFormatter::GetClass(cls)));
+                FormatClassColoursLabel(label_b, sizeof(label_b), cls);
               } else {
-                label_b = PageSettingCatalog::GettextOptional(
-                  PageSettingRegistry::Get(b).label);
+                CopyTruncateString(label_b, sizeof(label_b),
+                                   PageSettingCatalog::GettextOptional(
+                                     PageSettingRegistry::Get(b).label));
               }
 
-              return StringCompareIgnoreCase(label_a.c_str(),
-                                             label_b.c_str()) < 0;
+              return StringCompareIgnoreCase(label_a, label_b) < 0;
             });
 
   PageSettingGroup prev_group = PageSettingGroup::COUNT;
@@ -547,9 +556,8 @@ PageCustomSettingsWidget::OnPaintItem(Canvas &canvas, const PixelRect rc,
 
   const Row &row = rows[idx];
   if (row.kind == Row::Kind::GROUP_HEADER) {
-    StringFormat(header_display_buffer, sizeof(header_display_buffer),
-                 "---------------- %s ----------------",
-                 gettext(PageSettingModuleRegistry::GetLabel(row.group)));
+    FormatGroupHeader(header_display_buffer, sizeof(header_display_buffer),
+                      PageSettingModuleRegistry::GetLabel(row.group));
     row_renderer.DrawTextRow(canvas, rc, header_display_buffer);
     return;
   }
@@ -559,8 +567,8 @@ PageCustomSettingsWidget::OnPaintItem(Canvas &canvas, const PixelRect rc,
 
   if (IsColorRow(id)) {
     const AirspaceClass cls = AirspaceDisplaySetting::ClassFromColorId(id);
-    StaticString<64> label;
-    label.Format(_("%s colours"), gettext(AirspaceFormatter::GetClass(cls)));
+    char label[64];
+    FormatClassColoursLabel(label, sizeof(label), cls);
 
     const int second_x = row_renderer.NextColumn(canvas, remaining, label);
 
