@@ -45,4 +45,13 @@ void
 SortByLabel(PageSettingId *begin, PageSettingId *end,
             FilterLabelFn label) noexcept;
 
+/**
+ * Compare two catalog entries for picker / list ordering: section name
+ * (empty when @p section is null), then label case-insensitively.
+ */
+[[nodiscard]]
+int
+CompareSectionAndLabel(const char *section_a, const char *label_a,
+                       const char *section_b, const char *label_b) noexcept;
+
 } // namespace PageSettingFilterCatalog

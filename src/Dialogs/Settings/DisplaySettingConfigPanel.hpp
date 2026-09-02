@@ -14,6 +14,13 @@ class DataFieldListener;
  */
 namespace DisplaySettingConfigPanel {
 
+[[nodiscard]]
+constexpr unsigned
+CatalogRow(PageSettingId id, unsigned id_start) noexcept
+{
+  return unsigned(id) - id_start;
+}
+
 void
 AddBooleanRow(RowFormWidget &form, const PageSettingDescriptor &desc,
               bool value, DataFieldListener *listener=nullptr) noexcept;

@@ -16,45 +16,22 @@
 #include "PageSetting.hpp"
 #include "UIGlobals.hpp"
 
-#include <cassert>
-
 namespace {
-
-enum ControlIndex : unsigned {
-  DISPLAY = 0,
-  LABEL_VISIBILITY,
-  SHOW_NOTAM_LABELS,
-  CLIP_ALTITUDE,
-  MARGIN,
-  WARNINGS,
-  WARNING_DIALOG,
-  WARNING_TIME,
-  REPETITIVE_SOUND,
-  ACKNOWLEDGE_TIME,
-  BLACK_OUTLINE,
-  FILL_MODE,
-  TRANSPARENCY,
-
-  COUNT
-};
-
-static_assert(unsigned(ControlIndex::COUNT) == PageSettingAirspaceBaseCount,
-              "Airspace config controls must match base catalog size");
 
 [[nodiscard]]
 bool
 IsExpertRow(unsigned control) noexcept
 {
-  switch (ControlIndex(control)) {
-  case ControlIndex::LABEL_VISIBILITY:
-  case ControlIndex::SHOW_NOTAM_LABELS:
-  case ControlIndex::WARNING_DIALOG:
-  case ControlIndex::WARNING_TIME:
-  case ControlIndex::REPETITIVE_SOUND:
-  case ControlIndex::ACKNOWLEDGE_TIME:
-  case ControlIndex::BLACK_OUTLINE:
-  case ControlIndex::FILL_MODE:
-  case ControlIndex::TRANSPARENCY:
+  switch (PageSettingId(PageSettingAirspaceStart + control)) {
+  case PageSettingId::AIRSPACE_LABEL_VISIBILITY:
+  case PageSettingId::AIRSPACE_SHOW_NOTAM_LABELS:
+  case PageSettingId::AIRSPACE_WARNING_DIALOG:
+  case PageSettingId::AIRSPACE_WARNING_TIME:
+  case PageSettingId::AIRSPACE_REPETITIVE_SOUND:
+  case PageSettingId::AIRSPACE_ACKNOWLEDGE_TIME:
+  case PageSettingId::AIRSPACE_BLACK_OUTLINE:
+  case PageSettingId::AIRSPACE_FILL_MODE:
+  case PageSettingId::AIRSPACE_TRANSPARENCY:
     return true;
   default:
     return false;
@@ -65,8 +42,12 @@ IsExpertRow(unsigned control) noexcept
 bool
 NeedsListener(unsigned control) noexcept
 {
-  return control == unsigned(ControlIndex::DISPLAY) ||
-         control == unsigned(ControlIndex::WARNINGS);
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  return control == CatalogRow(PageSettingId::AIRSPACE_DISPLAY,
+                               PageSettingAirspaceStart) ||
+         control == CatalogRow(PageSettingId::AIRSPACE_WARNINGS,
+                               PageSettingAirspaceStart);
 }
 
 } // namespace
@@ -107,10 +88,14 @@ AirspaceConfigPanel::SyncCatalogFromForm() noexcept
 void
 AirspaceConfigPanel::ShowDisplayControls(AirspaceDisplayMode mode)
 {
-  SetRowVisible(unsigned(ControlIndex::CLIP_ALTITUDE),
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_CLIP_ALTITUDE,
+                           PageSettingAirspaceStart),
                 mode == AirspaceDisplayMode::CLIP);
 
-  SetRowVisible(unsigned(ControlIndex::MARGIN),
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_MARGIN,
+                           PageSettingAirspaceStart),
                 mode == AirspaceDisplayMode::AUTO ||
                 mode == AirspaceDisplayMode::ALLBELOW);
 }
@@ -118,10 +103,16 @@ AirspaceConfigPanel::ShowDisplayControls(AirspaceDisplayMode mode)
 void
 AirspaceConfigPanel::ShowWarningControls(bool visible)
 {
-  SetRowVisible(unsigned(ControlIndex::WARNING_DIALOG), visible);
-  SetRowVisible(unsigned(ControlIndex::WARNING_TIME), visible);
-  SetRowVisible(unsigned(ControlIndex::REPETITIVE_SOUND), visible);
-  SetRowVisible(unsigned(ControlIndex::ACKNOWLEDGE_TIME), visible);
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_WARNING_DIALOG,
+                           PageSettingAirspaceStart), visible);
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_WARNING_TIME,
+                           PageSettingAirspaceStart), visible);
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_REPETITIVE_SOUND,
+                           PageSettingAirspaceStart), visible);
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_ACKNOWLEDGE_TIME,
+                           PageSettingAirspaceStart), visible);
 }
 
 void
@@ -149,11 +140,15 @@ AirspaceConfigPanel::Hide() noexcept
 void
 AirspaceConfigPanel::OnModified(DataField &df) noexcept
 {
-  if (IsDataField(unsigned(ControlIndex::DISPLAY), df)) {
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  if (IsDataField(CatalogRow(PageSettingId::AIRSPACE_DISPLAY,
+                             PageSettingAirspaceStart), df)) {
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
     AirspaceDisplayMode mode = (AirspaceDisplayMode)dfe.GetValue();
     ShowDisplayControls(mode);
-  } else if (IsDataField(unsigned(ControlIndex::WARNINGS), df)) {
+  } else if (IsDataField(CatalogRow(PageSettingId::AIRSPACE_WARNINGS,
+                                    PageSettingAirspaceStart), df)) {
     const DataFieldBoolean &dfb = (const DataFieldBoolean &)df;
     ShowWarningControls(dfb.GetValue());
   }

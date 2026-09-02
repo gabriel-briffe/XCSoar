@@ -14,38 +14,19 @@
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
 
-#include <cassert>
-
 namespace {
-
-enum ControlIndex : unsigned {
-  LABEL_FORMAT = 0,
-  ARRIVAL_HEIGHT,
-  LABEL_STYLE,
-  LABEL_VISIBILITY,
-  LANDABLE_SYMBOLS,
-  ICON_SCALE,
-  DETAILED_LANDABLES,
-  LANDABLE_SIZE,
-  SCALE_RUNWAY_LENGTH,
-
-  COUNT
-};
-
-static_assert(unsigned(ControlIndex::COUNT) == PageSettingWaypointsBaseCount,
-              "Waypoints config controls must match base catalog size");
 
 [[nodiscard]]
 bool
 IsExpertRow(unsigned control) noexcept
 {
-  switch (ControlIndex(control)) {
-  case ControlIndex::ARRIVAL_HEIGHT:
-  case ControlIndex::LABEL_STYLE:
-  case ControlIndex::LABEL_VISIBILITY:
-  case ControlIndex::DETAILED_LANDABLES:
-  case ControlIndex::LANDABLE_SIZE:
-  case ControlIndex::SCALE_RUNWAY_LENGTH:
+  switch (PageSettingId(PageSettingWaypointsStart + control)) {
+  case PageSettingId::WAYPOINT_ARRIVAL_HEIGHT:
+  case PageSettingId::WAYPOINT_LABEL_STYLE:
+  case PageSettingId::WAYPOINT_LABEL_VISIBILITY:
+  case PageSettingId::WAYPOINT_DETAILED_LANDABLES:
+  case PageSettingId::WAYPOINT_LANDABLE_SIZE:
+  case PageSettingId::WAYPOINT_SCALE_RUNWAY_LENGTH:
     return true;
   default:
     return false;
@@ -101,9 +82,13 @@ WaypointDisplayConfigPanel::ApplyBundleLive() noexcept
 void
 WaypointDisplayConfigPanel::UpdateVisibilities()
 {
+  using DisplaySettingConfigPanel::CatalogRow;
+
   const bool show = bundle.waypoint.vector_landable_rendering;
-  SetRowVisible(unsigned(ControlIndex::LANDABLE_SIZE), show);
-  SetRowVisible(unsigned(ControlIndex::SCALE_RUNWAY_LENGTH), show);
+  SetRowVisible(CatalogRow(PageSettingId::WAYPOINT_LANDABLE_SIZE,
+                           PageSettingWaypointsStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::WAYPOINT_SCALE_RUNWAY_LENGTH,
+                           PageSettingWaypointsStart), show);
 }
 
 void
@@ -111,7 +96,10 @@ WaypointDisplayConfigPanel::OnModified(DataField &df) noexcept
 {
   SyncBundleFromForm();
 
-  if (IsDataField(unsigned(ControlIndex::DETAILED_LANDABLES), df))
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  if (IsDataField(CatalogRow(PageSettingId::WAYPOINT_DETAILED_LANDABLES,
+                             PageSettingWaypointsStart), df))
     UpdateVisibilities();
 
   ApplyBundleLive();
@@ -125,11 +113,14 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
 
   WaypointsDisplaySetting::ReadLive(bundle);
 
+  using DisplaySettingConfigPanel::CatalogRow;
+
   DisplaySettingConfigPanel::AddCatalogRows(
     *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsBaseCount,
     WaypointsDisplaySetting::Get, WaypointsDisplaySetting::GetValue,
     IsExpertRow, this, nullptr,
-    unsigned(ControlIndex::DETAILED_LANDABLES));
+    CatalogRow(PageSettingId::WAYPOINT_DETAILED_LANDABLES,
+               PageSettingWaypointsStart));
 
   SyncBundleFromForm();
   initial_bundle = bundle;

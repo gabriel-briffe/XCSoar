@@ -59,4 +59,29 @@ SortByLabel(PageSettingId *begin, PageSettingId *end,
             });
 }
 
+[[nodiscard]]
+static int
+CompareCStringCaseInsensitive(const char *a, const char *b) noexcept
+{
+#ifdef _MSC_VER
+  return _stricmp(a, b);
+#else
+  return strcasecmp(a, b);
+#endif
+}
+
+int
+CompareSectionAndLabel(const char *section_a, const char *label_a,
+                       const char *section_b, const char *label_b) noexcept
+{
+  const char *const key_a = section_a != nullptr ? section_a : "";
+  const char *const key_b = section_b != nullptr ? section_b : "";
+
+  const int section_cmp = CompareCStringCaseInsensitive(key_a, key_b);
+  if (section_cmp != 0)
+    return section_cmp;
+
+  return CompareCStringCaseInsensitive(label_a, label_b);
+}
+
 } // namespace PageSettingFilterCatalog

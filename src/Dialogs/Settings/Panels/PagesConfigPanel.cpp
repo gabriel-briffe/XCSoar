@@ -20,6 +20,7 @@
 #include "PageSetting.hpp"
 #include "PageSettingCatalog.hpp"
 #include "PageSettingModule.hpp"
+#include "PageSettingFilterCatalog.hpp"
 #include "Widget/RowFormWidget.hpp"
 
 static_assert(RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS,
@@ -50,6 +51,7 @@ static_assert(RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS,
 #endif
 
 #include <cassert>
+#include <algorithm>
 
 /* this macro exists in the WIN32 API */
 #ifdef DELETE
@@ -779,27 +781,50 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
 
   static constexpr int SECTION_HEADER = -1;
 
-  ComboList list;
-  StaticArray<PageSettingId, unsigned(PageSettingId::COUNT)> ids;
-  const char *prev_section = nullptr;
+  struct AddableItem {
+    PageSettingId id;
+    const char *section;
+    const char *label;
+  };
+
+  StaticArray<AddableItem, unsigned(PageSettingId::COUNT)> items;
   for (unsigned i = 0; i < module.count(); ++i) {
     const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
                                                 i));
     if (overrides.Contains(desc.id))
       continue;
 
-    if (!SameSection(desc.section, prev_section)) {
-      if (desc.section != nullptr) {
-  StaticString<96> header;
+    auto &item = items.append();
+    item.id = desc.id;
+    item.section = desc.section;
+    item.label = gettext(desc.label);
+  }
+
+  if (items.empty())
+    return;
+
+  std::sort(items.begin(), items.end(),
+            [](const AddableItem &a, const AddableItem &b) noexcept {
+              return PageSettingFilterCatalog::CompareSectionAndLabel(
+                a.section, a.label, b.section, b.label) < 0;
+            });
+
+  ComboList list;
+  StaticArray<PageSettingId, unsigned(PageSettingId::COUNT)> ids;
+  const char *prev_section = nullptr;
+  for (const auto &item : items) {
+    if (!SameSection(item.section, prev_section)) {
+      if (item.section != nullptr) {
+        StaticString<96> header;
         header.Format("---------------- %s ----------------",
-                      gettext(desc.section));
+                      gettext(item.section));
         list.Append(SECTION_HEADER, header.c_str());
       }
-      prev_section = desc.section;
+      prev_section = item.section;
     }
 
-    list.Append(ids.size(), gettext(desc.label));
-    ids.append(desc.id);
+    list.Append(ids.size(), item.label);
+    ids.append(item.id);
   }
 
   if (list.empty())

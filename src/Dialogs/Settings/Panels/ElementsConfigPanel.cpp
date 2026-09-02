@@ -12,42 +12,20 @@
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
 
-#include <cassert>
-
 namespace {
-
-enum ControlIndex : unsigned {
-  GROUND_TRACK = 0,
-  FLARM_TRAFFIC,
-  FADE_TRAFFIC,
-  TRAIL_LENGTH,
-  TRAIL_DRIFT,
-  TRAIL_TYPE,
-  TRAIL_SCALED,
-  DETOUR_COST_MARKERS,
-  AIRCRAFT_SYMBOL,
-  WIND_ARROW_STYLE,
-  ONLINE_TRAFFIC_MAP_MODE,
-  DISTANCE_RINGS,
-
-  COUNT
-};
-
-static_assert(unsigned(ControlIndex::COUNT) == PageSettingElementsCount,
-              "Elements config controls must match catalog size");
 
 [[nodiscard]]
 bool
 IsExpertRow(unsigned control) noexcept
 {
-  switch (ControlIndex(control)) {
-  case ControlIndex::TRAIL_LENGTH:
-  case ControlIndex::TRAIL_DRIFT:
-  case ControlIndex::TRAIL_TYPE:
-  case ControlIndex::TRAIL_SCALED:
-  case ControlIndex::DETOUR_COST_MARKERS:
-  case ControlIndex::AIRCRAFT_SYMBOL:
-  case ControlIndex::WIND_ARROW_STYLE:
+  switch (PageSettingId(PageSettingElementsStart + control)) {
+  case PageSettingId::TRAIL_LENGTH:
+  case PageSettingId::TRAIL_DRIFT:
+  case PageSettingId::TRAIL_TYPE:
+  case PageSettingId::TRAIL_SCALED:
+  case PageSettingId::DETOUR_COST_MARKERS:
+  case PageSettingId::AIRCRAFT_SYMBOL:
+  case PageSettingId::WIND_ARROW_STYLE:
     return true;
   default:
     return false;
@@ -97,9 +75,14 @@ ElementsConfigPanel::ApplyBundleLive() noexcept
 void
 ElementsConfigPanel::ShowTrailControls(bool show)
 {
-  SetRowVisible(unsigned(ControlIndex::TRAIL_DRIFT), show);
-  SetRowVisible(unsigned(ControlIndex::TRAIL_TYPE), show);
-  SetRowVisible(unsigned(ControlIndex::TRAIL_SCALED), show);
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  SetRowVisible(CatalogRow(PageSettingId::TRAIL_DRIFT,
+                           PageSettingElementsStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::TRAIL_TYPE,
+                           PageSettingElementsStart), show);
+  SetRowVisible(CatalogRow(PageSettingId::TRAIL_SCALED,
+                           PageSettingElementsStart), show);
 }
 
 void
@@ -107,22 +90,30 @@ ElementsConfigPanel::OnModified(DataField &df) noexcept
 {
   SyncBundleFromForm();
 
-  if (IsDataField(unsigned(ControlIndex::TRAIL_LENGTH), df))
+  using DisplaySettingConfigPanel::CatalogRow;
+
+  if (IsDataField(CatalogRow(PageSettingId::TRAIL_LENGTH,
+                             PageSettingElementsStart), df))
     ShowTrailControls(bundle.trail.length != TrailSettings::Length::OFF);
 
   ApplyBundleLive();
 }
 
 void
-ElementsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
-                             [[maybe_unused]] const PixelRect &rc) noexcept
+ElementsConfigPanel::Prepare(ContainerWindow &parent,
+                             const PixelRect &rc) noexcept
 {
+  RowFormWidget::Prepare(parent, rc);
+
   ElementsDisplaySetting::ReadLive(bundle);
+
+  using DisplaySettingConfigPanel::CatalogRow;
 
   DisplaySettingConfigPanel::AddCatalogRows(
     *this, bundle, PageSettingElementsStart, PageSettingElementsCount,
     ElementsDisplaySetting::Get, ElementsDisplaySetting::GetValue,
-    IsExpertRow, this, nullptr, unsigned(ControlIndex::TRAIL_LENGTH));
+    IsExpertRow, this, nullptr,
+    CatalogRow(PageSettingId::TRAIL_LENGTH, PageSettingElementsStart));
 
   SyncBundleFromForm();
   initial_bundle = bundle;

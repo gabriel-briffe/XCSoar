@@ -358,6 +358,7 @@ XCSOAR_SOURCES := \
 	$(SRC)/PageSetting.cpp \
 	$(SRC)/PageSettingCatalog.cpp \
 	$(SRC)/PageSettingFilterCatalog.cpp \
+	$(SRC)/Dialogs/Settings/PageSettingFilterListWidget.cpp \
 	$(SRC)/PageSettingModule.cpp \
 	$(SRC)/PageSettingProfile.cpp \
 	$(SRC)/Dialogs/Settings/DisplaySettingConfigPanel.cpp \
