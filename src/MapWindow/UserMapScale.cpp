@@ -61,7 +61,7 @@ DisableAutoZoomForManualScale() noexcept
     return false;
 
   settings.auto_zoom_enabled = false;
-  if (!PageSettingIsPageOnlyActive(PageSettingId::PAGE_ONLY_ZOOM))
+  if (!PageSettingIsPageOnlyZoomActive())
     Profile::Set(ProfileKeys::AutoZoom, false);
   Message::AddMessage(_("Auto. zoom off"));
   return true;

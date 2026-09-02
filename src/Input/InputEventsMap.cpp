@@ -166,7 +166,7 @@ InputEvents::sub_AutoZoom(int vswitch)
   else
     settings_map.auto_zoom_enabled = (vswitch != 0); // 0 off, 1 on
 
-  if (!PageSettingIsPageOnlyActive(PageSettingId::PAGE_ONLY_ZOOM))
+  if (!PageSettingIsPageOnlyZoomActive())
     Profile::Set(ProfileKeys::AutoZoom, settings_map.auto_zoom_enabled);
 
   if (settings_map.auto_zoom_enabled &&

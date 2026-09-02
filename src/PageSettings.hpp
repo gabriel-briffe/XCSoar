@@ -19,6 +19,8 @@ class RaspStore;
  * Remembered cruise/circling zoom when #PageSettingId::PAGE_ONLY_ZOOM
  * is listed for the page.  Negative scales mean unset.
  */
+struct MapSettings;
+
 struct PageZoomMemory {
   double cruise_scale;
   double circling_scale;
@@ -34,6 +36,18 @@ struct PageZoomMemory {
   constexpr bool HasScales() const noexcept {
     return cruise_scale > 0 || circling_scale > 0;
   }
+
+  /** Copy live map scales into this memory (always overwrites). */
+  void CaptureFrom(const MapSettings &settings) noexcept;
+
+  /**
+   * Apply stored scales to live map settings.  Only fields with a
+   * positive scale are written; auto-zoom follows #HasScales().
+   */
+  void ApplyTo(MapSettings &settings) const noexcept;
+
+  /** Write all fields to live map settings (used for the global stash). */
+  void ForceApplyTo(MapSettings &settings) const noexcept;
 
   [[nodiscard]]
   bool operator==(const PageZoomMemory &other) const noexcept {
@@ -415,6 +429,13 @@ struct PageSettings {
   std::array<PageZoomMemory, MAX_PAGES> page_zoom;
 
   unsigned n_pages;
+
+  [[nodiscard]]
+  bool HasPageOnlyZoom(unsigned page_index) const noexcept {
+    return page_index < MAX_PAGES &&
+           page_only_commands[page_index].Contains(
+             PageSettingId::PAGE_ONLY_ZOOM);
+  }
 
   void SetDefaults() noexcept;
 

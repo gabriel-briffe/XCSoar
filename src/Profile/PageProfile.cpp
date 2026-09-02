@@ -12,7 +12,6 @@
 #include "util/StaticString.hxx"
 #include "util/StringCompare.hxx"
 #include "util/StringFormat.hpp"
-#include "LogFile.hpp"
 
 #include <algorithm>
 #include <stdio.h>
@@ -201,6 +200,24 @@ LoadPageOnlyCommands(const ProfileMap &map, PageOnlyCommands &commands,
   }
 }
 
+namespace {
+
+[[nodiscard]]
+double
+DecodeMapScale(int profile_value) noexcept
+{
+  return std::clamp(profile_value / 10000., 0.0003, 10.);
+}
+
+[[nodiscard]]
+int
+EncodeMapScale(double scale) noexcept
+{
+  return int(scale * 10000);
+}
+
+} // namespace
+
 static void
 LoadPageZoom(const ProfileMap &map, PageZoomMemory &zoom,
              const unsigned page)
@@ -215,19 +232,14 @@ LoadPageZoom(const ProfileMap &map, PageZoomMemory &zoom,
   int tmp;
   strcpy(profileKey + prefixLen, "CruiseScale");
   if (map.Get(profileKey, tmp) && tmp > 0)
-    zoom.cruise_scale = std::clamp(tmp / 10000., 0.0003, 10.);
+    zoom.cruise_scale = DecodeMapScale(tmp);
 
   strcpy(profileKey + prefixLen, "CirclingScale");
   if (map.Get(profileKey, tmp) && tmp > 0)
-    zoom.circling_scale = std::clamp(tmp / 10000., 0.0003, 10.);
+    zoom.circling_scale = DecodeMapScale(tmp);
 
   strcpy(profileKey + prefixLen, "AutoZoom");
   map.Get(profileKey, zoom.auto_zoom_enabled);
-
-  if (zoom.HasScales())
-    LogFmt("xcsoar zoom: load page={} cruise={:.6f} circle={:.6f} auto={}",
-           page, zoom.cruise_scale, zoom.circling_scale,
-           zoom.auto_zoom_enabled);
 }
 
 void
@@ -241,13 +253,6 @@ Profile::Load(const ProfileMap &map, PageSettings &settings)
   }
 
   settings.Compress();
-
-  for (unsigned i = 0; i < settings.n_pages; ++i)
-    if (settings.page_only_commands[i].Contains(PageSettingId::PAGE_ONLY_ZOOM))
-      LogFmt("xcsoar zoom: after compress page={} page_only=1 cruise={:.6f} "
-             "circle={:.6f}",
-             i, settings.page_zoom[i].cruise_scale,
-             settings.page_zoom[i].circling_scale);
 }
 
 void
@@ -395,20 +400,15 @@ Profile::Save(ProfileMap &map, const PageZoomMemory &zoom,
   const bool persist = commands.Contains(PageSettingId::PAGE_ONLY_ZOOM) &&
                        zoom.HasScales();
 
-  LogFmt("xcsoar zoom: profile save page={} persist={} cruise={:.6f} "
-         "circle={:.6f} auto={}",
-         i, persist, zoom.cruise_scale, zoom.circling_scale,
-         zoom.auto_zoom_enabled);
-
   strcpy(profileKey + prefixLen, "CruiseScale");
   if (persist && zoom.cruise_scale > 0)
-    map.Set(profileKey, int(zoom.cruise_scale * 10000));
+    map.Set(profileKey, EncodeMapScale(zoom.cruise_scale));
   else
     map.Remove(profileKey);
 
   strcpy(profileKey + prefixLen, "CirclingScale");
   if (persist && zoom.circling_scale > 0)
-    map.Set(profileKey, int(zoom.circling_scale * 10000));
+    map.Set(profileKey, EncodeMapScale(zoom.circling_scale));
   else
     map.Remove(profileKey);
 

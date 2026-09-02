@@ -5,11 +5,39 @@
 #include "PageOverlayTitle.hpp"
 #include "InfoBoxes/InfoBoxSettings.hpp"
 #include "Language/Language.hpp"
+#include "MapSettings.hpp"
 #include "util/StringBuilder.hxx"
 #include "util/UTF8.hpp"
 
 #include <algorithm>
 #include <cassert>
+
+void
+PageZoomMemory::CaptureFrom(const MapSettings &settings) noexcept
+{
+  cruise_scale = settings.cruise_scale;
+  circling_scale = settings.circling_scale;
+  auto_zoom_enabled = settings.auto_zoom_enabled;
+}
+
+void
+PageZoomMemory::ApplyTo(MapSettings &settings) const noexcept
+{
+  if (cruise_scale > 0)
+    settings.cruise_scale = cruise_scale;
+  if (circling_scale > 0)
+    settings.circling_scale = circling_scale;
+  if (HasScales())
+    settings.auto_zoom_enabled = auto_zoom_enabled;
+}
+
+void
+PageZoomMemory::ForceApplyTo(MapSettings &settings) const noexcept
+{
+  settings.cruise_scale = cruise_scale;
+  settings.circling_scale = circling_scale;
+  settings.auto_zoom_enabled = auto_zoom_enabled;
+}
 
 const char *
 PageLayout::MakeTitle(const InfoBoxSettings &info_box_settings,

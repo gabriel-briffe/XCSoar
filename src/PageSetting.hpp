@@ -388,3 +388,10 @@ PageSettingApplyCommand(PageSettingId id, int value) noexcept;
 [[nodiscard]]
 bool
 PageSettingIsPageOnlyActive(PageSettingId id) noexcept;
+
+[[nodiscard]]
+inline bool
+PageSettingIsPageOnlyZoomActive() noexcept
+{
+  return PageSettingIsPageOnlyActive(PageSettingId::PAGE_ONLY_ZOOM);
+}
