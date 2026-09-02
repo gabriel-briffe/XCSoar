@@ -44,13 +44,35 @@ class PageCustomSettingsWidget final : public ListWidget {
   Button *add_button = nullptr;
   Button *delete_button = nullptr;
   TextRowRenderer row_renderer;
-  StaticArray<PageSettingId, PageSettingOverrides::MAX_ITEMS> row_ids;
+
+  struct Row {
+    enum class Kind : uint8_t {
+      SETTING,
+      GROUP_HEADER,
+    } kind;
+
+    PageSettingId id;
+    PageSettingGroup group;
+  };
+
+  static constexpr unsigned MAX_ROWS =
+    PageSettingOverrides::MAX_ITEMS + unsigned(PageSettingGroup::COUNT);
+
+  StaticArray<Row, MAX_ROWS> rows;
 
   [[nodiscard]]
   static bool
   IsColorRow(PageSettingId id) noexcept
   {
     return AirspaceDisplaySetting::IsClassColor(id);
+  }
+
+  [[nodiscard]]
+  bool
+  IsHeaderRow(unsigned index) const noexcept
+  {
+    return index < rows.size() &&
+           rows[index].kind == Row::Kind::GROUP_HEADER;
   }
 
   void RebuildRows() noexcept;
@@ -142,6 +164,7 @@ SameSection(const char *a, const char *b) noexcept
 
 static char color_picker_labels[PageSettingAirspaceClassFillColorCount][64];
 static char value_display_buffer[64];
+static char header_display_buffer[96];
 
 } // namespace
 
@@ -159,8 +182,12 @@ PageCustomSettingsWidget::UpdateActionButtons() noexcept
     add_button->SetEnabled(can_add);
   }
 
-  if (delete_button != nullptr)
-    delete_button->SetEnabled(IsDefined() && GetList().GetLength() > 0);
+  if (delete_button != nullptr) {
+    const bool has_rows = IsDefined() && GetList().GetLength() > 0;
+    const unsigned cursor =
+      has_rows ? GetList().GetCursorIndex() : 0;
+    delete_button->SetEnabled(has_rows && !IsHeaderRow(cursor));
+  }
 }
 
 void
@@ -351,9 +378,10 @@ PageCustomSettingsWidget::FormatValue(PageSettingId id,
 void
 PageCustomSettingsWidget::RebuildRows() noexcept
 {
-  row_ids.clear();
+  rows.clear();
 
   bool color_class_shown[AIRSPACECLASSCOUNT]{};
+  StaticArray<PageSettingId, PageSettingOverrides::MAX_ITEMS> setting_ids;
 
   for (unsigned i = 0; i < overrides.n_items; ++i) {
     const PageSettingId id = overrides.items[i].id;
@@ -363,14 +391,64 @@ PageCustomSettingsWidget::RebuildRows() noexcept
         continue;
 
       color_class_shown[unsigned(cls)] = true;
-      row_ids.append(AirspaceDisplaySetting::FillColorId(cls));
+      setting_ids.append(AirspaceDisplaySetting::FillColorId(cls));
     } else {
-      row_ids.append(id);
+      setting_ids.append(id);
     }
   }
 
+  std::sort(setting_ids.begin(), setting_ids.end(),
+            [](PageSettingId a, PageSettingId b) noexcept {
+              const PageSettingGroup group_a = PageSettingGroupForId(a);
+              const PageSettingGroup group_b = PageSettingGroupForId(b);
+              if (group_a != group_b)
+                return unsigned(group_a) < unsigned(group_b);
+
+              StaticString<96> label_a;
+              StaticString<96> label_b;
+              if (AirspaceDisplaySetting::IsClassColor(a)) {
+                const AirspaceClass cls =
+                  AirspaceDisplaySetting::ClassFromColorId(a);
+                label_a.Format(_("%s colours"),
+                               gettext(AirspaceFormatter::GetClass(cls)));
+              } else {
+                label_a = PageSettingCatalog::GettextOptional(
+                  PageSettingRegistry::Get(a).label);
+              }
+
+              if (AirspaceDisplaySetting::IsClassColor(b)) {
+                const AirspaceClass cls =
+                  AirspaceDisplaySetting::ClassFromColorId(b);
+                label_b.Format(_("%s colours"),
+                               gettext(AirspaceFormatter::GetClass(cls)));
+              } else {
+                label_b = PageSettingCatalog::GettextOptional(
+                  PageSettingRegistry::Get(b).label);
+              }
+
+              return StringCompareIgnoreCase(label_a.c_str(),
+                                             label_b.c_str()) < 0;
+            });
+
+  PageSettingGroup prev_group = PageSettingGroup::COUNT;
+  for (const PageSettingId id : setting_ids) {
+    const PageSettingGroup group = PageSettingGroupForId(id);
+    if (group != prev_group) {
+      auto &header = rows.append();
+      header.kind = Row::Kind::GROUP_HEADER;
+      header.id = PageSettingId::COUNT;
+      header.group = group;
+      prev_group = group;
+    }
+
+    auto &row = rows.append();
+    row.kind = Row::Kind::SETTING;
+    row.id = id;
+    row.group = group;
+  }
+
   if (IsDefined()) {
-    GetList().SetLength(row_ids.size());
+    GetList().SetLength(rows.size());
     GetList().Invalidate();
   }
   SyncAirspacePreviewLook();
@@ -384,10 +462,10 @@ PageCustomSettingsWidget::OnDeleteClicked() noexcept
     return;
 
   const unsigned index = GetList().GetCursorIndex();
-  if (index >= row_ids.size())
+  if (index >= rows.size() || IsHeaderRow(index))
     return;
 
-  const auto id = row_ids[index];
+  const auto id = rows[index].id;
   if (IsColorRow(id))
     AirspaceDisplaySetting::RemoveColorOverrides(
       overrides, AirspaceDisplaySetting::ClassFromColorId(id));
@@ -402,11 +480,12 @@ PageCustomSettingsWidget::OnDeleteClicked() noexcept
 void
 PageCustomSettingsWidget::EditColorRow(unsigned index) noexcept
 {
-  assert(index < row_ids.size());
-  assert(IsColorRow(row_ids[index]));
+  assert(index < rows.size());
+  assert(rows[index].kind == Row::Kind::SETTING);
+  assert(IsColorRow(rows[index].id));
 
   const AirspaceClass cls =
-    AirspaceDisplaySetting::ClassFromColorId(row_ids[index]);
+    AirspaceDisplaySetting::ClassFromColorId(rows[index].id);
 
   /* Ensure border width / fill mode slots exist for older colour-only
      overrides so the shared class renderer dialog can edit them. */
@@ -427,10 +506,11 @@ PageCustomSettingsWidget::EditColorRow(unsigned index) noexcept
 void
 PageCustomSettingsWidget::EditValueRow(unsigned index) noexcept
 {
-  assert(index < row_ids.size());
-  assert(!IsColorRow(row_ids[index]));
+  assert(index < rows.size());
+  assert(rows[index].kind == Row::Kind::SETTING);
+  assert(!IsColorRow(rows[index].id));
 
-  const PageSettingId id = row_ids[index];
+  const PageSettingId id = rows[index].id;
   const auto &desc = PageSettingRegistry::Get(id);
   const int *v = overrides.FindValue(id);
   assert(v != nullptr);
@@ -455,7 +535,7 @@ PageCustomSettingsWidget::Prepare(ContainerWindow &parent,
   ListControl &list = CreateList(parent, look, rc,
                                  row_renderer.CalculateLayout(*look.list.font));
   RebuildRows();
-  list.SetLength(row_ids.size());
+  list.SetLength(rows.size());
   UpdateActionButtons();
 }
 
@@ -463,9 +543,18 @@ void
 PageCustomSettingsWidget::OnPaintItem(Canvas &canvas, const PixelRect rc,
                                       unsigned idx) noexcept
 {
-  assert(idx < row_ids.size());
+  assert(idx < rows.size());
 
-  const PageSettingId id = row_ids[idx];
+  const Row &row = rows[idx];
+  if (row.kind == Row::Kind::GROUP_HEADER) {
+    StringFormat(header_display_buffer, sizeof(header_display_buffer),
+                 "---------------- %s ----------------",
+                 gettext(PageSettingModuleRegistry::GetLabel(row.group)));
+    row_renderer.DrawTextRow(canvas, rc, header_display_buffer);
+    return;
+  }
+
+  const PageSettingId id = row.id;
   PixelRect remaining = rc;
 
   if (IsColorRow(id)) {
@@ -511,17 +600,18 @@ PageCustomSettingsWidget::OnCursorMoved(unsigned) noexcept
 }
 
 bool
-PageCustomSettingsWidget::CanActivateItem(unsigned) const noexcept
+PageCustomSettingsWidget::CanActivateItem(unsigned index) const noexcept
 {
-  return true;
+  return !IsHeaderRow(index);
 }
 
 void
 PageCustomSettingsWidget::OnActivateItem(unsigned index) noexcept
 {
-  assert(index < row_ids.size());
+  assert(index < rows.size());
+  assert(!IsHeaderRow(index));
 
-  if (IsColorRow(row_ids[index]))
+  if (IsColorRow(rows[index].id))
     EditColorRow(index);
   else
     EditValueRow(index);
