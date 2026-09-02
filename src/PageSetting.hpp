@@ -300,23 +300,23 @@ PageSettingApplyDisplaySettings(unsigned page_index) noexcept;
 
 /**
  * Rebuild trail pens/brushes when @p before differs from live trail
- * settings (type or scaled width).  Trail rendering reads #MapSettings
- * for behaviour but colours come from #TrailLook.
+ * settings (type or scaled width).  Updates #TrailLook only (not a full
+ * #MainWindow::ReinitialiseLook).
  */
 void
 PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept;
 
 /**
  * Rebuild waypoint look when @p before.landable_style differs from live
- * map settings.
+ * map settings.  Updates #WaypointLook only.
  */
 void
 PageSettingReinitialiseWaypointLookIfChanged(
   const WaypointRendererSettings &before) noexcept;
 
 /**
- * Rebuild airspace class pens/brushes when @p before class colours
- * differ from live map settings.
+ * Rebuild airspace class pens/brushes when @p before class colours /
+ * style differ from live map settings.  Updates #AirspaceLook only.
  */
 void
 PageSettingReinitialiseAirspaceLookIfChanged(

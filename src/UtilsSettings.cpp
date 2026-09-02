@@ -228,8 +228,6 @@ SettingsLeave(const UISettings &old_ui_settings)
   main_window.ResumeThreads();
   // allow map and calculations threads to continue
 
-  ActionInterface::SendMapSettings(true);
-
 #ifdef HAVE_VOLUME_CONTROLLER
   volume_controller->SetVolume(ui_settings.sound.master_volume);
 #endif
@@ -239,7 +237,8 @@ SettingsLeave(const UISettings &old_ui_settings)
   operation.Hide();
   InfoBoxManager::SetDirty();
   main_window.FlushRendererCaches();
-  main_window.FullRedraw();
+  /* One publish after cache flush — avoid FullRedraw before and after. */
+  ActionInterface::SendMapSettings(true);
   main_window.SetDefaultFocus();
 }
 

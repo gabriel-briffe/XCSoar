@@ -44,6 +44,8 @@ class PageCustomSettingsWidget final : public ListWidget {
   Button *add_button = nullptr;
   Button *delete_button = nullptr;
   TextRowRenderer row_renderer;
+  /** True after preview Look was applied from colour overrides. */
+  mutable bool airspace_preview_active = false;
 
   struct Row {
     enum class Kind : uint8_t {
@@ -88,6 +90,16 @@ class PageCustomSettingsWidget final : public ListWidget {
    * dialog — not #MainWindow::ReinitialiseLook).
    */
   void SyncAirspacePreviewLook() const noexcept;
+
+  /**
+   * Sync preview Look when colour overrides exist; restore live Look when
+   * the last colour override was removed (skip when never previewing).
+   */
+  void SyncOrRestoreAirspacePreviewLook() const noexcept;
+
+  [[nodiscard]]
+  static bool
+  OverridesHaveColor(const PageSettingOverrides &overrides) noexcept;
 
   [[nodiscard]]
   AirspaceRendererSettings
@@ -353,6 +365,36 @@ PageCustomSettingsWidget::SyncAirspacePreviewLook() const noexcept
 
   CommonInterface::main_window->SetLook().map.airspace.Reinitialise(
     BuildPreviewRenderer());
+  airspace_preview_active = true;
+}
+
+bool
+PageCustomSettingsWidget::OverridesHaveColor(
+  const PageSettingOverrides &overrides) noexcept
+{
+  for (unsigned i = 0; i < overrides.n_items; ++i)
+    if (AirspaceDisplaySetting::IsClassColor(overrides.items[i].id))
+      return true;
+  return false;
+}
+
+void
+PageCustomSettingsWidget::SyncOrRestoreAirspacePreviewLook() const noexcept
+{
+  if (CommonInterface::main_window == nullptr)
+    return;
+
+  if (OverridesHaveColor(overrides)) {
+    SyncAirspacePreviewLook();
+    return;
+  }
+
+  if (!airspace_preview_active)
+    return;
+
+  CommonInterface::main_window->SetLook().map.airspace.Reinitialise(
+    CommonInterface::GetMapSettings().airspace);
+  airspace_preview_active = false;
 }
 
 const char *
@@ -442,7 +484,7 @@ PageCustomSettingsWidget::RebuildRows() noexcept
     GetList().SetLength(rows.size());
     GetList().Invalidate();
   }
-  SyncAirspacePreviewLook();
+  SyncOrRestoreAirspacePreviewLook();
   UpdateActionButtons();
 }
 

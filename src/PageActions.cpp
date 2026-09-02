@@ -51,15 +51,18 @@ namespace PageActions {
   static void LeavePage();
 
   /**
-   * Restore the map zoom afte switching to a configured page.
+   * Restore the map zoom after switching to a configured page.
+   * When @p redraw is false, only updates MapSettings / projection;
+   * the caller must publish a single redraw afterwards.
    */
-  static void RestoreMapZoom();
+  static void RestoreMapZoom(bool redraw = true);
 
   /**
    * Reload registered Map Display settings from the global profile,
    * then apply sparse per-page overrides for the current page.
+   * When @p trigger_draw is false, pushes settings without FullRedraw.
    */
-  static void ApplyPageDisplaySettings() noexcept;
+  static void ApplyPageDisplaySettings(bool trigger_draw = true) noexcept;
 
   /**
    * Loads the layout without updating current page information in
@@ -377,12 +380,13 @@ PageActions::Restore()
   special_page.SetUndefined();
 
   LoadLayout(GetConfiguredLayout());
-  ApplyPageDisplaySettings();
-  RestoreMapZoom();
+  ApplyPageDisplaySettings(false);
+  RestoreMapZoom(false);
+  PageSettingNotifyLive();
 }
 
 void
-PageActions::ApplyPageDisplaySettings() noexcept
+PageActions::ApplyPageDisplaySettings(bool trigger_draw) noexcept
 {
   const PagesState &state = CommonInterface::GetUIState().pages;
   if (state.special_page.IsDefined())
@@ -397,11 +401,14 @@ PageActions::ApplyPageDisplaySettings() noexcept
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
   PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
   PageSettingReinitialiseAirspaceLookIfChanged(old_airspace);
-  PageSettingNotifyLive();
+  if (trigger_draw)
+    PageSettingNotifyLive();
+  else
+    ActionInterface::SendMapSettings(false);
 }
 
 void
-PageActions::RestoreMapZoom()
+PageActions::RestoreMapZoom(bool redraw)
 {
   const PagesState &state = CommonInterface::SetUIState().pages;
   if (state.special_page.IsDefined())
@@ -424,7 +431,8 @@ PageActions::RestoreMapZoom()
     GlueMapWindow *map = UIGlobals::GetMapIfActive();
     if (map != nullptr) {
       map->RestoreMapScale();
-      map->QuickRedraw();
+      if (redraw)
+        map->QuickRedraw();
     }
   }
 }
@@ -509,8 +517,10 @@ PageActions::Next()
   state.current_index = NextIndex();
   state.special_page.SetUndefined();
 
-  Update();
-  RestoreMapZoom();
+  LoadLayout(GetCurrentLayout());
+  ApplyPageDisplaySettings(false);
+  RestoreMapZoom(false);
+  PageSettingNotifyLive();
 }
 
 unsigned
@@ -538,8 +548,10 @@ PageActions::Prev()
   state.current_index = PrevIndex();
   state.special_page.SetUndefined();
 
-  Update();
-  RestoreMapZoom();
+  LoadLayout(GetCurrentLayout());
+  ApplyPageDisplaySettings(false);
+  RestoreMapZoom(false);
+  PageSettingNotifyLive();
 }
 
 static void

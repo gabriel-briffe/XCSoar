@@ -10,6 +10,7 @@
 #include "PageSettingModule.hpp"
 #include "PageSettings.hpp"
 #include "UISettings.hpp"
+#include "Look/Look.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
 #include "Engine/Airspace/AirspaceClass.hpp"
 
@@ -160,7 +161,7 @@ PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept
     return;
 
   if (CommonInterface::main_window != nullptr)
-    CommonInterface::main_window->ReinitialiseLook();
+    CommonInterface::main_window->SetLook().map.trail.Initialise(after);
 }
 
 void
@@ -173,7 +174,7 @@ PageSettingReinitialiseWaypointLookIfChanged(
     return;
 
   if (CommonInterface::main_window != nullptr)
-    CommonInterface::main_window->ReinitialiseLook();
+    CommonInterface::main_window->SetLook().map.waypoint.Reinitialise(after);
 }
 
 void
@@ -189,7 +190,7 @@ PageSettingReinitialiseAirspaceLookIfChanged(
         before.classes[i].border_width != after.classes[i].border_width ||
         before.classes[i].fill_mode != after.classes[i].fill_mode) {
       if (CommonInterface::main_window != nullptr)
-        CommonInterface::main_window->ReinitialiseLook();
+        CommonInterface::main_window->SetLook().map.airspace.Reinitialise(after);
       return;
     }
   }
