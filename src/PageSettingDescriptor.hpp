@@ -100,6 +100,8 @@ enum class AirspaceBundleField : uint8_t {
 
   /** Catalog-only; handled by custom get/set (not in field accessors). */
   CLASS_FILTER,
+  CLASS_FILL_COLOR,
+  CLASS_BORDER_COLOR,
 };
 
 /**

@@ -369,6 +369,7 @@ XCSOAR_SOURCES := \
 	$(SRC)/Waypoints/WaypointMapFilterTypes.cpp \
 	$(SRC)/Airspace/AirspaceDisplaySetting.cpp \
 	$(SRC)/Airspace/AirspaceClassFilterProfile.cpp \
+	$(SRC)/Airspace/AirspaceClassColorProfile.cpp \
 	$(SRC)/Terrain/TerrainDisplaySetting.cpp \
 	$(SRC)/PageOverlayTitle.cpp \
 	$(SRC)/PageState.cpp \

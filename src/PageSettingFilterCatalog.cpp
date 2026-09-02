@@ -41,6 +41,19 @@ MakeEnumFilter(PageSettingId id, const char *label, const char *help,
     profile_default, choices, SECTION_FILTERS);
 }
 
+PageSettingDescriptor
+MakeColorFilter(PageSettingId id, const char *label, const char *help,
+                const char *override_key,
+                PageSettingBundleField bundle_field,
+                int profile_default,
+                const StaticEnumChoice *choices) noexcept
+{
+  return PageSettingCatalog::CatalogEnum(
+    id, label, help, override_key, {}, bundle_field,
+    ProfileWireFormat::UINT8_ENUM, profile_default, choices,
+    SECTION_COLOURS);
+}
+
 void
 FillConsecutiveIds(PageSettingId *order, PageSettingId first_id,
                    unsigned count) noexcept

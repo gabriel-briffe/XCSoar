@@ -5,8 +5,9 @@
 
 /**
  * Shared Airspace display choice lists (Config panel and page overrides).
- * Class colours stay outside the page-setting catalog; class filters use
- * #airspace_class_filter_mode_choices.
+ * Class filters use #airspace_class_filter_mode_choices; class fill and
+ * border colours are in the page-setting catalog (preset list from
+ * #AirspaceLook::preset_colors).
  */
 
 #include "Form/DataField/Enum.hpp"

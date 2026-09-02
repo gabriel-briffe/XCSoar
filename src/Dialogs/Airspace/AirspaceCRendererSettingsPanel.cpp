@@ -4,20 +4,99 @@
 #include "AirspaceCRendererSettingsPanel.hpp"
 #include "Airspace.hpp"
 #include "../ColorListDialog.hpp"
-#include "ui/canvas/Features.hpp"
-#include "Form/DataField/Enum.hpp"
+#include "../WidgetDialog.hpp"
+#include "Airspace/AirspaceClassColorProfile.hpp"
+#include "Airspace/AirspaceDisplaySetting.hpp"
+#include "PageSetting.hpp"
+#include "PageSettings.hpp"
 #include "Profile/AirspaceConfig.hpp"
 #include "Profile/Current.hpp"
+#include "Profile/PageProfile.hpp"
+#include "Profile/Profile.hpp"
+#include "ui/canvas/Features.hpp"
+#include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
+#include "UIState.hpp"
 #include "UIGlobals.hpp"
 #include "Look/Look.hpp"
 
 #include <cassert>
 
-AirspaceClassRendererSettingsPanel::AirspaceClassRendererSettingsPanel(AirspaceClass _type) noexcept
+namespace {
+
+void
+SaveClassFillColor(AirspaceClass type, const RGB8Color &color,
+                   const PageAirspaceRendererSettingsContext &page_context,
+                   bool &changed) noexcept
+{
+  const PageSettingId id = AirspaceDisplaySetting::FillColorId(type);
+  const int packed = AirspaceClassColorProfile::Pack(color);
+
+  if (page_context.overrides != nullptr) {
+    page_context.overrides->SetValue(id, packed);
+    changed = true;
+    return;
+  }
+
+  const PagesState &state = CommonInterface::GetUIState().pages;
+
+  if (!state.special_page.IsDefined()) {
+    auto &overrides =
+      CommonInterface::SetUISettings().pages.overrides[state.current_index];
+    if (const int *value = overrides.FindValue(id);
+        value != nullptr && *value != PageSettingOverrides::INHERIT) {
+      overrides.SetValue(id, packed);
+      Profile::Save(Profile::map, overrides, state.current_index);
+      changed = true;
+      return;
+    }
+  }
+
+  Profile::SetAirspaceFillColor(Profile::map, type, color);
+  changed = true;
+}
+
+void
+SaveClassBorderColor(AirspaceClass type, const RGB8Color &color,
+                     const PageAirspaceRendererSettingsContext &page_context,
+                     bool &changed) noexcept
+{
+  const PageSettingId id = AirspaceDisplaySetting::BorderColorId(type);
+  const int packed = AirspaceClassColorProfile::Pack(color);
+
+  if (page_context.overrides != nullptr) {
+    page_context.overrides->SetValue(id, packed);
+    changed = true;
+    return;
+  }
+
+  const PagesState &state = CommonInterface::GetUIState().pages;
+
+  if (!state.special_page.IsDefined()) {
+    auto &overrides =
+      CommonInterface::SetUISettings().pages.overrides[state.current_index];
+    if (const int *value = overrides.FindValue(id);
+        value != nullptr && *value != PageSettingOverrides::INHERIT) {
+      overrides.SetValue(id, packed);
+      Profile::Save(Profile::map, overrides, state.current_index);
+      changed = true;
+      return;
+    }
+  }
+
+  Profile::SetAirspaceBorderColor(Profile::map, type, color);
+  changed = true;
+}
+
+} // namespace
+
+AirspaceClassRendererSettingsPanel::AirspaceClassRendererSettingsPanel(
+  AirspaceClass _type,
+  PageAirspaceRendererSettingsContext _page_context) noexcept
   :RowFormWidget(UIGlobals::GetDialogLook()), border_color_changed(false),
-   fill_color_changed(false), fill_brush_changed(false), type(_type)
+   fill_color_changed(false), fill_brush_changed(false), type(_type),
+   page_context(_page_context)
 {
   assert(type < AIRSPACECLASSCOUNT);
 }
@@ -28,10 +107,22 @@ AirspaceClassRendererSettingsPanel::Prepare(ContainerWindow &parent,
 {
   RowFormWidget::Prepare(parent, rc);
 
-  // Save a working copy
   settings = CommonInterface::GetMapSettings().airspace.classes[type];
 
-  // Add controls
+  if (page_context.overrides != nullptr) {
+    if (const int *value =
+          page_context.overrides->FindValue(
+            AirspaceDisplaySetting::FillColorId(type));
+        value != nullptr)
+      settings.fill_color = AirspaceClassColorProfile::Unpack(*value);
+
+    if (const int *value =
+          page_context.overrides->FindValue(
+            AirspaceDisplaySetting::BorderColorId(type));
+        value != nullptr)
+      settings.border_color = AirspaceClassColorProfile::Unpack(*value);
+  }
+
   AddButton(_("Change Border Color"), [this](){
     border_color_changed |= ShowColorListDialog(settings.border_color);
   });
@@ -82,36 +173,43 @@ AirspaceClassRendererSettingsPanel::Prepare(ContainerWindow &parent,
 bool
 AirspaceClassRendererSettingsPanel::Save(bool &changed) noexcept
 {
-  if (border_color_changed) {
-    Profile::SetAirspaceBorderColor(Profile::map, type, settings.border_color);
-    changed = true;
-  }
+  if (border_color_changed)
+    SaveClassBorderColor(type, settings.border_color, page_context, changed);
 
-  if (fill_color_changed) {
-    Profile::SetAirspaceFillColor(Profile::map, type, settings.fill_color);
-    changed = true;
-  }
+  if (fill_color_changed)
+    SaveClassFillColor(type, settings.fill_color, page_context, changed);
 
+  if (page_context.overrides == nullptr) {
 #ifdef HAVE_HATCHED_BRUSH
-  if (fill_brush_changed) {
-    Profile::SetAirspaceBrush(Profile::map, type, settings.brush);
-    changed = true;
-  }
+    if (fill_brush_changed) {
+      Profile::SetAirspaceBrush(Profile::map, type, settings.brush);
+      changed = true;
+    }
 #endif
 
-  if (SaveValueInteger(BorderWidth, settings.border_width)) {
-    Profile::SetAirspaceBorderWidth(Profile::map, type, settings.border_width);
-    changed = true;
+    if (SaveValueInteger(BorderWidth, settings.border_width)) {
+      Profile::SetAirspaceBorderWidth(Profile::map, type, settings.border_width);
+      changed = true;
+    }
+
+    if (SaveValueEnum(FillMode, settings.fill_mode)) {
+      Profile::SetAirspaceFillMode(Profile::map, type,
+                                   (unsigned)settings.fill_mode);
+      changed = true;
+    }
   }
 
-  if (SaveValueEnum(FillMode, settings.fill_mode)) {
-    Profile::SetAirspaceFillMode(Profile::map, type,
-                                 (unsigned)settings.fill_mode);
-    changed = true;
-  }
+  if (!changed)
+    return true;
 
-  if (changed)
+  if (page_context.overrides != nullptr) {
+    /* Page draft only — do not mutate live MapSettings (Pages panel
+       applies overrides on save / page switch). */
+    Profile::Save(Profile::map, *page_context.overrides,
+                  page_context.page_index);
+  } else {
     CommonInterface::SetMapSettings().airspace.classes[type] = settings;
+  }
 
   return true;
 }

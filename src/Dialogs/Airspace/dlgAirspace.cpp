@@ -50,7 +50,7 @@ AirspaceColorListWidget::OnPaintItem(Canvas &canvas, PixelRect rc,
   assert(i < AirspaceDisplaySetting::FilterDialogRowCount());
 
   const PageSettingId id = AirspaceDisplaySetting::FilterDialogRowId(i);
-  const AirspaceClass type = AirspaceDisplaySetting::ClassFromId(id);
+  const AirspaceClass type = AirspaceDisplaySetting::ClassFromFilterId(id);
 
   const AirspaceRendererSettings &renderer =
     CommonInterface::GetMapSettings().airspace;
@@ -85,7 +85,7 @@ AirspaceColorListWidget::OnActivateItem(unsigned index) noexcept
   assert(index < AirspaceDisplaySetting::FilterDialogRowCount());
 
   const PageSettingId id = AirspaceDisplaySetting::FilterDialogRowId(index);
-  const AirspaceClass type = AirspaceDisplaySetting::ClassFromId(id);
+  const AirspaceClass type = AirspaceDisplaySetting::ClassFromFilterId(id);
 
   AirspaceLook &look =
     CommonInterface::main_window->SetLook().map.airspace;

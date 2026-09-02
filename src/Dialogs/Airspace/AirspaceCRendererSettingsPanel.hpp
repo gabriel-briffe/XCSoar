@@ -5,6 +5,8 @@
 
 #include "Widget/RowFormWidget.hpp"
 #include "Airspace/AirspaceClass.hpp"
+#include "Airspace/AirspaceClass.hpp"
+#include "Dialogs/Airspace/Airspace.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
 
 class AirspaceClassRendererSettingsPanel:
@@ -22,10 +24,13 @@ class AirspaceClassRendererSettingsPanel:
   bool fill_color_changed;
   bool fill_brush_changed;
   AirspaceClass type;
+  PageAirspaceRendererSettingsContext page_context;
   AirspaceClassRendererSettings settings;
 
 public:
-  explicit AirspaceClassRendererSettingsPanel(AirspaceClass type) noexcept;
+  AirspaceClassRendererSettingsPanel(
+    AirspaceClass type,
+    PageAirspaceRendererSettingsContext _page_context = {}) noexcept;
 
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
   bool Save(bool &changed) noexcept override;

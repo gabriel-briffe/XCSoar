@@ -21,11 +21,20 @@
 #include "PageSettingCatalog.hpp"
 #include "PageSettingModule.hpp"
 #include "PageSettingFilterCatalog.hpp"
+#include "Dialogs/Airspace/Airspace.hpp"
+#include "Airspace/AirspaceClassColorProfile.hpp"
+#include "Airspace/AirspaceDisplaySetting.hpp"
+#include "Formatter/AirspaceFormatter.hpp"
+#include "Engine/Airspace/AirspaceClass.hpp"
+#include "MainWindow.hpp"
+#include "Renderer/AirspacePreviewRenderer.hpp"
+#include "Renderer/AirspaceRendererSettings.hpp"
+#include "Look/Look.hpp"
+#include "Look/AirspaceLook.hpp"
+#include "Screen/Layout.hpp"
 #include "Widget/RowFormWidget.hpp"
-
-static_assert(RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS,
-              "RowFormWidget::MAX_ROWS must fit per-page override rows");
-
+#include "Widget/ListWidget.hpp"
+#include "ui/canvas/Canvas.hpp"
 #include "Language/Language.hpp"
 #include "Profile/PageProfile.hpp"
 #include "Profile/Current.hpp"
@@ -39,10 +48,8 @@ static_assert(RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS,
 #include "Weather/EDL/Levels.hpp"
 #include "Weather/EDL/StateController.hpp"
 #endif
-#include "Widget/ListWidget.hpp"
 #include "Widget/TwoWidgets.hpp"
 #include "Widget/ButtonPanelWidget.hpp"
-#include "Widget/VScrollWidget.hpp"
 #include "UIGlobals.hpp"
 #include "util/StaticString.hxx"
 
@@ -61,113 +68,54 @@ static_assert(RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS,
 class PageCustomSettingsWidget;
 
 static void
-ShowPageCustomSettingsDialog(PageSettingOverrides &overrides) noexcept;
+ShowPageCustomSettingsDialog(PageSettingOverrides &overrides,
+                             unsigned page_index) noexcept;
 
 /**
- * Hosts a scrollable custom-settings form and can remeasure after rows
- * are added or removed.
+ * Scrollable list of per-page setting overrides (same #ListWidget
+ * pattern as airspace filter / colours).
  */
-class PageCustomSettingsHost final : public NullWidget {
-  std::unique_ptr<VScrollWidget> scroll;
-  PageCustomSettingsWidget *form = nullptr;
-  PixelRect position{};
-  bool visible = false;
-
-public:
-  PageCustomSettingsHost(const DialogLook &look,
-                         PageSettingOverrides &overrides) noexcept;
-
-  void RefreshLayout() noexcept {
-    if (visible)
-      scroll->Move(position);
-  }
-
-  PageCustomSettingsWidget &GetForm() noexcept {
-    return *form;
-  }
-
-  PixelSize GetMinimumSize() const noexcept override {
-    return scroll->GetMinimumSize();
-  }
-
-  PixelSize GetMaximumSize() const noexcept override {
-    return scroll->GetMaximumSize();
-  }
-
-  void Initialise(ContainerWindow &parent,
-                  const PixelRect &rc) noexcept override {
-    position = rc;
-    scroll->Initialise(parent, rc);
-  }
-
-  void Prepare(ContainerWindow &parent,
-               const PixelRect &rc) noexcept override {
-    position = rc;
-    scroll->Prepare(parent, rc);
-  }
-
-  void Unprepare() noexcept override {
-    scroll->Unprepare();
-  }
-
-  bool Save(bool &changed) noexcept override {
-    return scroll->Save(changed);
-  }
-
-  void Show(const PixelRect &rc) noexcept override {
-    position = rc;
-    visible = true;
-    scroll->Show(rc);
-  }
-
-  void Hide() noexcept override {
-    visible = false;
-    scroll->Hide();
-  }
-
-  void Move(const PixelRect &rc) noexcept override {
-    position = rc;
-    scroll->Move(rc);
-  }
-
-  bool SetFocus() noexcept override {
-    return scroll->SetFocus();
-  }
-
-  bool HasFocus() const noexcept override {
-    return scroll->HasFocus();
-  }
-
-  bool KeyPress(unsigned key_code) noexcept override {
-    return scroll->KeyPress(key_code);
-  }
-};
-
-class PageCustomSettingsWidget final
-  : public RowFormWidget, private DataFieldListener {
+class PageCustomSettingsWidget final : public ListWidget {
   PageSettingOverrides &overrides;
-  PageCustomSettingsHost *host = nullptr;
+  unsigned page_index;
   Button *add_button = nullptr;
   Button *delete_button = nullptr;
-  int selected_control = -1;
+  TextRowRenderer row_renderer;
   StaticArray<PageSettingId, PageSettingOverrides::MAX_ITEMS> row_ids;
 
-  void FillControl(PageSettingId id, unsigned control) noexcept;
-  void AppendRow(PageSettingId id) noexcept;
+  [[nodiscard]]
+  static bool
+  IsColorRow(PageSettingId id) noexcept
+  {
+    return AirspaceDisplaySetting::IsClassColor(id);
+  }
+
   void RebuildRows() noexcept;
   void UpdateActionButtons() noexcept;
   void OnAddClicked() noexcept;
   void OnDeleteClicked() noexcept;
-  void SelectControl(unsigned control) noexcept;
+  void EditValueRow(unsigned index) noexcept;
+  void EditColorRow(unsigned index) noexcept;
+
+  /**
+   * Merge this page's colour overrides into a copy of live map settings
+   * and refresh only #AirspaceLook (same scope as the airspace colours
+   * dialog — not #MainWindow::ReinitialiseLook).
+   */
+  void SyncAirspacePreviewLook() const noexcept;
+
+  [[nodiscard]]
+  AirspaceRendererSettings
+  BuildPreviewRenderer() const noexcept;
+
+  [[nodiscard]]
+  const char *
+  FormatValue(PageSettingId id, int value) const noexcept;
 
 public:
-  PageCustomSettingsWidget(const DialogLook &_look,
-                           PageSettingOverrides &_overrides) noexcept
-    :RowFormWidget(_look), overrides(_overrides) {}
-
-  void SetHost(PageCustomSettingsHost &_host) noexcept {
-    host = &_host;
-  }
+  PageCustomSettingsWidget(PageSettingOverrides &_overrides,
+                           unsigned _page_index) noexcept
+    :overrides(_overrides), page_index(_page_index) {}
 
   void SetActionButtons(Button &_add, Button &_delete) noexcept {
     add_button = &_add;
@@ -184,9 +132,11 @@ public:
   }
 
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-
-private:
-  void OnModified(DataField &df) noexcept override;
+  void OnPaintItem(Canvas &canvas, const PixelRect rc,
+                   unsigned idx) noexcept override;
+  void OnCursorMoved(unsigned index) noexcept override;
+  bool CanActivateItem(unsigned index) const noexcept override;
+  void OnActivateItem(unsigned index) noexcept override;
 };
 
 class PageLayoutEditWidget final
@@ -679,47 +629,8 @@ PageLayoutEditWidget::OnCustomSettingsClicked() noexcept
   if (overrides == nullptr)
     return;
 
-  ShowPageCustomSettingsDialog(*overrides);
+  ShowPageCustomSettingsDialog(*overrides, page_index);
   UpdateCustomSettingsButton();
-}
-
-void
-PageCustomSettingsWidget::FillControl(PageSettingId id,
-                                      unsigned control) noexcept
-{
-  const auto &desc = PageSettingRegistry::Get(id);
-  const int *v = overrides.FindValue(id);
-  assert(v != nullptr);
-
-  auto &df = (DataFieldEnum &)GetDataField(control);
-  PageSettingCatalog::FillDataFieldEnum(df, desc, *v);
-  GetControl(control).RefreshDisplay();
-}
-
-void
-PageCustomSettingsWidget::UpdateActionButtons() noexcept
-{
-  if (add_button != nullptr) {
-    bool can_add = false;
-    for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
-      const auto &module = PageSettingModuleRegistry::Get(m);
-      for (unsigned i = 0; i < module.count(); ++i) {
-        const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
-                                                  i));
-        if (!overrides.Contains(desc.id)) {
-          can_add = true;
-          break;
-        }
-      }
-      if (can_add)
-        break;
-    }
-    add_button->SetEnabled(can_add);
-  }
-
-  if (delete_button != nullptr)
-    delete_button->SetEnabled(selected_control >= 0 &&
-                              unsigned(selected_control) < row_ids.size());
 }
 
 namespace {
@@ -732,6 +643,17 @@ ModuleHasAddable(const PageSettingModule &module,
   for (unsigned i = 0; i < module.count(); ++i) {
     const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
                                                 i));
+    if (AirspaceDisplaySetting::IsClassBorderColor(desc.id))
+      continue;
+
+    if (AirspaceDisplaySetting::IsClassFillColor(desc.id)) {
+      const AirspaceClass cls =
+        AirspaceDisplaySetting::ClassFromFillColorId(desc.id);
+      if (overrides.Contains(AirspaceDisplaySetting::FillColorId(cls)) ||
+          overrides.Contains(AirspaceDisplaySetting::BorderColorId(cls)))
+        continue;
+    }
+
     if (!overrides.Contains(desc.id))
       return true;
   }
@@ -749,7 +671,28 @@ SameSection(const char *a, const char *b) noexcept
   return StringIsEqual(a, b);
 }
 
+static char color_picker_labels[PageSettingAirspaceClassFillColorCount][64];
+static char value_display_buffer[64];
+
 } // namespace
+
+void
+PageCustomSettingsWidget::UpdateActionButtons() noexcept
+{
+  if (add_button != nullptr) {
+    bool can_add = false;
+    for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
+      if (ModuleHasAddable(PageSettingModuleRegistry::Get(m), overrides)) {
+        can_add = true;
+        break;
+      }
+    }
+    add_button->SetEnabled(can_add);
+  }
+
+  if (delete_button != nullptr)
+    delete_button->SetEnabled(IsDefined() && GetList().GetLength() > 0);
+}
 
 void
 PageCustomSettingsWidget::OnAddClicked() noexcept
@@ -794,10 +737,31 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
     if (overrides.Contains(desc.id))
       continue;
 
+    if (AirspaceDisplaySetting::IsClassBorderColor(desc.id))
+      continue;
+
     auto &item = items.append();
     item.id = desc.id;
     item.section = desc.section;
-    item.label = gettext(desc.label);
+
+    if (AirspaceDisplaySetting::IsClassFillColor(desc.id)) {
+      const AirspaceClass cls =
+        AirspaceDisplaySetting::ClassFromFillColorId(desc.id);
+      if (overrides.Contains(AirspaceDisplaySetting::FillColorId(cls)) ||
+          overrides.Contains(AirspaceDisplaySetting::BorderColorId(cls)))
+        continue;
+
+      StaticString<64> label;
+      label.Format(_("%s colours"),
+                     gettext(AirspaceFormatter::GetClass(cls)));
+      const unsigned label_index = unsigned(cls) - 1;
+      StringFormat(color_picker_labels[label_index],
+                   sizeof(color_picker_labels[label_index]),
+                   "%s", label.c_str());
+      item.label = color_picker_labels[label_index];
+    } else {
+      item.label = gettext(desc.label);
+    }
   }
 
   if (items.empty())
@@ -842,130 +806,284 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
     return;
 
   const auto id = ids[choice];
-  overrides.Add(id, PageSettingGet(id));
-  AppendRow(id);
-  UpdateActionButtons();
-  if (host != nullptr)
-    host->RefreshLayout();
+  if (AirspaceDisplaySetting::IsClassFillColor(id)) {
+    const AirspaceClass cls =
+      AirspaceDisplaySetting::ClassFromFillColorId(id);
+    overrides.Add(AirspaceDisplaySetting::FillColorId(cls),
+                  PageSettingGet(AirspaceDisplaySetting::FillColorId(cls)));
+    overrides.Add(AirspaceDisplaySetting::BorderColorId(cls),
+                  PageSettingGet(AirspaceDisplaySetting::BorderColorId(cls)));
+  } else {
+    overrides.Add(id, PageSettingGet(id));
+  }
+
+  RebuildRows();
+}
+
+AirspaceRendererSettings
+PageCustomSettingsWidget::BuildPreviewRenderer() const noexcept
+{
+  AirspaceRendererSettings renderer =
+    CommonInterface::GetMapSettings().airspace;
+
+  for (unsigned i = 0; i < overrides.n_items; ++i) {
+    const PageSettingId id = overrides.items[i].id;
+    const int value = overrides.items[i].value;
+    if (value == PageSettingOverrides::INHERIT)
+      continue;
+
+    if (AirspaceDisplaySetting::IsClassFillColor(id)) {
+      const AirspaceClass cls =
+        AirspaceDisplaySetting::ClassFromFillColorId(id);
+      renderer.classes[unsigned(cls)].fill_color =
+        AirspaceClassColorProfile::Unpack(value);
+    } else if (AirspaceDisplaySetting::IsClassBorderColor(id)) {
+      const AirspaceClass cls =
+        AirspaceDisplaySetting::ClassFromBorderColorId(id);
+      renderer.classes[unsigned(cls)].border_color =
+        AirspaceClassColorProfile::Unpack(value);
+    }
+  }
+
+  return renderer;
 }
 
 void
-PageCustomSettingsWidget::AppendRow(PageSettingId id) noexcept
+PageCustomSettingsWidget::SyncAirspacePreviewLook() const noexcept
+{
+  if (CommonInterface::main_window == nullptr)
+    return;
+
+  CommonInterface::main_window->SetLook().map.airspace.Reinitialise(
+    BuildPreviewRenderer());
+}
+
+const char *
+PageCustomSettingsWidget::FormatValue(PageSettingId id,
+                                      int value) const noexcept
 {
   const auto &desc = PageSettingRegistry::Get(id);
-  const unsigned control = row_ids.size();
-  row_ids.append(id);
-
-  AddEnum(PageSettingCatalog::GettextOptional(desc.label),
-          PageSettingCatalog::GettextOptional(desc.help_global),
-          this);
-  auto &wnd = GetControl(control);
-  wnd.GetDataField()->EnableItemHelp(true);
-  wnd.SetCaptionClickSelects(true, [this, control](){
-    SelectControl(control);
-  });
-  FillControl(id, control);
+  DataFieldEnum df(nullptr);
+  PageSettingCatalog::FillDataFieldEnum(df, desc, value);
+  StringFormat(value_display_buffer, sizeof(value_display_buffer),
+               "%s", df.GetAsDisplayString());
+  return value_display_buffer;
 }
 
 void
 PageCustomSettingsWidget::RebuildRows() noexcept
 {
-  ClearRows();
   row_ids.clear();
-  selected_control = -1;
 
-  for (unsigned i = 0; i < overrides.n_items; ++i)
-    AppendRow(overrides.items[i].id);
+  bool color_class_shown[AIRSPACECLASSCOUNT]{};
 
-  UpdateLayout();
-  if (host != nullptr)
-    host->RefreshLayout();
-  UpdateActionButtons();
-}
+  for (unsigned i = 0; i < overrides.n_items; ++i) {
+    const PageSettingId id = overrides.items[i].id;
+    if (IsColorRow(id)) {
+      const AirspaceClass cls = AirspaceDisplaySetting::ClassFromColorId(id);
+      if (color_class_shown[unsigned(cls)])
+        continue;
 
-void
-PageCustomSettingsWidget::SelectControl(unsigned control) noexcept
-{
-  if (selected_control >= 0 &&
-      unsigned(selected_control) != control)
-    GetControl(unsigned(selected_control)).SetCaptionSelected(false);
+      color_class_shown[unsigned(cls)] = true;
+      row_ids.append(AirspaceDisplaySetting::FillColorId(cls));
+    } else {
+      row_ids.append(id);
+    }
+  }
 
-  selected_control = int(control);
-  GetControl(control).SetCaptionSelected(true);
-  GetControl(control).SetFocus();
+  if (IsDefined()) {
+    GetList().SetLength(row_ids.size());
+    GetList().Invalidate();
+  }
+  SyncAirspacePreviewLook();
   UpdateActionButtons();
 }
 
 void
 PageCustomSettingsWidget::OnDeleteClicked() noexcept
 {
-  if (selected_control < 0 ||
-      unsigned(selected_control) >= row_ids.size())
+  if (!IsDefined() || GetList().GetLength() == 0)
     return;
 
-  const auto id = row_ids[unsigned(selected_control)];
-  if (!overrides.Contains(id))
+  const unsigned index = GetList().GetCursorIndex();
+  if (index >= row_ids.size())
     return;
 
-  overrides.Remove(id);
+  const auto id = row_ids[index];
+  if (IsColorRow(id)) {
+    const AirspaceClass cls = AirspaceDisplaySetting::ClassFromColorId(id);
+    overrides.Remove(AirspaceDisplaySetting::FillColorId(cls));
+    overrides.Remove(AirspaceDisplaySetting::BorderColorId(cls));
+  } else if (!overrides.Contains(id))
+    return;
+  else
+    overrides.Remove(id);
+
   RebuildRows();
+}
+
+void
+PageCustomSettingsWidget::EditColorRow(unsigned index) noexcept
+{
+  assert(index < row_ids.size());
+  assert(IsColorRow(row_ids[index]));
+
+  const AirspaceClass cls =
+    AirspaceDisplaySetting::ClassFromColorId(row_ids[index]);
+
+  PageAirspaceRendererSettingsContext page_context;
+  page_context.overrides = &overrides;
+  page_context.page_index = page_index;
+
+  if (!ShowAirspaceClassRendererSettingsDialog(cls, page_context))
+    return;
+
+  /* Same refresh as dlgAirspace colour mode: only AirspaceLook, then
+     invalidate the list.  Do not call MainWindow::ReinitialiseLook(). */
+  SyncAirspacePreviewLook();
+  GetList().Invalidate();
+}
+
+void
+PageCustomSettingsWidget::EditValueRow(unsigned index) noexcept
+{
+  assert(index < row_ids.size());
+  assert(!IsColorRow(row_ids[index]));
+
+  const PageSettingId id = row_ids[index];
+  const auto &desc = PageSettingRegistry::Get(id);
+  const int *v = overrides.FindValue(id);
+  assert(v != nullptr);
+
+  DataFieldEnum df(nullptr);
+  PageSettingCatalog::FillDataFieldEnum(df, desc, *v);
+  df.EnableItemHelp(true);
+
+  if (!ComboPicker(PageSettingCatalog::GettextOptional(desc.label), df,
+                   PageSettingCatalog::GettextOptional(desc.help_global)))
+    return;
+
+  overrides.SetValue(id, int(df.GetValue()));
+  GetList().Invalidate();
 }
 
 void
 PageCustomSettingsWidget::Prepare(ContainerWindow &parent,
                                   const PixelRect &rc) noexcept
 {
-  RowFormWidget::Prepare(parent, rc);
+  const DialogLook &look = UIGlobals::GetDialogLook();
+  ListControl &list = CreateList(parent, look, rc,
+                                 row_renderer.CalculateLayout(*look.list.font));
   RebuildRows();
+  list.SetLength(row_ids.size());
+  SyncAirspacePreviewLook();
+  UpdateActionButtons();
 }
 
 void
-PageCustomSettingsWidget::OnModified(DataField &df) noexcept
+PageCustomSettingsWidget::OnPaintItem(Canvas &canvas, const PixelRect rc,
+                                      unsigned idx) noexcept
 {
-  for (unsigned i = 0; i < row_ids.size(); ++i) {
-    if (&df != &GetDataField(i))
-      continue;
+  assert(idx < row_ids.size());
 
-    SelectControl(i);
+  const PageSettingId id = row_ids[idx];
+  PixelRect remaining = rc;
 
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    overrides.SetValue(row_ids[i], int(dfe.GetValue()));
+  if (IsColorRow(id)) {
+    const AirspaceClass cls = AirspaceDisplaySetting::ClassFromColorId(id);
+    StaticString<64> label;
+    label.Format(_("%s colours"), gettext(AirspaceFormatter::GetClass(cls)));
+
+    const int second_x = row_renderer.NextColumn(canvas, remaining, label);
+
+    if (CommonInterface::main_window != nullptr) {
+      /* Same sources as dlgAirspace colour list: live look (synced to
+         page overrides via SyncAirspacePreviewLook) + map settings. */
+      const AirspaceRendererSettings &renderer =
+        CommonInterface::GetMapSettings().airspace;
+      const AirspaceLook &airspace_look =
+        CommonInterface::main_window->GetLook().map.airspace;
+      const int padding = Layout::GetTextPadding();
+      const PixelRect preview_rc{second_x, remaining.top + padding,
+                                 remaining.right - padding,
+                                 remaining.bottom - padding};
+
+      const Color text_color = canvas.GetTextColor();
+      if (AirspacePreviewRenderer::PrepareFill(canvas, cls, airspace_look,
+                                               renderer)) {
+        canvas.DrawRectangle(preview_rc);
+        AirspacePreviewRenderer::UnprepareFill(canvas, text_color);
+      }
+      if (AirspacePreviewRenderer::PrepareOutline(canvas, cls, airspace_look,
+                                                  renderer))
+        canvas.DrawRectangle(preview_rc);
+    }
+
+    row_renderer.DrawTextRow(canvas, remaining, label);
     return;
   }
 
-  gcc_unreachable();
+  const auto &desc = PageSettingRegistry::Get(id);
+  const int *v = overrides.FindValue(id);
+  assert(v != nullptr);
+
+  remaining.right = row_renderer.DrawRightColumn(canvas, remaining,
+                                                 FormatValue(id, *v));
+  row_renderer.DrawTextRow(canvas, remaining,
+                           PageSettingCatalog::GettextOptional(desc.label));
+}
+
+void
+PageCustomSettingsWidget::OnCursorMoved(unsigned) noexcept
+{
+  UpdateActionButtons();
+}
+
+bool
+PageCustomSettingsWidget::CanActivateItem(unsigned) const noexcept
+{
+  return true;
+}
+
+void
+PageCustomSettingsWidget::OnActivateItem(unsigned index) noexcept
+{
+  assert(index < row_ids.size());
+
+  if (IsColorRow(row_ids[index]))
+    EditColorRow(index);
+  else
+    EditValueRow(index);
 }
 
 static void
-ShowPageCustomSettingsDialog(PageSettingOverrides &overrides) noexcept
+ShowPageCustomSettingsDialog(PageSettingOverrides &overrides,
+                             unsigned page_index) noexcept
 {
   const DialogLook &look = UIGlobals::GetDialogLook();
   WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
                       look, _("Custom settings"));
 
-  auto host = std::make_unique<PageCustomSettingsHost>(look, overrides);
-  auto &form = host->GetForm();
+  auto list = std::make_unique<PageCustomSettingsWidget>(overrides,
+                                                         page_index);
+  auto &widget = *list;
 
-  dialog.FinishPreliminary(std::move(host));
-  Button *add = dialog.AddButton(_("Add"), [&form](){
-    form.AddClicked();
+  dialog.FinishPreliminary(std::move(list));
+  Button *add = dialog.AddButton(_("Add"), [&widget](){
+    widget.AddClicked();
   });
-  Button *del = dialog.AddButton(_("Delete"), [&form](){
-    form.DeleteClicked();
+  Button *del = dialog.AddButton(_("Delete"), [&widget](){
+    widget.DeleteClicked();
   });
-  form.SetActionButtons(*add, *del);
+  widget.SetActionButtons(*add, *del);
   dialog.AddButton(_("Close"), mrOK);
   dialog.ShowModal();
-}
 
-PageCustomSettingsHost::PageCustomSettingsHost(const DialogLook &look,
-                                               PageSettingOverrides &overrides) noexcept
-{
-  auto form_widget =
-    std::make_unique<PageCustomSettingsWidget>(look, overrides);
-  form = form_widget.get();
-  scroll = std::make_unique<VScrollWidget>(std::move(form_widget), look);
-  form->SetHost(*this);
+  /* Restore map airspace look from live settings — preview sync above
+     only applied this page's draft overrides for the list swatches. */
+  if (CommonInterface::main_window != nullptr)
+    CommonInterface::main_window->SetLook().map.airspace.Reinitialise(
+      CommonInterface::GetMapSettings().airspace);
 }
 
 void

@@ -14,6 +14,7 @@
 namespace PageSettingFilterCatalog {
 
 constexpr const char *SECTION_FILTERS = N_("Filters");
+constexpr const char *SECTION_COLOURS = N_("Colours");
 
 void
 CopyBase(PageSettingDescriptor *dest,
@@ -34,6 +35,14 @@ MakeEnumFilter(PageSettingId id, const char *label, const char *help,
                PageSettingBundleField bundle_field,
                ProfileWireFormat wire, int profile_default,
                const StaticEnumChoice *choices) noexcept;
+
+[[nodiscard]]
+PageSettingDescriptor
+MakeColorFilter(PageSettingId id, const char *label, const char *help,
+                const char *override_key,
+                PageSettingBundleField bundle_field,
+                int profile_default,
+                const StaticEnumChoice *choices) noexcept;
 
 using FilterLabelFn = const char *(*)(PageSettingId id) noexcept;
 

@@ -39,8 +39,7 @@ class Button;
  */
 class RowFormWidget : public WindowWidget {
 public:
-  /** Largest row count in any single form (Pages custom settings uses up
-   * to #PageSettingOverrides::MAX_ITEMS sparse rows). */
+  /** Largest row count in any single form. */
   static constexpr unsigned MAX_ROWS = 160u;
 
 private:

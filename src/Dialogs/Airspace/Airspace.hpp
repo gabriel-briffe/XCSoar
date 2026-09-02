@@ -30,4 +30,13 @@ void
 ShowAirspaceListDialog(const Airspaces &airspace_database,
                        ProtectedAirspaceWarningManager *airspace_warnings);
 
-bool ShowAirspaceClassRendererSettingsDialog(AirspaceClass selected = OTHER);
+struct PageSettingOverrides;
+
+struct PageAirspaceRendererSettingsContext {
+  PageSettingOverrides *overrides = nullptr;
+  unsigned page_index = 0;
+};
+
+bool ShowAirspaceClassRendererSettingsDialog(
+  AirspaceClass selected = OTHER,
+  PageAirspaceRendererSettingsContext page_context = {});

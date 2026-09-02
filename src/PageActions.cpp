@@ -401,10 +401,13 @@ PageActions::ApplyPageDisplaySettings() noexcept
   const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
   const WaypointRendererSettings old_waypoint =
     CommonInterface::GetMapSettings().waypoint;
+  const AirspaceRendererSettings old_airspace =
+    CommonInterface::GetMapSettings().airspace;
   PageSettingApplyGlobalBaseline();
   PageSettingApplyPageOverrides(state.current_index);
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
   PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
+  PageSettingReinitialiseAirspaceLookIfChanged(old_airspace);
   PageSettingNotifyLive();
 }
 

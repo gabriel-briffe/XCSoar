@@ -11,6 +11,7 @@
 
 struct TrailSettings;
 struct WaypointRendererSettings;
+struct AirspaceRendererSettings;
 
 constexpr unsigned PageSettingWaypointMapFilterTypeCount =
   WAYPOINT_MAP_FILTER_TYPE_COUNT;
@@ -31,8 +32,8 @@ enum class PageSettingGroup : uint8_t {
  * elements, waypoints, then airspace).
  *
  * Airspace class filters occupy
- * [#AIRSPACE_CLASS_FILTER_BEGIN, #COUNT): one entry per #AirspaceClass
- * except OTHER (same skip as the Airspace Filter dialog).
+ * [#AIRSPACE_CLASS_FILTER_BEGIN, #AIRSPACE_CLASS_FILL_COLOR_BEGIN).
+ * Class fill and border colours follow (one per #AirspaceClass except OTHER).
  */
 enum class PageSettingId : uint8_t {
   TERRAIN_ENABLE = 0,
@@ -93,7 +94,13 @@ enum class PageSettingId : uint8_t {
 
   AIRSPACE_CLASS_FILTER_BEGIN,
 
-  COUNT = AIRSPACE_CLASS_FILTER_BEGIN + (AIRSPACECLASSCOUNT - 1)
+  AIRSPACE_CLASS_FILL_COLOR_BEGIN =
+    AIRSPACE_CLASS_FILTER_BEGIN + (AIRSPACECLASSCOUNT - 1),
+
+  AIRSPACE_CLASS_BORDER_COLOR_BEGIN =
+    AIRSPACE_CLASS_FILL_COLOR_BEGIN + (AIRSPACECLASSCOUNT - 1),
+
+  COUNT = AIRSPACE_CLASS_BORDER_COLOR_BEGIN + (AIRSPACECLASSCOUNT - 1)
 };
 
 constexpr unsigned PageSettingTerrainCount =
@@ -121,8 +128,15 @@ constexpr unsigned PageSettingAirspaceCount =
   unsigned(PageSettingId::COUNT) - PageSettingAirspaceStart;
 constexpr unsigned PageSettingAirspaceClassFilterCount =
   AIRSPACECLASSCOUNT - 1;
+constexpr unsigned PageSettingAirspaceClassFillColorCount =
+  AIRSPACECLASSCOUNT - 1;
+constexpr unsigned PageSettingAirspaceClassBorderColorCount =
+  AIRSPACECLASSCOUNT - 1;
 constexpr unsigned PageSettingAirspaceBaseCount =
-  PageSettingAirspaceCount - PageSettingAirspaceClassFilterCount;
+  PageSettingAirspaceCount -
+  PageSettingAirspaceClassFilterCount -
+  PageSettingAirspaceClassFillColorCount -
+  PageSettingAirspaceClassBorderColorCount;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items
@@ -130,10 +144,10 @@ constexpr unsigned PageSettingAirspaceBaseCount =
  * setting" while keeping the field on this page.
  *
  * #MAX_ITEMS caps overrides per page (typical use is small; the catalog
- * may grow much larger).  Keep #RowFormWidget::MAX_ROWS >= MAX_ITEMS.
+ * may grow much larger).
  */
 struct PageSettingOverrides {
-  static constexpr unsigned MAX_ITEMS = 160;
+  static constexpr unsigned MAX_ITEMS = 256;
 
   /** Sentinel: follow the global / profile value. */
   static constexpr int INHERIT = -1;
@@ -192,8 +206,6 @@ struct PageSettingOverrides {
 };
 
 static_assert(std::is_trivial_v<PageSettingOverrides>);
-/* Keep RowFormWidget::MAX_ROWS >= PageSettingOverrides::MAX_ITEMS
-   (asserted in Dialogs/Settings/Panels/PagesConfigPanel.cpp). */
 
 struct PageSettingDescriptor;
 
@@ -279,6 +291,14 @@ PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept;
 void
 PageSettingReinitialiseWaypointLookIfChanged(
   const WaypointRendererSettings &before) noexcept;
+
+/**
+ * Rebuild airspace class pens/brushes when @p before class colours
+ * differ from live map settings.
+ */
+void
+PageSettingReinitialiseAirspaceLookIfChanged(
+  const AirspaceRendererSettings &before) noexcept;
 
 /** Push live MapSettings to the map (one FullRedraw). */
 void

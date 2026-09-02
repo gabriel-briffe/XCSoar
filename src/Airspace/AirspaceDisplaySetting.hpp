@@ -11,8 +11,7 @@
 
 /**
  * Airspace settings shared by the Airspace config panel and per-page
- * overrides (display, warnings, and per-class filters).  Class colours
- * remain outside this catalog (Colours dialog only).
+ * overrides (display, warnings, filters, and class colours).
  */
 namespace AirspaceDisplaySetting {
 
@@ -82,16 +81,82 @@ constexpr bool
 IsClassFilter(PageSettingId id) noexcept
 {
   return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) &&
+         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN);
+}
+
+[[nodiscard]]
+constexpr bool
+IsClassFillColor(PageSettingId id) noexcept
+{
+  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) &&
+         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN);
+}
+
+[[nodiscard]]
+constexpr bool
+IsClassBorderColor(PageSettingId id) noexcept
+{
+  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) &&
          unsigned(id) < unsigned(PageSettingId::COUNT);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
-ClassFromId(PageSettingId id) noexcept
+ClassFromFilterId(PageSettingId id) noexcept
 {
   return AirspaceClass(unsigned(id) -
                        unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) +
                        1);
+}
+
+[[nodiscard]]
+constexpr AirspaceClass
+ClassFromFillColorId(PageSettingId id) noexcept
+{
+  return AirspaceClass(unsigned(id) -
+                       unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) +
+                       1);
+}
+
+[[nodiscard]]
+constexpr AirspaceClass
+ClassFromBorderColorId(PageSettingId id) noexcept
+{
+  return AirspaceClass(unsigned(id) -
+                       unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) +
+                       1);
+}
+
+[[nodiscard]]
+constexpr PageSettingId
+FillColorId(AirspaceClass cls) noexcept
+{
+  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) +
+                       unsigned(cls) - 1);
+}
+
+[[nodiscard]]
+constexpr PageSettingId
+BorderColorId(AirspaceClass cls) noexcept
+{
+  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) +
+                       unsigned(cls) - 1);
+}
+
+[[nodiscard]]
+constexpr bool
+IsClassColor(PageSettingId id) noexcept
+{
+  return IsClassFillColor(id) || IsClassBorderColor(id);
+}
+
+[[nodiscard]]
+constexpr AirspaceClass
+ClassFromColorId(PageSettingId id) noexcept
+{
+  return IsClassFillColor(id)
+    ? ClassFromFillColorId(id)
+    : ClassFromBorderColorId(id);
 }
 
 [[nodiscard]]

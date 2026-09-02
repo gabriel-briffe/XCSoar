@@ -11,6 +11,8 @@
 #include "PageSettingModule.hpp"
 #include "PageSettings.hpp"
 #include "UISettings.hpp"
+#include "Renderer/AirspaceRendererSettings.hpp"
+#include "Engine/Airspace/AirspaceClass.hpp"
 
 #include <cassert>
 
@@ -161,6 +163,23 @@ PageSettingReinitialiseWaypointLookIfChanged(
 }
 
 void
+PageSettingReinitialiseAirspaceLookIfChanged(
+  const AirspaceRendererSettings &before) noexcept
+{
+  const AirspaceRendererSettings &after =
+    CommonInterface::GetMapSettings().airspace;
+
+  for (unsigned i = 1; i < AIRSPACECLASSCOUNT; ++i) {
+    if (before.classes[i].fill_color != after.classes[i].fill_color ||
+        before.classes[i].border_color != after.classes[i].border_color) {
+      if (CommonInterface::main_window != nullptr)
+        CommonInterface::main_window->ReinitialiseLook();
+      return;
+    }
+  }
+}
+
+void
 PageSettingNotifyLive() noexcept
 {
   ActionInterface::SendMapSettings(true);
@@ -202,6 +221,8 @@ PageSettingSet(PageSettingId id, int value) noexcept
   const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
   const WaypointRendererSettings old_waypoint =
     CommonInterface::GetMapSettings().waypoint;
+  const AirspaceRendererSettings old_airspace =
+    CommonInterface::GetMapSettings().airspace;
 
   const auto &desc = module.get(id);
   LogFmt("perPage: Set global '{}' value={}", desc.label, value);
@@ -209,6 +230,7 @@ PageSettingSet(PageSettingId id, int value) noexcept
   module.save_global(id, value);
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
   PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
+  PageSettingReinitialiseAirspaceLookIfChanged(old_airspace);
   PageSettingNotifyLive();
 }
 
