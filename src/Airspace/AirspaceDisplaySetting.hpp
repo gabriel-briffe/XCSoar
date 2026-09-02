@@ -3,18 +3,25 @@
 
 #pragma once
 
+#include "Airspace/AirspaceComputerSettings.hpp"
 #include "PageSettingDescriptor.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
 
+#include <cstdint>
+
 /**
- * Airspace map display settings shared by the Airspace config panel and
- * per-page overrides.  Class filter/colours, clip altitude, transparency
- * and warnings remain outside this catalog.
+ * Airspace settings shared by the Airspace config panel and per-page
+ * overrides (display, warnings, and per-class filters).  Class colours
+ * remain outside this catalog.
  */
 namespace AirspaceDisplaySetting {
 
 struct Bundle {
   AirspaceRendererSettings airspace;
+  AirspaceComputerSettings computer;
+  bool enable_airspace_warning_dialog;
+  /** Always present for catalog stability across canvas backends. */
+  bool transparency;
 };
 
 [[nodiscard]]
@@ -69,5 +76,22 @@ LoadGlobal(Bundle &bundle) noexcept;
  */
 bool
 SaveGlobal(const Bundle &current, const Bundle &initial) noexcept;
+
+[[nodiscard]]
+constexpr bool
+IsClassFilter(PageSettingId id) noexcept
+{
+  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) &&
+         unsigned(id) < unsigned(PageSettingId::COUNT);
+}
+
+[[nodiscard]]
+constexpr AirspaceClass
+ClassFromId(PageSettingId id) noexcept
+{
+  return AirspaceClass(unsigned(id) -
+                       unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) +
+                       1);
+}
 
 } // namespace AirspaceDisplaySetting

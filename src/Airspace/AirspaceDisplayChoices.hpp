@@ -5,12 +5,23 @@
 
 /**
  * Shared Airspace display choice lists (Config panel and page overrides).
- * Filter / colours / warnings stay outside the page-setting catalog.
+ * Class colours stay outside the page-setting catalog; class filters use
+ * #airspace_class_filter_mode_choices.
  */
 
 #include "Form/DataField/Enum.hpp"
 #include "Language/Language.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
+
+#include <cstdint>
+
+/** Combined display + warning mode for one airspace class. */
+enum class AirspaceClassFilterMode : uint8_t {
+  NONE = 0,
+  WARN = 1,
+  DISPLAY = 2,
+  WARN_AND_DISPLAY = 3,
+};
 
 static constexpr StaticEnumChoice airspace_display_mode_choices[] = {
   { AirspaceDisplayMode::ALLON, N_("All on"),
@@ -43,5 +54,17 @@ static constexpr StaticEnumChoice airspace_fill_mode_choices[] = {
        "airspace.") },
   { AirspaceRendererSettings::FillMode::NONE, N_("No fill"),
     N_("Don't fill the airspace area.") },
+  nullptr
+};
+
+static constexpr StaticEnumChoice airspace_class_filter_mode_choices[] = {
+  { AirspaceClassFilterMode::NONE, N_("None"),
+    N_("Do not display or warn for this airspace class.") },
+  { AirspaceClassFilterMode::WARN, N_("Warn"),
+    N_("Warn for this airspace class without drawing it on the map.") },
+  { AirspaceClassFilterMode::DISPLAY, N_("Display"),
+    N_("Draw this airspace class on the map without warnings.") },
+  { AirspaceClassFilterMode::WARN_AND_DISPLAY, N_("Warn + Display"),
+    N_("Draw this airspace class on the map and enable warnings.") },
   nullptr
 };

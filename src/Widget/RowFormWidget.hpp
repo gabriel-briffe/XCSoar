@@ -40,7 +40,7 @@ class Button;
 class RowFormWidget : public WindowWidget {
 public:
   /** Largest form in the app (Pages custom settings). */
-  static constexpr unsigned MAX_ROWS = 48u;
+  static constexpr unsigned MAX_ROWS = 128u;
 
 private:
   struct Row {

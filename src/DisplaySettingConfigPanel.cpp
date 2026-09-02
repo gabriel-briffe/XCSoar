@@ -34,7 +34,8 @@ AddIntegerRow(RowFormWidget &form, const PageSettingDescriptor &desc,
 {
   form.AddInteger(PageSettingCatalog::GettextOptional(desc.label),
                   PageSettingCatalog::GettextOptional(desc.help_global),
-                  "%d %%", "%d", desc.int_min, desc.int_max, desc.int_step,
+                  desc.int_format != nullptr ? desc.int_format : "%d %%",
+                  "%d", desc.int_min, desc.int_max, desc.int_step,
                   value, listener);
 }
 

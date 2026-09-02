@@ -56,12 +56,13 @@ constexpr PageSettingDescriptor
 CatalogBool(PageSettingId id, const char *label, const char *help,
             const char *override_key, std::string_view profile_key,
             PageSettingBundleField bundle_field,
-            int profile_default = 1) noexcept
+            int profile_default = 1,
+            const char *section = nullptr) noexcept
 {
   return {
     id, PageSettingType::BOOL, label, help, override_key, profile_key,
     bundle_field, ProfileWireFormat::BOOL, profile_default,
-    enabled_disabled_choices, 0, 0, 0,
+    enabled_disabled_choices, 0, 0, 0, nullptr, section,
   };
 }
 
@@ -71,11 +72,12 @@ CatalogEnum(PageSettingId id, const char *label, const char *help,
               const char *override_key, std::string_view profile_key,
               PageSettingBundleField bundle_field, ProfileWireFormat wire,
               int profile_default,
-              const StaticEnumChoice *choices) noexcept
+              const StaticEnumChoice *choices,
+              const char *section = nullptr) noexcept
 {
   return {
     id, PageSettingType::ENUM, label, help, override_key, profile_key,
-    bundle_field, wire, profile_default, choices, 0, 0, 0,
+    bundle_field, wire, profile_default, choices, 0, 0, 0, nullptr, section,
   };
 }
 
@@ -85,12 +87,14 @@ CatalogInteger(PageSettingId id, const char *label, const char *help,
                const char *override_key, std::string_view profile_key,
                PageSettingBundleField bundle_field, ProfileWireFormat wire,
                int profile_default,
-               int int_min, int int_max, int int_step) noexcept
+               int int_min, int int_max, int int_step,
+               const char *int_format = "%d %%",
+               const char *section = nullptr) noexcept
 {
   return {
     id, PageSettingType::INTEGER, label, help, override_key, profile_key,
     bundle_field, wire, profile_default,
-    nullptr, int_min, int_max, int_step,
+    nullptr, int_min, int_max, int_step, int_format, section,
   };
 }
 

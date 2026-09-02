@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "Engine/Airspace/AirspaceClass.hpp"
+
 #include <cstdint>
 #include <type_traits>
 
@@ -23,6 +25,10 @@ enum class PageSettingGroup : uint8_t {
  * Identifiers for settings that may be overridden per page.
  * The registry in PageSetting.cpp is the catalog (terrain, orientation,
  * elements, waypoints, then airspace).
+ *
+ * Airspace class filters occupy
+ * [#AIRSPACE_CLASS_FILTER_BEGIN, #COUNT): one entry per #AirspaceClass
+ * except OTHER (same skip as the Airspace Filter dialog).
  */
 enum class PageSettingId : uint8_t {
   TERRAIN_ENABLE = 0,
@@ -65,10 +71,20 @@ enum class PageSettingId : uint8_t {
   AIRSPACE_DISPLAY,
   AIRSPACE_LABEL_VISIBILITY,
   AIRSPACE_SHOW_NOTAM_LABELS,
+  AIRSPACE_CLIP_ALTITUDE,
+  AIRSPACE_MARGIN,
+  AIRSPACE_WARNINGS,
+  AIRSPACE_WARNING_DIALOG,
+  AIRSPACE_WARNING_TIME,
+  AIRSPACE_REPETITIVE_SOUND,
+  AIRSPACE_ACKNOWLEDGE_TIME,
   AIRSPACE_BLACK_OUTLINE,
   AIRSPACE_FILL_MODE,
+  AIRSPACE_TRANSPARENCY,
 
-  COUNT
+  AIRSPACE_CLASS_FILTER_BEGIN,
+
+  COUNT = AIRSPACE_CLASS_FILTER_BEGIN + (AIRSPACECLASSCOUNT - 1)
 };
 
 constexpr unsigned PageSettingTerrainCount =
@@ -89,6 +105,10 @@ constexpr unsigned PageSettingWaypointsCount =
   PageSettingAirspaceStart - PageSettingWaypointsStart;
 constexpr unsigned PageSettingAirspaceCount =
   unsigned(PageSettingId::COUNT) - PageSettingAirspaceStart;
+constexpr unsigned PageSettingAirspaceClassFilterCount =
+  AIRSPACECLASSCOUNT - 1;
+constexpr unsigned PageSettingAirspaceBaseCount =
+  PageSettingAirspaceCount - PageSettingAirspaceClassFilterCount;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items
@@ -99,7 +119,7 @@ constexpr unsigned PageSettingAirspaceCount =
  * #PageSettingId::COUNT.
  */
 struct PageSettingOverrides {
-  static constexpr unsigned MAX_ITEMS = 48;
+  static constexpr unsigned MAX_ITEMS = 128;
 
   /** Sentinel: follow the global / profile value. */
   static constexpr int INHERIT = -1;

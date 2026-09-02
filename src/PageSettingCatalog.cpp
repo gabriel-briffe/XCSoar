@@ -48,8 +48,10 @@ FillDataFieldEnum(DataFieldEnum &df, const PageSettingDescriptor &desc,
 
   if (desc.type == PageSettingType::INTEGER) {
     char label[16];
+    const char *format =
+      desc.int_format != nullptr ? desc.int_format : "%d %%";
     for (int v = desc.int_min; v <= desc.int_max; v += desc.int_step) {
-      StringFormat(label, sizeof(label), "%d %%", v);
+      StringFormat(label, sizeof(label), format, v);
       df.AddChoice(unsigned(v), label);
     }
   } else {

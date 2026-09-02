@@ -81,8 +81,16 @@ enum class AirspaceBundleField : uint8_t {
   DISPLAY,
   LABEL_VISIBILITY,
   SHOW_NOTAM_LABELS,
+  CLIP_ALTITUDE,
+  MARGIN,
+  WARNINGS,
+  WARNING_DIALOG,
+  WARNING_TIME,
+  REPETITIVE_SOUND,
+  ACKNOWLEDGE_TIME,
   BLACK_OUTLINE,
   FILL_MODE,
+  TRANSPARENCY,
 
   COUNT
 };
@@ -159,4 +167,17 @@ struct PageSettingDescriptor {
   int int_min;
   int int_max;
   int int_step;
+
+  /**
+   * printf format for INTEGER choice labels (e.g. "%d %%", "%d m", "%d s").
+   * nullptr means "%d %%".
+   */
+  const char *int_format = nullptr;
+
+  /**
+   * Optional section for the Pages → Custom settings Add picker (N_()).
+   * nullptr continues the previous section (no header).  When the section
+   * string changes, the picker inserts a non-selectable header.
+   */
+  const char *section = nullptr;
 };

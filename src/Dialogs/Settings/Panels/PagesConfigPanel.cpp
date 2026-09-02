@@ -10,6 +10,7 @@
 #include "util/StaticArray.hxx"
 #include "util/Compiler.h"
 #include "util/StringFormat.hpp"
+#include "util/StringCompare.hxx"
 #include "Renderer/TextRowRenderer.hpp"
 #include "Form/Button.hpp"
 #include "Form/ButtonPanel.hpp"
@@ -734,6 +735,17 @@ ModuleHasAddable(const PageSettingModule &module,
   return false;
 }
 
+[[nodiscard]]
+bool
+SameSection(const char *a, const char *b) noexcept
+{
+  if (a == b)
+    return true;
+  if (a == nullptr || b == nullptr)
+    return false;
+  return StringIsEqual(a, b);
+}
+
 } // namespace
 
 void
@@ -764,13 +776,27 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
 
   const auto &module = PageSettingModuleRegistry::Get(setting_group);
 
+  static constexpr int SECTION_HEADER = -1;
+
   ComboList list;
   StaticArray<PageSettingId, unsigned(PageSettingId::COUNT)> ids;
+  const char *prev_section = nullptr;
   for (unsigned i = 0; i < module.count(); ++i) {
     const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
                                                 i));
     if (overrides.Contains(desc.id))
       continue;
+
+    if (!SameSection(desc.section, prev_section)) {
+      if (desc.section != nullptr) {
+  StaticString<96> header;
+        header.Format("---------------- %s ----------------",
+                      gettext(desc.section));
+        list.Append(SECTION_HEADER, header.c_str());
+      }
+      prev_section = desc.section;
+    }
+
     list.Append(ids.size(), gettext(desc.label));
     ids.append(desc.id);
   }
@@ -782,10 +808,14 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
   caption.Format("%s: %s", _("Add"), gettext(module.label));
 
   const int result = ComboPicker(caption, list, nullptr);
-  if (result < 0 || unsigned(result) >= ids.size())
+  if (result < 0 || unsigned(result) >= list.size())
     return;
 
-  const auto id = ids[result];
+  const int choice = list[result].int_value;
+  if (choice < 0 || unsigned(choice) >= ids.size())
+    return;
+
+  const auto id = ids[choice];
   overrides.Add(id, PageSettingGet(id));
   for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i)
     if (PageSettingRegistry::Get(i).id == id) {
