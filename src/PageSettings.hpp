@@ -367,6 +367,12 @@ struct PageSettings {
    */
   std::array<PageSettingOverrides, MAX_PAGES> overrides;
 
+  /**
+   * Menu commands that write #overrides instead of the global profile
+   * while the page is active.  Parallel to #pages.
+   */
+  std::array<PageOnlyCommands, MAX_PAGES> page_only_commands;
+
   unsigned n_pages;
 
   /**

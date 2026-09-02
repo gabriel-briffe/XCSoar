@@ -68,7 +68,7 @@ static const PageSettingModule modules[] = {
   },
   {
     PageSettingGroup::AIRSPACE,
-    PageSettingId::AIRSPACE_DISPLAY,
+    PageSettingId::AIRSPACE_ENABLE,
     N_("Airspace"),
     AirspaceDisplaySetting::Count,
     AirspaceDisplaySetting::Get,

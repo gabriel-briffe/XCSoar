@@ -37,7 +37,7 @@ namespace {
 using Bundle = AirspaceDisplaySetting::Bundle;
 using Duration = AirspaceWarningConfig::Duration;
 
-static_assert(PageSettingAirspaceBaseCount == 13,
+static_assert(PageSettingAirspaceBaseCount == 14,
               "Airspace base catalog size mismatch");
 static_assert(PageSettingAirspaceCount ==
               PageSettingAirspaceBaseCount +
@@ -49,6 +49,15 @@ static_assert(PageSettingAirspaceCount ==
               "Airspace catalog size mismatch");
 
 static constexpr PageSettingDescriptor base_catalog[] = {
+  PageSettingCatalog::CatalogBool(
+    PageSettingId::AIRSPACE_ENABLE,
+    N_("Show airspace"),
+    N_("Draw airspace on the map.  This is a temporary map display "
+       "choice and is not stored in the global profile; use page-only "
+       "commands or custom settings to keep it per page."),
+    "OverrideAirspaceEnable",
+    {},
+    {.airspace = AirspaceBundleField::ENABLE}),
   PageSettingCatalog::CatalogEnum(
     PageSettingId::AIRSPACE_DISPLAY,
     N_("Airspace display"),
@@ -172,6 +181,7 @@ struct FieldAccessor {
   void (*set)(Bundle &, int) noexcept;
 };
 
+PAGE_SETTING_FIELD_BOOL(Enable, airspace.enable)
 PAGE_SETTING_FIELD_ENUM(Display, airspace.altitude_mode, AirspaceDisplayMode)
 PAGE_SETTING_FIELD_ENUM(LabelVisibility, airspace.label_selection,
                           AirspaceRendererSettings::LabelSelection)
@@ -213,6 +223,7 @@ PAGE_SETTING_FIELD_ENUM(FillMode, airspace.fill_mode,
 PAGE_SETTING_FIELD_BOOL(Transparency, transparency)
 
 static constexpr FieldAccessor field_accessors[] = {
+  PAGE_SETTING_FIELD_ROW(Enable),
   PAGE_SETTING_FIELD_ROW(Display),
   PAGE_SETTING_FIELD_ROW(LabelVisibility),
   PAGE_SETTING_FIELD_ROW(ShowNotamLabels),
@@ -740,6 +751,7 @@ void
 ApplyLive(const Bundle &bundle) noexcept
 {
   auto &live = CommonInterface::SetMapSettings().airspace;
+  live.enable = bundle.airspace.enable;
   live.altitude_mode = bundle.airspace.altitude_mode;
   live.label_selection = bundle.airspace.label_selection;
   live.show_notam_labels = bundle.airspace.show_notam_labels;

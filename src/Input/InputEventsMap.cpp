@@ -6,6 +6,7 @@
 #include "Message.hpp"
 #include "Interface.hpp"
 #include "ActionInterface.hpp"
+#include "PageSetting.hpp"
 #include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
 #include "UIGlobals.hpp"
@@ -197,22 +198,24 @@ InputEvents::eventDistanceRings(const char *misc)
 {
   MapSettings &settings_map = CommonInterface::SetMapSettings();
 
-  if (StringIsEqual(misc, "toggle"))
-    settings_map.distance_rings_enabled = !settings_map.distance_rings_enabled;
-  else if (StringIsEqual(misc, "on"))
-    settings_map.distance_rings_enabled = true;
-  else if (StringIsEqual(misc, "off"))
-    settings_map.distance_rings_enabled = false;
-  else if (StringIsEqual(misc, "show")) {
+  if (StringIsEqual(misc, "show")) {
     Message::AddMessage(settings_map.distance_rings_enabled
                         ? _("Distance rings on")
                         : _("Distance rings off"));
     return;
   }
 
-  Profile::Set(ProfileKeys::DistanceRingsEnabled,
-               settings_map.distance_rings_enabled);
-  ActionInterface::SendMapSettings(true);
+  int value = settings_map.distance_rings_enabled ? 1 : 0;
+  if (StringIsEqual(misc, "toggle"))
+    value = value ? 0 : 1;
+  else if (StringIsEqual(misc, "on"))
+    value = 1;
+  else if (StringIsEqual(misc, "off"))
+    value = 0;
+  else
+    return;
+
+  PageSettingApplyCommand(PageSettingId::DISTANCE_RINGS, value);
 }
 
 void

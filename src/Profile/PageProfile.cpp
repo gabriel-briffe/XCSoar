@@ -6,6 +6,7 @@
 #include "Map.hpp"
 #include "PageSettings.hpp"
 #include "PageSetting.hpp"
+#include "PageSettingCommand.hpp"
 #include "PageSettingDescriptor.hpp"
 #include "InfoBoxes/InfoBoxSettings.hpp"
 #include "util/NumberParser.hxx"
@@ -176,12 +177,36 @@ LoadOverrides(const ProfileMap &map, PageSettingOverrides &overrides,
   }
 }
 
+static void
+LoadPageOnlyCommands(const ProfileMap &map, PageOnlyCommands &commands,
+                     const unsigned page)
+{
+  commands.Clear();
+
+  char profileKey[64];
+  int prefixLen = StringFormat(profileKey, sizeof(profileKey), "Page%u", page);
+  if (prefixLen <= 0 || (size_t)prefixLen >= sizeof(profileKey))
+    return;
+
+  for (unsigned i = 0; i < PageSettingCommandCount(); ++i) {
+    const PageSettingId id = PageSettingCommandGet(i).id;
+    StringFormat(profileKey + prefixLen,
+                 sizeof(profileKey) - size_t(prefixLen),
+                 "PageOnly%u", unsigned(id));
+    int value;
+    if (!map.Get(profileKey, value) || value == 0)
+      continue;
+    commands.Add(id);
+  }
+}
+
 void
 Profile::Load(const ProfileMap &map, PageSettings &settings)
 {
   for (unsigned i = 0; i < PageSettings::MAX_PAGES; ++i) {
     ::Load(map, settings.pages[i], i);
     LoadOverrides(map, settings.overrides[i], i);
+    LoadPageOnlyCommands(map, settings.page_only_commands[i], i);
   }
 
   settings.Compress();
@@ -294,11 +319,40 @@ Profile::Save(ProfileMap &map, const PageSettingOverrides &overrides,
   SaveOverrides(map, overrides, i);
 }
 
+static void
+SavePageOnlyCommands(ProfileMap &map, const PageOnlyCommands &commands,
+                     const unsigned i)
+{
+  char profileKey[64];
+  int prefixLen = StringFormat(profileKey, sizeof(profileKey), "Page%u", i);
+  if (prefixLen <= 0 || (size_t)prefixLen >= sizeof(profileKey))
+    return;
+
+  for (unsigned c = 0; c < PageSettingCommandCount(); ++c) {
+    const PageSettingId id = PageSettingCommandGet(c).id;
+    StringFormat(profileKey + prefixLen,
+                 sizeof(profileKey) - size_t(prefixLen),
+                 "PageOnly%u", unsigned(id));
+    if (commands.Contains(id))
+      map.Set(profileKey, 1);
+    else
+      map.Remove(profileKey);
+  }
+}
+
+void
+Profile::Save(ProfileMap &map, const PageOnlyCommands &commands,
+              const unsigned i)
+{
+  SavePageOnlyCommands(map, commands, i);
+}
+
 void
 Profile::Save(ProfileMap &map, const PageSettings &settings)
 {
   for (unsigned i = 0; i < PageSettings::MAX_PAGES; ++i) {
     Save(map, settings.pages[i], i);
     SaveOverrides(map, settings.overrides[i], i);
+    SavePageOnlyCommands(map, settings.page_only_commands[i], i);
   }
 }

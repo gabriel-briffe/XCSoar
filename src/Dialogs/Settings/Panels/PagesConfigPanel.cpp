@@ -3,6 +3,7 @@
 
 #include "PagesConfigPanel.hpp"
 #include "PageCustomSettingsWidget.hpp"
+#include "PageOnlyCommandsWidget.hpp"
 #include "Airspace/AirspaceDisplaySetting.hpp"
 #include "Dialogs/Message.hpp"
 #include "Dialogs/ComboPicker.hpp"
@@ -69,6 +70,7 @@ private:
     OVERLAY,
     OVERLAY_DETAIL,
     CUSTOM_SETTINGS,
+    PAGE_ONLY_COMMANDS,
   };
 
   static constexpr unsigned IBP_NONE = 0x7000;
@@ -76,6 +78,7 @@ private:
 
   PageLayout value;
   PageSettingOverrides *overrides = nullptr;
+  PageOnlyCommands *page_only_commands = nullptr;
   unsigned page_index = 0;
 
   Listener &listener;
@@ -85,6 +88,8 @@ private:
   void ApplyValueToForm() noexcept;
   void UpdateCustomSettingsButton() noexcept;
   void OnCustomSettingsClicked() noexcept;
+  void UpdatePageOnlyCommandsButton() noexcept;
+  void OnPageOnlyCommandsClicked() noexcept;
 
 public:
   PageLayoutEditWidget(const DialogLook &_look, Listener &_listener)
@@ -92,7 +97,8 @@ public:
      listener(_listener) {}
 
   void SetValue(unsigned index, const PageLayout &_value,
-                PageSettingOverrides &_overrides);
+                PageSettingOverrides &_overrides,
+                PageOnlyCommands &_page_only_commands);
 
   /* virtual methods from class Widget */
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
@@ -137,6 +143,7 @@ public:
         auto &page = settings.pages[n];
         page = PageLayout::Default();
         settings.overrides[n].Clear();
+        settings.page_only_commands[n].Clear();
         GetList().SetLength(n + 1);
         GetList().SetCursorIndex(n);
       }
@@ -152,14 +159,19 @@ public:
         std::copy(settings.overrides.begin() + cursor + 1,
                   settings.overrides.begin() + n,
                   settings.overrides.begin() + cursor);
+        std::copy(settings.page_only_commands.begin() + cursor + 1,
+                  settings.page_only_commands.begin() + n,
+                  settings.page_only_commands.begin() + cursor);
         settings.overrides[n - 1].Clear();
+        settings.page_only_commands[n - 1].Clear();
         GetList().SetLength(n - 1);
 
         if (cursor == n - 1)
           GetList().SetCursorIndex(cursor - 1);
         else
           editor->SetValue(cursor, settings.pages[cursor],
-                           settings.overrides[cursor]);
+                           settings.overrides[cursor],
+                           settings.page_only_commands[cursor]);
       }
     });
 
@@ -169,6 +181,8 @@ public:
         std::swap(settings.pages[cursor], settings.pages[cursor - 1]);
         std::swap(settings.overrides[cursor],
                   settings.overrides[cursor - 1]);
+        std::swap(settings.page_only_commands[cursor],
+                  settings.page_only_commands[cursor - 1]);
         GetList().SetCursorIndex(cursor - 1);
       }
     });
@@ -180,6 +194,8 @@ public:
         std::swap(settings.pages[cursor], settings.pages[cursor + 1]);
         std::swap(settings.overrides[cursor],
                   settings.overrides[cursor + 1]);
+        std::swap(settings.page_only_commands[cursor],
+                  settings.page_only_commands[cursor + 1]);
         GetList().SetCursorIndex(cursor + 1);
       }
     });
@@ -490,14 +506,21 @@ PageLayoutEditWidget::Prepare([[maybe_unused]] ContainerWindow &parent, [[maybe_
     OnCustomSettingsClicked();
   });
   UpdateCustomSettingsButton();
+
+  AddButton(_("Page-only commands"), [this](){
+    OnPageOnlyCommandsClicked();
+  });
+  UpdatePageOnlyCommandsButton();
 }
 
 void
 PageLayoutEditWidget::SetValue(unsigned index, const PageLayout &_value,
-                               PageSettingOverrides &_overrides)
+                               PageSettingOverrides &_overrides,
+                               PageOnlyCommands &_page_only_commands)
 {
   page_index = index;
   overrides = &_overrides;
+  page_only_commands = &_page_only_commands;
   value = _value;
   value.Normalise();
 
@@ -521,6 +544,7 @@ PageLayoutEditWidget::SetValue(unsigned index, const PageLayout &_value,
   FillOverlayDetailControl();
   UpdateOverlayControls();
   UpdateCustomSettingsButton();
+  UpdatePageOnlyCommandsButton();
 }
 
 void
@@ -547,6 +571,32 @@ PageLayoutEditWidget::OnCustomSettingsClicked() noexcept
 
   ShowPageCustomSettingsDialog(*overrides);
   UpdateCustomSettingsButton();
+}
+
+void
+PageLayoutEditWidget::UpdatePageOnlyCommandsButton() noexcept
+{
+  StaticString<64> caption;
+  const unsigned n = page_only_commands != nullptr
+    ? page_only_commands->n_items
+    : 0;
+  if (n == 0)
+    caption = _("Page-only commands");
+  else
+    caption.Format("%s (%u)", _("Page-only commands"), n);
+
+  auto &button = (Button &)GetRow(PAGE_ONLY_COMMANDS);
+  button.SetCaption(caption);
+}
+
+void
+PageLayoutEditWidget::OnPageOnlyCommandsClicked() noexcept
+{
+  if (page_only_commands == nullptr)
+    return;
+
+  ShowPageOnlyCommandsDialog(*page_only_commands);
+  UpdatePageOnlyCommandsButton();
 }
 
 void
@@ -694,7 +744,8 @@ void
 PageListWidget::Show(const PixelRect &rc) noexcept
 {
   const unsigned i = GetList().GetCursorIndex();
-  editor->SetValue(i, settings.pages[i], settings.overrides[i]);
+  editor->SetValue(i, settings.pages[i], settings.overrides[i],
+                   settings.page_only_commands[i]);
 
   ListWidget::Show(rc);
 }
@@ -708,8 +759,10 @@ PageListWidget::Save(bool &_changed) noexcept
   std::fill(settings.pages.begin() + settings.n_pages,
             settings.pages.end(),
             PageLayout::Undefined());
-  for (unsigned i = settings.n_pages; i < PageSettings::MAX_PAGES; ++i)
+  for (unsigned i = settings.n_pages; i < PageSettings::MAX_PAGES; ++i) {
     settings.overrides[i].Clear();
+    settings.page_only_commands[i].Clear();
+  }
 
   for (unsigned i = 0; i < settings.n_pages; ++i)
     settings.pages[i].Normalise();
@@ -725,6 +778,11 @@ PageListWidget::Save(bool &_changed) noexcept
 
     if (settings.overrides[i] != _settings.overrides[i]) {
       Profile::Save(Profile::map, settings.overrides[i], i);
+      changed = true;
+    }
+
+    if (settings.page_only_commands[i] != _settings.page_only_commands[i]) {
+      Profile::Save(Profile::map, settings.page_only_commands[i], i);
       changed = true;
     }
   }
@@ -760,7 +818,8 @@ PageListWidget::OnCursorMoved[[maybe_unused]] (unsigned idx) noexcept
 {
   UpdateButtons();
 
-  editor->SetValue(idx, settings.pages[idx], settings.overrides[idx]);
+  editor->SetValue(idx, settings.pages[idx], settings.overrides[idx],
+                   settings.page_only_commands[idx]);
 }
 
 void
@@ -777,7 +836,8 @@ PageListWidget::OnModified(const PageLayout &new_value) noexcept
 
   if (i == 0 && !new_value.IsDefined()) {
     /* refuse to delete the first page (kludge) */
-    editor->SetValue(i, settings.pages[i], settings.overrides[i]);
+    editor->SetValue(i, settings.pages[i], settings.overrides[i],
+                     settings.page_only_commands[i]);
     return;
   }
 

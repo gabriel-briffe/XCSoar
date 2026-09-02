@@ -7,12 +7,12 @@
 #include "Interface.hpp"
 #include "ActionInterface.hpp"
 #include "Message.hpp"
+#include "PageSetting.hpp"
 #include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Settings.hpp"
 #include "Profile/Current.hpp"
 #include "util/Macros.hpp"
-#include "util/EnumCast.hpp"
 #include "Units/Units.hpp"
 #include "Protection.hpp"
 #include "UtilsSettings.hpp"
@@ -66,19 +66,7 @@ InputEvents::eventSnailTrail(const char *misc)
 {
   MapSettings &settings_map = CommonInterface::SetMapSettings();
 
-  if (StringIsEqual(misc, "toggle")) {
-    unsigned trail_length = (int)settings_map.trail.length;
-    trail_length = (trail_length + 1u) % 4u;
-    settings_map.trail.length = (TrailSettings::Length)trail_length;
-  } else if (StringIsEqual(misc, "off"))
-    settings_map.trail.length = TrailSettings::Length::OFF;
-  else if (StringIsEqual(misc, "long"))
-    settings_map.trail.length = TrailSettings::Length::LONG;
-  else if (StringIsEqual(misc, "short"))
-    settings_map.trail.length = TrailSettings::Length::SHORT;
-  else if (StringIsEqual(misc, "full"))
-    settings_map.trail.length = TrailSettings::Length::FULL;
-  else if (StringIsEqual(misc, "show")) {
+  if (StringIsEqual(misc, "show")) {
     switch (settings_map.trail.length) {
     case TrailSettings::Length::OFF:
       Message::AddMessage(_("Snail trail off"));
@@ -96,9 +84,24 @@ InputEvents::eventSnailTrail(const char *misc)
       Message::AddMessage(_("Full snail trail"));
       break;
     }
+    return;
   }
 
-  ActionInterface::SendMapSettings(true);
+  int value = int(settings_map.trail.length);
+  if (StringIsEqual(misc, "toggle"))
+    value = (value + 1) % 4;
+  else if (StringIsEqual(misc, "off"))
+    value = int(TrailSettings::Length::OFF);
+  else if (StringIsEqual(misc, "long"))
+    value = int(TrailSettings::Length::LONG);
+  else if (StringIsEqual(misc, "short"))
+    value = int(TrailSettings::Length::SHORT);
+  else if (StringIsEqual(misc, "full"))
+    value = int(TrailSettings::Length::FULL);
+  else
+    return;
+
+  PageSettingApplyCommand(PageSettingId::TRAIL_LENGTH, value);
 }
 
 void
@@ -111,30 +114,57 @@ InputEvents::eventTerrainTopology(const char *misc)
 void
 InputEvents::eventTerrainTopography(const char *misc)
 {
-  if (StringIsEqual(misc, "terrain toggle"))
-    sub_TerrainTopography(-2);
-  else if (StringIsEqual(misc, "topography toggle"))
-    sub_TerrainTopography(-3);
-  else if (StringIsEqual(misc, "topology toggle"))
-    sub_TerrainTopography(-3);
-  else if (StringIsEqual(misc, "terrain on"))
-    sub_TerrainTopography(3);
-  else if (StringIsEqual(misc, "terrain off"))
-    sub_TerrainTopography(4);
-  else if (StringIsEqual(misc, "topography on"))
-    sub_TerrainTopography(1);
-  else if (StringIsEqual(misc, "topography off"))
-    sub_TerrainTopography(2);
-  else if (StringIsEqual(misc, "topology on"))
-    sub_TerrainTopography(1);
-  else if (StringIsEqual(misc, "topology off"))
-    sub_TerrainTopography(2);
-  else if (StringIsEqual(misc, "show"))
+  if (StringIsEqual(misc, "terrain toggle")) {
+    const bool enable = !CommonInterface::GetMapSettings().terrain.enable;
+    Message::AddMessage(enable
+                        ? _("Terrain shown")
+                        : _("Terrain hidden"));
+    PageSettingApplyCommand(PageSettingId::TERRAIN_ENABLE, enable ? 1 : 0);
+    return;
+  }
+
+  if (StringIsEqual(misc, "terrain on")) {
+    Message::AddMessage(_("Terrain shown"));
+    PageSettingApplyCommand(PageSettingId::TERRAIN_ENABLE, 1);
+    return;
+  }
+
+  if (StringIsEqual(misc, "terrain off")) {
+    Message::AddMessage(_("Terrain hidden"));
+    PageSettingApplyCommand(PageSettingId::TERRAIN_ENABLE, 0);
+    return;
+  }
+
+  if (StringIsEqual(misc, "topography toggle") ||
+      StringIsEqual(misc, "topology toggle")) {
+    const bool enable =
+      !CommonInterface::GetMapSettings().topography_enabled;
+    Message::AddMessage(enable
+                        ? _("Topography shown")
+                        : _("Topography hidden"));
+    PageSettingApplyCommand(PageSettingId::TOPOGRAPHY_ENABLE,
+                            enable ? 1 : 0);
+    return;
+  }
+
+  if (StringIsEqual(misc, "topography on") ||
+      StringIsEqual(misc, "topology on")) {
+    Message::AddMessage(_("Topography shown"));
+    PageSettingApplyCommand(PageSettingId::TOPOGRAPHY_ENABLE, 1);
+    return;
+  }
+
+  if (StringIsEqual(misc, "topography off") ||
+      StringIsEqual(misc, "topology off")) {
+    Message::AddMessage(_("Topography hidden"));
+    PageSettingApplyCommand(PageSettingId::TOPOGRAPHY_ENABLE, 0);
+    return;
+  }
+
+  if (StringIsEqual(misc, "show"))
     sub_TerrainTopography(0);
   else if (StringIsEqual(misc, "toggle"))
     sub_TerrainTopography(-1);
-
-  XCSoarInterface::SendMapSettings(true);
 }
 
 // Adjust audio deadband of internal vario sounds
@@ -421,28 +451,34 @@ InputEvents::eventDeclutterLabels(const char *misc)
     "task+airfields",
   };
 
-  WaypointRendererSettings::LabelSelection &wls =
-    CommonInterface::SetMapSettings().waypoint.label_selection;
-  if (StringIsEqual(misc, "toggle")) {
-    wls = WaypointRendererSettings::LabelSelection(((unsigned)wls + 1) %  n);
-    Profile::Set(ProfileKeys::WaypointLabelSelection, (int)wls);
-  } else if (StringIsEqual(misc, "show")) {
+  const auto current =
+    CommonInterface::GetMapSettings().waypoint.label_selection;
+
+  if (StringIsEqual(misc, "show")) {
     char tbuf[64];
     StringFormatUnsafe(tbuf, _("%s: %s"), _("Waypoint labels"),
-                       gettext(msg[(unsigned)wls]));
+                       gettext(msg[(unsigned)current]));
     Message::AddMessage(tbuf);
+    return;
   }
+
+  int value = int(current);
+  if (StringIsEqual(misc, "toggle"))
+    value = (value + 1) % int(n);
   else {
-    for (unsigned int i=0; i<n; i++)
-      if (StringIsEqual(misc, actions[i]))
-        wls = (WaypointRendererSettings::LabelSelection)i;
+    bool found = false;
+    for (unsigned i = 0; i < n; ++i) {
+      if (StringIsEqual(misc, actions[i])) {
+        value = int(i);
+        found = true;
+        break;
+      }
+    }
+    if (!found)
+      return;
   }
 
-  /* save new values to profile */
-  Profile::Set(ProfileKeys::WaypointLabelSelection,
-               EnumCast<WaypointRendererSettings::LabelSelection>()(wls));
-
-  ActionInterface::SendMapSettings(true);
+  PageSettingApplyCommand(PageSettingId::WAYPOINT_LABEL_VISIBILITY, value);
 }
 
 void

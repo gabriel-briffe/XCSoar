@@ -17,86 +17,80 @@
 #include "Dialogs/Airspace/Airspace.hpp"
 #include "Dialogs/Airspace/AirspaceWarningDialog.hpp"
 #include "NMEA/Aircraft.hpp"
-#include "Profile/Profile.hpp"
-#include "Profile/Keys.hpp"
+#include "PageSetting.hpp"
 #include "util/StringCompare.hxx"
 
 /*
- * This even currently toggles DrawAirSpace() and does nothing else.
- * But since we use an int and not a bool, it is easy to expand it.
- * Note that XCSoar.cpp init OnAirSpace always to 1, and this value
- * is never saved to the registry actually. It is intended to be used
- * as a temporary choice during flight, does not affect configuration.
- * Note also that in MapWindow DrawAirSpace() is accomplished for
- * every OnAirSpace value >0 .  We can use negative numbers also,
- * but 0 should mean OFF all the way.
+ * Temporary map-display airspace on/off (not a global profile setting).
+ * Page-only membership stores the choice in per-page overrides.
  */
 void
 InputEvents::eventAirSpace(const char *misc)
 {
-  AirspaceRendererSettings &settings =
-    CommonInterface::SetMapSettings().airspace;
+  const bool currently_on =
+    CommonInterface::GetMapSettings().airspace.enable;
 
-  if (StringIsEqual(misc, "toggle")) {
-    settings.enable = !settings.enable;
-    Message::AddMessage(settings.enable
-                        ? _("Airspace shown")
-                        : _("Airspace hidden"));
-  } else if (StringIsEqual(misc, "off")) {
-    settings.enable = false;
-    Message::AddMessage(_("Airspace hidden"));
-  } else if (StringIsEqual(misc, "on")) {
-    settings.enable = true;
-    Message::AddMessage(_("Airspace shown"));
-  }
-  else if (StringIsEqual(misc, "show")) {
-    if (!settings.enable)
-      Message::AddMessage(_("Show airspace off"));
-    if (settings.enable)
-      Message::AddMessage(_("Show airspace on"));
+  if (StringIsEqual(misc, "show")) {
+    Message::AddMessage(currently_on
+                        ? _("Show airspace on")
+                        : _("Show airspace off"));
     return;
-  } else if (StringIsEqual(misc, "list")) {
+  }
+
+  if (StringIsEqual(misc, "list")) {
     ShowAirspaceListDialog(*data_components->airspaces,
                            backend_components->GetAirspaceWarnings());
     return;
   }
 
-  ActionInterface::SendMapSettings(true);
+  int value = currently_on ? 1 : 0;
+  if (StringIsEqual(misc, "toggle"))
+    value = value ? 0 : 1;
+  else if (StringIsEqual(misc, "off"))
+    value = 0;
+  else if (StringIsEqual(misc, "on"))
+    value = 1;
+  else
+    return;
+
+  Message::AddMessage(value
+                      ? _("Airspace shown")
+                      : _("Airspace hidden"));
+  PageSettingApplyCommand(PageSettingId::AIRSPACE_ENABLE, value);
 }
 
 void
 InputEvents::eventAirspaceLabels(const char *misc)
 {
-  AirspaceRendererSettings &settings =
-    CommonInterface::SetMapSettings().airspace;
+  using LabelSelection = AirspaceRendererSettings::LabelSelection;
 
   const bool currently_on =
-    settings.label_selection == AirspaceRendererSettings::LabelSelection::ALL;
+    CommonInterface::GetMapSettings().airspace.label_selection ==
+    LabelSelection::ALL;
 
-  if (StringIsEqual(misc, "toggle")) {
-    settings.label_selection = currently_on
-      ? AirspaceRendererSettings::LabelSelection::NONE
-      : AirspaceRendererSettings::LabelSelection::ALL;
-    Message::AddMessage(currently_on
-                        ? _("Airspace labels hidden")
-                        : _("Airspace labels shown"));
-  } else if (StringIsEqual(misc, "off") || StringIsEqual(misc, "none")) {
-    settings.label_selection = AirspaceRendererSettings::LabelSelection::NONE;
-    Message::AddMessage(_("Airspace labels hidden"));
-  } else if (StringIsEqual(misc, "on") || StringIsEqual(misc, "all")) {
-    settings.label_selection = AirspaceRendererSettings::LabelSelection::ALL;
-    Message::AddMessage(_("Airspace labels shown"));
-  } else if (StringIsEqual(misc, "show")) {
+  if (StringIsEqual(misc, "show")) {
     Message::AddMessage(currently_on
                         ? _("Airspace labels on")
                         : _("Airspace labels off"));
     return;
-  } else
+  }
+
+  int value = currently_on ? int(LabelSelection::ALL)
+                           : int(LabelSelection::NONE);
+  if (StringIsEqual(misc, "toggle"))
+    value = currently_on ? int(LabelSelection::NONE)
+                         : int(LabelSelection::ALL);
+  else if (StringIsEqual(misc, "off") || StringIsEqual(misc, "none"))
+    value = int(LabelSelection::NONE);
+  else if (StringIsEqual(misc, "on") || StringIsEqual(misc, "all"))
+    value = int(LabelSelection::ALL);
+  else
     return;
 
-  Profile::Set(ProfileKeys::AirspaceLabelSelection,
-               (int)settings.label_selection);
-  ActionInterface::SendMapSettings(true);
+  Message::AddMessage(value == int(LabelSelection::NONE)
+                      ? _("Airspace labels hidden")
+                      : _("Airspace labels shown"));
+  PageSettingApplyCommand(PageSettingId::AIRSPACE_LABEL_VISIBILITY, value);
 }
 
 // ClearAirspaceWarnings

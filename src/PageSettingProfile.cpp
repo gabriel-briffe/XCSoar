@@ -119,12 +119,18 @@ static_assert(ARRAY_SIZE(handlers) == unsigned(ProfileWireFormat::COUNT),
 int
 Load(const PageSettingDescriptor &desc) noexcept
 {
+  if (desc.profile_key.empty())
+    return desc.profile_default;
+
   return handlers[unsigned(desc.profile_wire)].load(desc);
 }
 
 void
 Save(const PageSettingDescriptor &desc, int value) noexcept
 {
+  if (desc.profile_key.empty())
+    return;
+
   handlers[unsigned(desc.profile_wire)].save(desc, value);
 }
 

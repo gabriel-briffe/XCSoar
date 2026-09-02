@@ -9,7 +9,10 @@
 #include "MapSettings.hpp"
 #include "PageSettingModule.hpp"
 #include "PageSettings.hpp"
+#include "Profile/Current.hpp"
+#include "Profile/PageProfile.hpp"
 #include "UISettings.hpp"
+#include "UIState.hpp"
 #include "Look/Look.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
 #include "Engine/Airspace/AirspaceClass.hpp"
@@ -92,6 +95,55 @@ PageSettingOverrides::EqualsUnordered(const PageSettingOverrides &other) const n
     if (v == nullptr || *v != items[i].value)
       return false;
   }
+
+  return true;
+}
+
+bool
+PageOnlyCommands::Contains(PageSettingId id) const noexcept
+{
+  for (unsigned i = 0; i < n_items; ++i)
+    if (ids[i] == id)
+      return true;
+  return false;
+}
+
+bool
+PageOnlyCommands::Add(PageSettingId id) noexcept
+{
+  if (Contains(id))
+    return false;
+  if (n_items >= MAX_ITEMS)
+    return false;
+
+  ids[n_items++] = id;
+  return true;
+}
+
+bool
+PageOnlyCommands::Remove(PageSettingId id) noexcept
+{
+  for (unsigned i = 0; i < n_items; ++i) {
+    if (ids[i] != id)
+      continue;
+
+    for (unsigned j = i + 1; j < n_items; ++j)
+      ids[j - 1] = ids[j];
+    --n_items;
+    return true;
+  }
+  return false;
+}
+
+bool
+PageOnlyCommands::operator==(const PageOnlyCommands &other) const noexcept
+{
+  if (n_items != other.n_items)
+    return false;
+
+  for (unsigned i = 0; i < n_items; ++i)
+    if (!other.Contains(ids[i]))
+      return false;
 
   return true;
 }
@@ -202,6 +254,53 @@ PageSettingNotifyLive() noexcept
   ActionInterface::SendMapSettings(true);
 }
 
+bool
+PageSettingIsPageOnlyActive(PageSettingId id) noexcept
+{
+  const PagesState &state = CommonInterface::GetUIState().pages;
+  if (state.special_page.IsDefined())
+    return false;
+  if (state.current_index >= PageSettings::MAX_PAGES)
+    return false;
+
+  return CommonInterface::GetUISettings().pages
+    .page_only_commands[state.current_index].Contains(id);
+}
+
+void
+PageSettingApplyCommand(PageSettingId id, int value) noexcept
+{
+  const auto &module = PageSettingModuleRegistry::GetById(id);
+  if (!module.is_valid_value(id, value))
+    return;
+
+  if (value == PageSettingOverrides::INHERIT)
+    value = module.load_global(id);
+
+  if (PageSettingIsPageOnlyActive(id)) {
+    const unsigned page_index =
+      CommonInterface::GetUIState().pages.current_index;
+    auto &pages = CommonInterface::SetUISettings().pages;
+    pages.overrides[page_index].SetValue(id, value);
+    Profile::Save(Profile::map, pages.overrides[page_index], page_index);
+
+    const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
+    const WaypointRendererSettings old_waypoint =
+      CommonInterface::GetMapSettings().waypoint;
+    const AirspaceRendererSettings old_airspace =
+      CommonInterface::GetMapSettings().airspace;
+
+    module.set_live(id, value);
+    PageSettingReinitialiseTrailLookIfChanged(old_trail);
+    PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
+    PageSettingReinitialiseAirspaceLookIfChanged(old_airspace);
+    PageSettingNotifyLive();
+    return;
+  }
+
+  PageSettingSet(id, value);
+}
+
 int
 PageSettingGet(PageSettingId id) noexcept
 {
@@ -276,7 +375,11 @@ RestoreOverridesToGlobal(unsigned page_index) noexcept
   for (unsigned i = 0; i < overrides.n_items; ++i) {
     const auto id = overrides.items[i].id;
     const auto &module = PageSettingModuleRegistry::GetById(id);
-    module.set_live(id, module.load_global(id));
+    /* Ephemeral globals fall back to the catalog default. */
+    const int value = module.get(id).profile_key.empty()
+      ? module.get(id).profile_default
+      : module.load_global(id);
+    module.set_live(id, value);
   }
 }
 
@@ -289,6 +392,11 @@ PageSettingApplyGlobalBaseline() noexcept
     const auto &module = PageSettingModuleRegistry::Get(m);
     for (unsigned i = 0; i < module.count(); ++i) {
       const auto id = PageSettingId(unsigned(module.id_start) + i);
+      /* Settings without a global profile key are ephemeral (e.g.
+         airspace show toggle) — do not stomp the live value. */
+      if (module.get(id).profile_key.empty())
+        continue;
+
       const int value = module.load_global(id);
       if (module.get_live(id) != value)
         module.set_live(id, value);

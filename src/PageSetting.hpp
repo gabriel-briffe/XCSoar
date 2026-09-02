@@ -76,8 +76,9 @@ enum class PageSettingId : uint16_t {
 
   WAYPOINT_TYPE_FILTER_BEGIN,
 
-  AIRSPACE_DISPLAY =
+  AIRSPACE_ENABLE =
     WAYPOINT_TYPE_FILTER_BEGIN + PageSettingWaypointMapFilterTypeCount,
+  AIRSPACE_DISPLAY,
   AIRSPACE_LABEL_VISIBILITY,
   AIRSPACE_SHOW_NOTAM_LABELS,
   AIRSPACE_CLIP_ALTITUDE,
@@ -121,7 +122,7 @@ constexpr unsigned PageSettingElementsStart =
 constexpr unsigned PageSettingWaypointsStart =
   unsigned(PageSettingId::WAYPOINT_LABEL_FORMAT);
 constexpr unsigned PageSettingAirspaceStart =
-  unsigned(PageSettingId::AIRSPACE_DISPLAY);
+  unsigned(PageSettingId::AIRSPACE_ENABLE);
 constexpr unsigned PageSettingOrientationCount =
   PageSettingElementsStart - PageSettingOrientationStart;
 constexpr unsigned PageSettingElementsCount =
@@ -221,6 +222,44 @@ struct PageSettingOverrides {
 };
 
 static_assert(std::is_trivial_v<PageSettingOverrides>);
+
+/**
+ * Per-page allowlist of menu commands whose effect is stored in
+ * #PageSettingOverrides instead of the global profile while that page
+ * is active.
+ */
+struct PageOnlyCommands {
+  static constexpr unsigned MAX_ITEMS = 16;
+
+  PageSettingId ids[MAX_ITEMS];
+  unsigned n_items;
+
+  constexpr void Clear() noexcept {
+    n_items = 0;
+  }
+
+  [[nodiscard]]
+  constexpr bool IsEmpty() const noexcept {
+    return n_items == 0;
+  }
+
+  [[nodiscard]]
+  bool Contains(PageSettingId id) const noexcept;
+
+  bool Add(PageSettingId id) noexcept;
+
+  bool Remove(PageSettingId id) noexcept;
+
+  [[nodiscard]]
+  bool operator==(const PageOnlyCommands &other) const noexcept;
+
+  [[nodiscard]]
+  bool operator!=(const PageOnlyCommands &other) const noexcept {
+    return !(*this == other);
+  }
+};
+
+static_assert(std::is_trivial_v<PageOnlyCommands>);
 
 struct PageSettingDescriptor;
 
@@ -325,3 +364,20 @@ PageSettingReinitialiseAirspaceLookIfChanged(
 /** Push live MapSettings to the map (one FullRedraw). */
 void
 PageSettingNotifyLive() noexcept;
+
+/**
+ * Apply a display-menu / Quick-menu command value.  When the current
+ * configured page lists @p id in #PageOnlyCommands, writes the page
+ * override (and live map) without changing the global profile key;
+ * otherwise behaves like #PageSettingSet.
+ */
+void
+PageSettingApplyCommand(PageSettingId id, int value) noexcept;
+
+/**
+ * True when @p id is page-only on the active configured page (not a
+ * special page such as pan fullscreen).
+ */
+[[nodiscard]]
+bool
+PageSettingIsPageOnlyActive(PageSettingId id) noexcept;

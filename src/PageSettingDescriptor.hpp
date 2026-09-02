@@ -83,6 +83,7 @@ enum class WaypointsBundleField : uint8_t {
 
 /** Field within #AirspaceDisplaySetting::Bundle. */
 enum class AirspaceBundleField : uint8_t {
+  ENABLE,
   DISPLAY,
   LABEL_VISIBILITY,
   SHOW_NOTAM_LABELS,

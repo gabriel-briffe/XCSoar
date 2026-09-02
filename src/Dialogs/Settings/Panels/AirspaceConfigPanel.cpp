@@ -177,6 +177,11 @@ AirspaceConfigPanel::Prepare(ContainerWindow &parent,
   SyncCatalogFromForm();
   initial_bundle = bundle;
 
+  using DisplaySettingConfigPanel::CatalogRow;
+  SetRowVisible(CatalogRow(PageSettingId::AIRSPACE_ENABLE,
+                           PageSettingAirspaceStart),
+                false);
+
   ShowDisplayControls(bundle.airspace.altitude_mode);
   ShowWarningControls(bundle.computer.enable_warnings);
 }
