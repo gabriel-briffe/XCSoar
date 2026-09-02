@@ -5,40 +5,7 @@
 
 #include "PageSettings.hpp"
 
-#include <array>
 #include <type_traits>
-
-/**
- * The state of one configured page.
- */
-struct PageState {
-  /**
-   * The last map scale on this page.  Negative means it's undefined.
-   * This attribute is only used if PageSettings::distinct_zoom is
-   * enabled.
-   */
-  double cruise_scale;
-
-  /**
-   * The last map scale on this page while circling.  Negative means
-   * it's undefined.  This attribute is only used if
-   * PageSettings::distinct_zoom and MapSettings::circle_zoom_enabled
-   * are both enabled.
-   */
-  double circling_scale;
-
-  /**
-   * The last zoom mode on this page. This attribute is only used if
-   * PageSettings::distinct_zoom is enabled.
-   */
-  bool auto_zoom_enabled;
-
-  void Clear() {
-    cruise_scale = -1;
-    circling_scale = -1;
-    auto_zoom_enabled = false;
-  }
-};
 
 /**
  * Keeps track of the state of the "pages" subsystem.
@@ -65,8 +32,6 @@ struct PagesState {
    * configured page.
    */
   PageLayout special_page;
-
-  std::array<PageState, MAX_PAGES> pages;
 
   void Clear();
 };

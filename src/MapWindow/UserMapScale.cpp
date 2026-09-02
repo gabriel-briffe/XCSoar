@@ -4,6 +4,7 @@
 #include "UserMapScale.hpp"
 #include "Interface.hpp"
 #include "UIState.hpp"
+#include "PageSetting.hpp"
 #include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
 #include "Message.hpp"
@@ -60,7 +61,8 @@ DisableAutoZoomForManualScale() noexcept
     return false;
 
   settings.auto_zoom_enabled = false;
-  Profile::Set(ProfileKeys::AutoZoom, false);
+  if (!PageSettingIsPageOnlyActive(PageSettingId::PAGE_ONLY_ZOOM))
+    Profile::Set(ProfileKeys::AutoZoom, false);
   Message::AddMessage(_("Auto. zoom off"));
   return true;
 }

@@ -326,8 +326,6 @@ constexpr std::string_view VarioDeadBandEnabled = "VarioDeadBandEnabled";
 constexpr std::string_view VarioDeadBandMin = "VarioDeadBandMin";
 constexpr std::string_view VarioDeadBandMax = "VarioDeadBandMax";
 
-constexpr std::string_view PagesDistinctZoom = "PagesDistinctZoom";
-
 constexpr std::string_view WaveAssistant = "WaveAssistant";
 
 constexpr std::string_view MasterAudioVolume = "MasterAudioVolume";

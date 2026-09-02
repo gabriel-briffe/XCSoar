@@ -807,6 +807,7 @@ DestroyNetComponents() noexcept
 void
 SaveUserState() noexcept
 {
+  PageActions::PersistPageOnlyZoom();
   SaveFlarmColors();
   SaveFlarmMessaging();
   Profile::Save();

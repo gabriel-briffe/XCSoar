@@ -106,10 +106,16 @@ enum class PageSettingId : uint16_t {
   AIRSPACE_CLASS_FILL_MODE_BEGIN =
     AIRSPACE_CLASS_BORDER_WIDTH_BEGIN + (AIRSPACECLASSCOUNT - 1),
 
-  COUNT = AIRSPACE_CLASS_FILL_MODE_BEGIN + (AIRSPACECLASSCOUNT - 1)
+  COUNT = AIRSPACE_CLASS_FILL_MODE_BEGIN + (AIRSPACECLASSCOUNT - 1),
+
+  /**
+   * Page-only command id (not a catalog setting): remember cruise and
+   * circling map zoom on this page.
+   */
+  PAGE_ONLY_ZOOM = COUNT,
 };
 
-static_assert(unsigned(PageSettingId::COUNT) <= 65535,
+static_assert(unsigned(PageSettingId::PAGE_ONLY_ZOOM) <= 65535,
               "PageSettingId must fit in uint16_t");
 
 constexpr unsigned PageSettingTerrainCount =
@@ -224,9 +230,10 @@ struct PageSettingOverrides {
 static_assert(std::is_trivial_v<PageSettingOverrides>);
 
 /**
- * Per-page allowlist of menu commands whose effect is stored in
- * #PageSettingOverrides instead of the global profile while that page
- * is active.
+ * Per-page allowlist of Display/Quick-menu commands.  Most entries map
+ * to a catalog #PageSettingId and write #PageSettingOverrides while
+ * that page is active.  #PageSettingId::PAGE_ONLY_ZOOM instead enables
+ * per-page cruise/circling zoom memory (see #PageZoomMemory).
  */
 struct PageOnlyCommands {
   static constexpr unsigned MAX_ITEMS = 16;

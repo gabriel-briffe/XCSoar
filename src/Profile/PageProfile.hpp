@@ -3,11 +3,9 @@
 
 #pragma once
 
+#include "PageSettings.hpp"
+
 class ProfileMap;
-struct PageLayout;
-struct PageSettings;
-struct PageSettingOverrides;
-struct PageOnlyCommands;
 
 namespace Profile {
   void Load(const ProfileMap &map, PageSettings &settings);
@@ -17,5 +15,7 @@ namespace Profile {
             unsigned i);
   void Save(ProfileMap &map, const PageOnlyCommands &commands,
             unsigned i);
+  void Save(ProfileMap &map, const PageZoomMemory &zoom,
+            const PageOnlyCommands &commands, unsigned i);
   void Save(ProfileMap &map, const PageSettings &settings);
 };

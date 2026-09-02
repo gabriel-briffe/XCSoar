@@ -126,6 +126,12 @@ namespace PageActions
   void ResumeWeatherOverlaysAfterPan() noexcept;
 
   /**
+   * Flush live page-only zoom into #PageSettings and the profile map
+   * so #Profile::Save() persists it (e.g. on quit).
+   */
+  void PersistPageOnlyZoom() noexcept;
+
+  /**
    * Use a custom widget for the "bottom" area.  This is a wrapper for
    * MainWindow::SetBottomWidget().  Call RestoreBottom() to undo this.
    */

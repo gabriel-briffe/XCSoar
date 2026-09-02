@@ -15,6 +15,41 @@ struct InfoBoxSettings;
 
 class RaspStore;
 
+/**
+ * Remembered cruise/circling zoom when #PageSettingId::PAGE_ONLY_ZOOM
+ * is listed for the page.  Negative scales mean unset.
+ */
+struct PageZoomMemory {
+  double cruise_scale;
+  double circling_scale;
+  bool auto_zoom_enabled;
+
+  constexpr void Clear() noexcept {
+    cruise_scale = -1;
+    circling_scale = -1;
+    auto_zoom_enabled = false;
+  }
+
+  [[nodiscard]]
+  constexpr bool HasScales() const noexcept {
+    return cruise_scale > 0 || circling_scale > 0;
+  }
+
+  [[nodiscard]]
+  bool operator==(const PageZoomMemory &other) const noexcept {
+    return cruise_scale == other.cruise_scale &&
+           circling_scale == other.circling_scale &&
+           auto_zoom_enabled == other.auto_zoom_enabled;
+  }
+
+  [[nodiscard]]
+  bool operator!=(const PageZoomMemory &other) const noexcept {
+    return !(*this == other);
+  }
+};
+
+static_assert(std::is_trivial_v<PageZoomMemory>);
+
 struct PageLayout
 {
   struct InfoBoxConfig {
@@ -373,13 +408,13 @@ struct PageSettings {
    */
   std::array<PageOnlyCommands, MAX_PAGES> page_only_commands;
 
-  unsigned n_pages;
-
   /**
-   * Each page manages its own map zoom level.  Returning to this page
-   * restores the last zoom level.
+   * Remembered cruise/circling zoom for pages that list
+   * #PageSettingId::PAGE_ONLY_ZOOM.
    */
-  bool distinct_zoom;
+  std::array<PageZoomMemory, MAX_PAGES> page_zoom;
+
+  unsigned n_pages;
 
   void SetDefaults() noexcept;
 

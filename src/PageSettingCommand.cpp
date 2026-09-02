@@ -18,6 +18,7 @@ static constexpr PageSettingCommandDescriptor commands[] = {
   { PageSettingId::AIRSPACE_ENABLE, N_("Airspace") },
   { PageSettingId::AIRSPACE_LABEL_VISIBILITY, N_("Airspace labels") },
   { PageSettingId::DISTANCE_RINGS, N_("Distance rings") },
+  { PageSettingId::PAGE_ONLY_ZOOM, N_("Zoom") },
 };
 
 } // namespace

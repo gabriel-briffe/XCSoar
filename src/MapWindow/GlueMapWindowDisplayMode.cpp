@@ -7,7 +7,10 @@
 #include "Topography/Thread.hpp"
 #include "Terrain/Thread.hpp"
 #include "Interface.hpp"
+#include "PageSetting.hpp"
 #include "Profile/Profile.hpp"
+#include "Profile/Keys.hpp"
+#include "LogFile.hpp"
 #include "Screen/Layout.hpp"
 #include "PageActions.hpp"
 
@@ -288,6 +291,13 @@ GlueMapWindow::RestoreMapScale() noexcept
 inline void
 GlueMapWindow::SaveDisplayModeScales() noexcept
 {
+  /* Page-only zoom updates live MapSettings for this page; keep the
+     shared profile cruise/circling scales unchanged until leave. */
+  if (PageSettingIsPageOnlyActive(PageSettingId::PAGE_ONLY_ZOOM)) {
+    LogFmt("xcsoar zoom: skip profile scale write (page-only active)");
+    return;
+  }
+
   const MapSettings &settings = CommonInterface::GetMapSettings();
 
   Profile::Set(ProfileKeys::ClimbMapScale, (int)(settings.circling_scale * 10000));

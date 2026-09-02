@@ -111,9 +111,10 @@ PageSettings::SetDefaults() noexcept
   for (auto &c : page_only_commands)
     c.Clear();
 
-  n_pages = 2;
+  for (auto &z : page_zoom)
+    z.Clear();
 
-  distinct_zoom = true;
+  n_pages = 2;
 }
 
 void
@@ -128,6 +129,7 @@ PageSettings::Compress() noexcept
       pages[write] = pages[read];
       overrides[write] = overrides[read];
       page_only_commands[write] = page_only_commands[read];
+      page_zoom[write] = page_zoom[read];
     }
     ++write;
   }
@@ -136,6 +138,7 @@ PageSettings::Compress() noexcept
     pages[i] = PageLayout::Undefined();
     overrides[i].Clear();
     page_only_commands[i].Clear();
+    page_zoom[i].Clear();
   }
 
   n_pages = write;

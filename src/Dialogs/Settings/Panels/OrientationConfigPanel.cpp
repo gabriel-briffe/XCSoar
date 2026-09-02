@@ -16,7 +16,6 @@ namespace {
 
 enum class NonCatalogRow : unsigned {
   MaxAutoZoomDistance = 0,
-  PagesDistinctZoom,
 };
 
 [[nodiscard]]
@@ -132,8 +131,6 @@ OrientationConfigPanel::Prepare(ContainerWindow &parent,
 
   OrientationDisplaySetting::ReadLive(bundle);
 
-  const PageSettings &page_settings = CommonInterface::GetUISettings().pages;
-
   non_catalog_start = DisplaySettingConfigPanel::AddCatalogRows(
     *this, bundle, PageSettingOrientationStart, PageSettingOrientationCount,
     OrientationDisplaySetting::Get, OrientationDisplaySetting::GetValue,
@@ -146,12 +143,6 @@ OrientationConfigPanel::Prepare(ContainerWindow &parent,
            CommonInterface::GetMapSettings().max_auto_zoom_distance);
   SetExpertRow(non_catalog_start +
                unsigned(NonCatalogRow::MaxAutoZoomDistance));
-
-  AddBoolean(_("Distinct page zoom"),
-             _("Maintain one map zoom level on each page."),
-             page_settings.distinct_zoom);
-  SetExpertRow(non_catalog_start +
-               unsigned(NonCatalogRow::PagesDistinctZoom));
 
   SyncBundleFromForm();
   initial_bundle = bundle;
@@ -168,16 +159,11 @@ OrientationConfigPanel::Save(bool &_changed) noexcept
   changed |= OrientationDisplaySetting::SaveGlobal(bundle, initial_bundle);
 
   MapSettings &settings_map = CommonInterface::SetMapSettings();
-  PageSettings &page_settings = CommonInterface::SetUISettings().pages;
 
   changed |= SaveValue(NonCatalogControl(NonCatalogRow::MaxAutoZoomDistance),
                        UnitGroup::DISTANCE,
                        ProfileKeys::MaxAutoZoomDistance,
                        settings_map.max_auto_zoom_distance);
-
-  changed |= SaveValue(NonCatalogControl(NonCatalogRow::PagesDistinctZoom),
-                       ProfileKeys::PagesDistinctZoom,
-                       page_settings.distinct_zoom);
 
   _changed |= changed;
 

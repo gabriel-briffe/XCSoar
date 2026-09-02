@@ -8,7 +8,4 @@ PagesState::Clear()
 {
   current_index = 0;
   special_page.SetUndefined();
-
-  for (auto &p : pages)
-    p.Clear();
 }

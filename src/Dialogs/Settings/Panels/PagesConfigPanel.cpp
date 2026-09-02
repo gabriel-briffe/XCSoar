@@ -144,6 +144,7 @@ public:
         page = PageLayout::Default();
         settings.overrides[n].Clear();
         settings.page_only_commands[n].Clear();
+        settings.page_zoom[n].Clear();
         GetList().SetLength(n + 1);
         GetList().SetCursorIndex(n);
       }
@@ -162,8 +163,12 @@ public:
         std::copy(settings.page_only_commands.begin() + cursor + 1,
                   settings.page_only_commands.begin() + n,
                   settings.page_only_commands.begin() + cursor);
+        std::copy(settings.page_zoom.begin() + cursor + 1,
+                  settings.page_zoom.begin() + n,
+                  settings.page_zoom.begin() + cursor);
         settings.overrides[n - 1].Clear();
         settings.page_only_commands[n - 1].Clear();
+        settings.page_zoom[n - 1].Clear();
         GetList().SetLength(n - 1);
 
         if (cursor == n - 1)
@@ -183,6 +188,8 @@ public:
                   settings.overrides[cursor - 1]);
         std::swap(settings.page_only_commands[cursor],
                   settings.page_only_commands[cursor - 1]);
+        std::swap(settings.page_zoom[cursor],
+                  settings.page_zoom[cursor - 1]);
         GetList().SetCursorIndex(cursor - 1);
       }
     });
@@ -196,6 +203,8 @@ public:
                   settings.overrides[cursor + 1]);
         std::swap(settings.page_only_commands[cursor],
                   settings.page_only_commands[cursor + 1]);
+        std::swap(settings.page_zoom[cursor],
+                  settings.page_zoom[cursor + 1]);
         GetList().SetCursorIndex(cursor + 1);
       }
     });
@@ -762,6 +771,7 @@ PageListWidget::Save(bool &_changed) noexcept
   for (unsigned i = settings.n_pages; i < PageSettings::MAX_PAGES; ++i) {
     settings.overrides[i].Clear();
     settings.page_only_commands[i].Clear();
+    settings.page_zoom[i].Clear();
   }
 
   for (unsigned i = 0; i < settings.n_pages; ++i)
@@ -783,6 +793,12 @@ PageListWidget::Save(bool &_changed) noexcept
 
     if (settings.page_only_commands[i] != _settings.page_only_commands[i]) {
       Profile::Save(Profile::map, settings.page_only_commands[i], i);
+      Profile::Save(Profile::map, settings.page_zoom[i],
+                    settings.page_only_commands[i], i);
+      changed = true;
+    } else if (settings.page_zoom[i] != _settings.page_zoom[i]) {
+      Profile::Save(Profile::map, settings.page_zoom[i],
+                    settings.page_only_commands[i], i);
       changed = true;
     }
   }

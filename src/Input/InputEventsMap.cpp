@@ -166,7 +166,8 @@ InputEvents::sub_AutoZoom(int vswitch)
   else
     settings_map.auto_zoom_enabled = (vswitch != 0); // 0 off, 1 on
 
-  Profile::Set(ProfileKeys::AutoZoom, settings_map.auto_zoom_enabled);
+  if (!PageSettingIsPageOnlyActive(PageSettingId::PAGE_ONLY_ZOOM))
+    Profile::Set(ProfileKeys::AutoZoom, settings_map.auto_zoom_enabled);
 
   if (settings_map.auto_zoom_enabled &&
       UIGlobals::GetMap() != NULL)

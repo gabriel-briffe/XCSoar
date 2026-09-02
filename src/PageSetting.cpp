@@ -270,6 +270,9 @@ PageSettingIsPageOnlyActive(PageSettingId id) noexcept
 void
 PageSettingApplyCommand(PageSettingId id, int value) noexcept
 {
+  if (unsigned(id) >= unsigned(PageSettingId::COUNT))
+    return;
+
   const auto &module = PageSettingModuleRegistry::GetById(id);
   if (!module.is_valid_value(id, value))
     return;

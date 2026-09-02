@@ -17,7 +17,13 @@
 #include "Input/InputEvents.hpp"
 #include "UIGlobals.hpp"
 #include "MapWindow/GlueMapWindow.hpp"
+#include "MapSettings.hpp"
+#include "Profile/Profile.hpp"
+#include "Profile/Current.hpp"
+#include "Profile/Keys.hpp"
+#include "Profile/PageProfile.hpp"
 #include "Components.hpp"
+#include "LogFile.hpp"
 #include "Weather/MapOverlay/ControlsFactory.hpp"
 #include "Weather/MapOverlay/ControlsWidget.hpp"
 #include "Weather/Rasp/FieldControls.hpp"
@@ -347,25 +353,106 @@ PageActions::ApplyPageOverlay(const PageLayout &layout) noexcept
     ActionInterface::SendUIState(true);
 }
 
+namespace {
+
+struct GlobalZoomStash {
+  bool active = false;
+  double cruise_scale;
+  double circling_scale;
+  bool auto_zoom_enabled;
+} global_zoom_stash;
+
+[[nodiscard]]
+bool
+HasPageOnlyZoom(unsigned page_index) noexcept
+{
+  const auto &pages = CommonInterface::GetUISettings().pages;
+  if (page_index >= PageSettings::MAX_PAGES)
+    return false;
+
+  return pages.page_only_commands[page_index].Contains(
+    PageSettingId::PAGE_ONLY_ZOOM);
+}
+
+/**
+ * After leaving a page-only zoom page, put the shared cruise/circling
+ * scales back into live #MapSettings (and the profile).
+ */
+void
+UnstashGlobalZoom() noexcept
+{
+  if (!global_zoom_stash.active) {
+    LogFmt("xcsoar zoom: unstash skipped (stash inactive)");
+    return;
+  }
+
+  MapSettings &map_settings = CommonInterface::SetMapSettings();
+  LogFmt("xcsoar zoom: unstash global cruise={:.6f} circle={:.6f} auto={}",
+         global_zoom_stash.cruise_scale,
+         global_zoom_stash.circling_scale,
+         global_zoom_stash.auto_zoom_enabled);
+  map_settings.cruise_scale = global_zoom_stash.cruise_scale;
+  map_settings.circling_scale = global_zoom_stash.circling_scale;
+  map_settings.auto_zoom_enabled = global_zoom_stash.auto_zoom_enabled;
+  global_zoom_stash.active = false;
+
+  Profile::Set(ProfileKeys::ClimbMapScale,
+               int(map_settings.circling_scale * 10000));
+  Profile::Set(ProfileKeys::CruiseMapScale,
+               int(map_settings.cruise_scale * 10000));
+
+  if (GlueMapWindow *map = UIGlobals::GetMapIfActive(); map != nullptr)
+    map->RestoreMapScale();
+  else
+    LogFmt("xcsoar zoom: unstash — no map to RestoreMapScale");
+}
+
+} // namespace
+
 void
 PageActions::LeavePage()
 {
   PagesState &state = CommonInterface::SetUIState().pages;
 
-
   LeaveWeatherOverlayPage(GetActiveLayout());
 
-  if (state.special_page.IsDefined())
+  if (state.special_page.IsDefined()) {
+    LogFmt("xcsoar zoom: leave page={} skipped (special page)",
+           state.current_index);
     return;
+  }
+
+  if (!HasPageOnlyZoom(state.current_index)) {
+    LogFmt("xcsoar zoom: leave page={} skipped (no page-only zoom)",
+           state.current_index);
+    return;
+  }
+
+  if (!global_zoom_stash.active) {
+    /* Page zoom was never applied this visit (e.g. startup before
+       RestoreMapZoom).  Do not overwrite stored page scales with the
+       shared live zoom. */
+    LogFmt("xcsoar zoom: leave page={} skipped (stash inactive, keep stored)",
+           state.current_index);
+    return;
+  }
 
   const GlueMapWindow *map = UIGlobals::GetMapIfActive();
   if (map != nullptr) {
     const MapSettings &map_settings = CommonInterface::GetMapSettings();
-    PageState &page = state.pages[state.current_index];
-    page.cruise_scale = map_settings.cruise_scale;
-    page.circling_scale = map_settings.circling_scale;
-    page.auto_zoom_enabled = map_settings.auto_zoom_enabled;
-  }
+    auto &zoom = CommonInterface::SetUISettings().pages
+      .page_zoom[state.current_index];
+    zoom.cruise_scale = map_settings.cruise_scale;
+    zoom.circling_scale = map_settings.circling_scale;
+    zoom.auto_zoom_enabled = map_settings.auto_zoom_enabled;
+    LogFmt("xcsoar zoom: leave page={} save cruise={:.6f} circle={:.6f} auto={}",
+           state.current_index, zoom.cruise_scale, zoom.circling_scale,
+           zoom.auto_zoom_enabled);
+  } else
+    LogFmt("xcsoar zoom: leave page={} — no map, not saving live scales",
+           state.current_index);
+
+  UnstashGlobalZoom();
 }
 
 void
@@ -411,29 +498,97 @@ void
 PageActions::RestoreMapZoom(bool redraw)
 {
   const PagesState &state = CommonInterface::SetUIState().pages;
-  if (state.special_page.IsDefined())
+  if (state.special_page.IsDefined()) {
+    LogFmt("xcsoar zoom: restore skipped (special page)");
     return;
+  }
 
-  const PageState &page = state.pages[state.current_index];
-  const PageSettings &settings = CommonInterface::GetUISettings().pages;
+  if (!HasPageOnlyZoom(state.current_index)) {
+    LogFmt("xcsoar zoom: restore page={} skipped (no page-only zoom)",
+           state.current_index);
+    return;
+  }
 
-  if (settings.distinct_zoom) {
-    MapSettings &map_settings = CommonInterface::SetMapSettings();
+  MapSettings &map_settings = CommonInterface::SetMapSettings();
 
-    if (page.cruise_scale > 0)
-      map_settings.cruise_scale = page.cruise_scale;
-    if (page.circling_scale > 0)
-      map_settings.circling_scale = page.circling_scale;
+  /* Keep the shared scales aside so zoom on this page cannot leak. */
+  if (!global_zoom_stash.active) {
+    global_zoom_stash.cruise_scale = map_settings.cruise_scale;
+    global_zoom_stash.circling_scale = map_settings.circling_scale;
+    global_zoom_stash.auto_zoom_enabled = map_settings.auto_zoom_enabled;
+    global_zoom_stash.active = true;
+    LogFmt("xcsoar zoom: stash global cruise={:.6f} circle={:.6f} auto={}",
+           global_zoom_stash.cruise_scale,
+           global_zoom_stash.circling_scale,
+           global_zoom_stash.auto_zoom_enabled);
+  } else
+    LogFmt("xcsoar zoom: stash already active");
 
-    map_settings.auto_zoom_enabled = page.auto_zoom_enabled;
+  const auto &zoom =
+    CommonInterface::GetUISettings().pages.page_zoom[state.current_index];
+  const bool have_page_scales = zoom.HasScales();
 
+  LogFmt("xcsoar zoom: restore page={} stored cruise={:.6f} circle={:.6f} "
+         "auto={} has_scales={} redraw={}",
+         state.current_index, zoom.cruise_scale, zoom.circling_scale,
+         zoom.auto_zoom_enabled, have_page_scales, redraw);
 
-    GlueMapWindow *map = UIGlobals::GetMapIfActive();
-    if (map != nullptr) {
-      map->RestoreMapScale();
-      if (redraw)
-        map->QuickRedraw();
-    }
+  if (zoom.cruise_scale > 0)
+    map_settings.cruise_scale = zoom.cruise_scale;
+  if (zoom.circling_scale > 0)
+    map_settings.circling_scale = zoom.circling_scale;
+  if (have_page_scales)
+    map_settings.auto_zoom_enabled = zoom.auto_zoom_enabled;
+
+  LogFmt("xcsoar zoom: restore page={} live cruise={:.6f} circle={:.6f} auto={}",
+         state.current_index, map_settings.cruise_scale,
+         map_settings.circling_scale, map_settings.auto_zoom_enabled);
+
+  GlueMapWindow *map = UIGlobals::GetMapIfActive();
+  if (map != nullptr) {
+    map->RestoreMapScale();
+    if (redraw)
+      map->QuickRedraw();
+  } else
+    LogFmt("xcsoar zoom: restore page={} — no map", state.current_index);
+}
+
+void
+PageActions::PersistPageOnlyZoom() noexcept
+{
+  PagesState &state = CommonInterface::SetUIState().pages;
+  PageSettings &settings = CommonInterface::SetUISettings().pages;
+
+  LogFmt("xcsoar zoom: persist begin page={} special={} stash={} page_only={}",
+         state.current_index, state.special_page.IsDefined(),
+         global_zoom_stash.active, HasPageOnlyZoom(state.current_index));
+
+  if (!state.special_page.IsDefined() &&
+      HasPageOnlyZoom(state.current_index) &&
+      global_zoom_stash.active) {
+    const MapSettings &map_settings = CommonInterface::GetMapSettings();
+    auto &zoom = settings.page_zoom[state.current_index];
+    zoom.cruise_scale = map_settings.cruise_scale;
+    zoom.circling_scale = map_settings.circling_scale;
+    zoom.auto_zoom_enabled = map_settings.auto_zoom_enabled;
+    LogFmt("xcsoar zoom: persist flush page={} cruise={:.6f} circle={:.6f} "
+           "auto={}",
+           state.current_index, zoom.cruise_scale, zoom.circling_scale,
+           zoom.auto_zoom_enabled);
+  } else
+    LogFmt("xcsoar zoom: persist — no live flush");
+
+  for (unsigned i = 0; i < PageSettings::MAX_PAGES; ++i) {
+    const auto &zoom = settings.page_zoom[i];
+    const bool page_only = settings.page_only_commands[i].Contains(
+      PageSettingId::PAGE_ONLY_ZOOM);
+    if (page_only || zoom.HasScales())
+      LogFmt("xcsoar zoom: persist write page={} page_only={} cruise={:.6f} "
+             "circle={:.6f} auto={}",
+             i, page_only, zoom.cruise_scale, zoom.circling_scale,
+             zoom.auto_zoom_enabled);
+    Profile::Save(Profile::map, settings.page_zoom[i],
+                  settings.page_only_commands[i], i);
   }
 }
 
@@ -482,7 +637,9 @@ PageActions::Update()
   }
 
   LoadLayout(GetCurrentLayout());
-  ApplyPageDisplaySettings();
+  ApplyPageDisplaySettings(false);
+  RestoreMapZoom(false);
+  PageSettingNotifyLive();
 }
 
 void
