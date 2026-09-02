@@ -8,6 +8,7 @@
 #include "Orientation/OrientationDisplaySetting.hpp"
 #include "Terrain/TerrainDisplaySetting.hpp"
 #include "Waypoints/WaypointsDisplaySetting.hpp"
+#include "Airspace/AirspaceDisplaySetting.hpp"
 #include "util/Macros.hpp"
 
 #include <cassert>
@@ -64,6 +65,18 @@ static const PageSettingModule modules[] = {
     WaypointsDisplaySetting::SetLive,
     WaypointsDisplaySetting::LoadGlobal,
     WaypointsDisplaySetting::SaveGlobal,
+  },
+  {
+    PageSettingGroup::AIRSPACE,
+    PageSettingId::AIRSPACE_DISPLAY,
+    N_("Airspace"),
+    AirspaceDisplaySetting::Count,
+    AirspaceDisplaySetting::Get,
+    AirspaceDisplaySetting::IsValidValue,
+    AirspaceDisplaySetting::GetLive,
+    AirspaceDisplaySetting::SetLive,
+    AirspaceDisplaySetting::LoadGlobal,
+    AirspaceDisplaySetting::SaveGlobal,
   },
 };
 

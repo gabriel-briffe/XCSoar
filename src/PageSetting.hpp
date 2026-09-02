@@ -14,6 +14,7 @@ enum class PageSettingGroup : uint8_t {
   ORIENTATION,
   ELEMENTS,
   WAYPOINTS,
+  AIRSPACE,
 
   COUNT
 };
@@ -21,7 +22,7 @@ enum class PageSettingGroup : uint8_t {
 /**
  * Identifiers for settings that may be overridden per page.
  * The registry in PageSetting.cpp is the catalog (terrain, orientation,
- * elements, then waypoints).
+ * elements, waypoints, then airspace).
  */
 enum class PageSettingId : uint8_t {
   TERRAIN_ENABLE = 0,
@@ -61,6 +62,12 @@ enum class PageSettingId : uint8_t {
   WAYPOINT_LANDABLE_SIZE,
   WAYPOINT_SCALE_RUNWAY_LENGTH,
 
+  AIRSPACE_DISPLAY,
+  AIRSPACE_LABEL_VISIBILITY,
+  AIRSPACE_SHOW_NOTAM_LABELS,
+  AIRSPACE_BLACK_OUTLINE,
+  AIRSPACE_FILL_MODE,
+
   COUNT
 };
 
@@ -72,12 +79,16 @@ constexpr unsigned PageSettingElementsStart =
   unsigned(PageSettingId::GROUND_TRACK);
 constexpr unsigned PageSettingWaypointsStart =
   unsigned(PageSettingId::WAYPOINT_LABEL_FORMAT);
+constexpr unsigned PageSettingAirspaceStart =
+  unsigned(PageSettingId::AIRSPACE_DISPLAY);
 constexpr unsigned PageSettingOrientationCount =
   PageSettingElementsStart - PageSettingOrientationStart;
 constexpr unsigned PageSettingElementsCount =
   PageSettingWaypointsStart - PageSettingElementsStart;
 constexpr unsigned PageSettingWaypointsCount =
-  unsigned(PageSettingId::COUNT) - PageSettingWaypointsStart;
+  PageSettingAirspaceStart - PageSettingWaypointsStart;
+constexpr unsigned PageSettingAirspaceCount =
+  unsigned(PageSettingId::COUNT) - PageSettingAirspaceStart;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items

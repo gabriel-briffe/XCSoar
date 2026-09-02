@@ -2,7 +2,9 @@
 // Copyright The XCSoar Project
 
 #include "AirspaceConfigPanel.hpp"
+#include "Airspace/AirspaceDisplaySetting.hpp"
 #include "ConfigPanel.hpp"
+#include "DisplaySettingConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Form/DataField/Boolean.hpp"
 #include "Form/DataField/Listener.hpp"
@@ -14,66 +16,64 @@
 #include "Renderer/AirspaceRendererSettings.hpp"
 #include "ui/canvas/Features.hpp"
 #include "Interface.hpp"
+#include "PageSetting.hpp"
 #include "UIGlobals.hpp"
 #include "UtilsSettings.hpp"
 
+#include <cassert>
+
 using namespace std::chrono;
 
-enum ControlIndex {
-  AirspaceDisplay,
-  AirspaceLabelSelection,
-#ifdef HAVE_HTTP
-  ShowNotamLabels,
-#endif
-  ClipAltitude,
-  AltWarningMargin,
-  AirspaceWarnings,
-  WarningDialog,
-  WarningTime,
-  RepetitiveSound,
-  AcknowledgeTime,
-  UseBlackOutline,
-  AirspaceFillMode,
+namespace {
+
+enum ControlIndex : unsigned {
+  DISPLAY = 0,
+  LABEL_VISIBILITY,
+  SHOW_NOTAM_LABELS,
+  CLIP_ALTITUDE,
+  ALT_WARNING_MARGIN,
+  AIRSPACE_WARNINGS,
+  WARNING_DIALOG,
+  WARNING_TIME,
+  REPETITIVE_SOUND,
+  ACKNOWLEDGE_TIME,
+  BLACK_OUTLINE,
+  FILL_MODE,
 #if defined(HAVE_HATCHED_BRUSH) && defined(HAVE_ALPHA_BLEND)
-  AirspaceTransparency,
+  TRANSPARENCY,
 #endif
 };
 
-static constexpr StaticEnumChoice as_display_list[] = {
-  { AirspaceDisplayMode::ALLON, N_("All on"),
-    N_("All airspaces are displayed.") },
-  { AirspaceDisplayMode::CLIP, N_("Clip"),
-    N_("Display airspaces below the clip altitude.") },
-  { AirspaceDisplayMode::AUTO, NC_("Setting", "Auto"),
-    N_("Display airspaces within a margin of the glider.") },
-  { AirspaceDisplayMode::ALLBELOW, N_("All below"),
-    N_("Display airspaces below the glider or within a margin.") },
-  nullptr
-};
+[[nodiscard]]
+PageSettingId
+CatalogIdForControl(unsigned control) noexcept
+{
+  switch (ControlIndex(control)) {
+  case ControlIndex::DISPLAY:
+    return PageSettingId::AIRSPACE_DISPLAY;
+  case ControlIndex::LABEL_VISIBILITY:
+    return PageSettingId::AIRSPACE_LABEL_VISIBILITY;
+  case ControlIndex::SHOW_NOTAM_LABELS:
+    return PageSettingId::AIRSPACE_SHOW_NOTAM_LABELS;
+  case ControlIndex::BLACK_OUTLINE:
+    return PageSettingId::AIRSPACE_BLACK_OUTLINE;
+  case ControlIndex::FILL_MODE:
+    return PageSettingId::AIRSPACE_FILL_MODE;
+  default:
+    assert(false);
+    return PageSettingId::AIRSPACE_DISPLAY;
+  }
+}
 
-static constexpr StaticEnumChoice as_fill_mode_list[] = {
-  { AirspaceRendererSettings::FillMode::DEFAULT, N_("Default"),
-    N_("This selects the best performing option for your hardware. "
-      "In fact it favours 'fill padding' except for PPC 2000 system.") },
-  { AirspaceRendererSettings::FillMode::ALL, N_("Fill all"),
-    N_("Transparently fills the airspace colour over the whole area.") },
-  { AirspaceRendererSettings::FillMode::PADDING, N_("Fill padding"),
-    N_("Draws a solid outline with a half transparent border around the airspace.") },
-  { AirspaceRendererSettings::FillMode::NONE, N_("No fill"),
-    N_("Don't fill the airspace area.") },
-  nullptr
-};
-
-static constexpr StaticEnumChoice as_label_selection_list[] = {
-  { AirspaceRendererSettings::LabelSelection::NONE, N_("None"),
-    N_("No labels will be displayed.") },
-  { AirspaceRendererSettings::LabelSelection::ALL, N_("All"),
-    N_("All labels will be displayed.") },
-  nullptr
-};
+} // namespace
 
 class AirspaceConfigPanel final
   : public RowFormWidget, DataFieldListener {
+  AirspaceDisplaySetting::Bundle bundle;
+  AirspaceDisplaySetting::Bundle initial_bundle;
+
+  void SyncCatalogFromForm() noexcept;
+
 public:
   AirspaceConfigPanel()
     :RowFormWidget(UIGlobals::GetDialogLook()) {}
@@ -93,12 +93,46 @@ private:
 };
 
 void
+AirspaceConfigPanel::SyncCatalogFromForm() noexcept
+{
+  static constexpr unsigned catalog_controls[] = {
+    unsigned(ControlIndex::DISPLAY),
+    unsigned(ControlIndex::LABEL_VISIBILITY),
+    unsigned(ControlIndex::SHOW_NOTAM_LABELS),
+    unsigned(ControlIndex::BLACK_OUTLINE),
+    unsigned(ControlIndex::FILL_MODE),
+  };
+
+  for (const unsigned control : catalog_controls) {
+    const auto id = CatalogIdForControl(control);
+    const auto &desc = AirspaceDisplaySetting::Get(id);
+
+    switch (desc.type) {
+    case PageSettingType::BOOL:
+      AirspaceDisplaySetting::SetValue(bundle, id,
+                                       GetValueBoolean(control) ? 1 : 0);
+      break;
+
+    case PageSettingType::ENUM:
+      AirspaceDisplaySetting::SetValue(bundle, id,
+                                       int(GetValueEnum(control)));
+      break;
+
+    case PageSettingType::INTEGER:
+      AirspaceDisplaySetting::SetValue(bundle, id,
+                                       GetValueInteger(control));
+      break;
+    }
+  }
+}
+
+void
 AirspaceConfigPanel::ShowDisplayControls(AirspaceDisplayMode mode)
 {
-  SetRowVisible(ClipAltitude,
+  SetRowVisible(unsigned(ControlIndex::CLIP_ALTITUDE),
                 mode == AirspaceDisplayMode::CLIP);
 
-  SetRowVisible(AltWarningMargin,
+  SetRowVisible(unsigned(ControlIndex::ALT_WARNING_MARGIN),
                 mode == AirspaceDisplayMode::AUTO ||
                 mode == AirspaceDisplayMode::ALLBELOW);
 }
@@ -106,10 +140,10 @@ AirspaceConfigPanel::ShowDisplayControls(AirspaceDisplayMode mode)
 void
 AirspaceConfigPanel::ShowWarningControls(bool visible)
 {
-  SetRowVisible(WarningDialog, visible);
-  SetRowVisible(WarningTime, visible);
-  SetRowVisible(RepetitiveSound, visible);
-  SetRowVisible(AcknowledgeTime, visible);
+  SetRowVisible(unsigned(ControlIndex::WARNING_DIALOG), visible);
+  SetRowVisible(unsigned(ControlIndex::WARNING_TIME), visible);
+  SetRowVisible(unsigned(ControlIndex::REPETITIVE_SOUND), visible);
+  SetRowVisible(unsigned(ControlIndex::ACKNOWLEDGE_TIME), visible);
 }
 
 void
@@ -137,11 +171,11 @@ AirspaceConfigPanel::Hide() noexcept
 void
 AirspaceConfigPanel::OnModified(DataField &df) noexcept
 {
-  if (IsDataField(AirspaceDisplay, df)) {
+  if (IsDataField(unsigned(ControlIndex::DISPLAY), df)) {
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
     AirspaceDisplayMode mode = (AirspaceDisplayMode)dfe.GetValue();
     ShowDisplayControls(mode);
-  } else if (IsDataField(AirspaceWarnings, df)) {
+  } else if (IsDataField(unsigned(ControlIndex::AIRSPACE_WARNINGS), df)) {
     const DataFieldBoolean &dfb = (const DataFieldBoolean &)df;
     ShowWarningControls(dfb.GetValue());
   }
@@ -160,21 +194,21 @@ AirspaceConfigPanel::Prepare(ContainerWindow &parent,
 
   RowFormWidget::Prepare(parent, rc);
 
-  AddEnum(_("Airspace display"),
-          _("Controls filtering of airspace for display and warnings. The airspace filter button also allows filtering of display and warnings independently for each airspace class."),
-          as_display_list, (unsigned)renderer.altitude_mode, this);
+  AirspaceDisplaySetting::ReadLive(bundle);
 
-  AddEnum(_("Label visibility"),
-          _("Determines what labels are displayed."),
-          as_label_selection_list, (unsigned)renderer.label_selection);
-  SetExpertRow(AirspaceLabelSelection);
+  auto AddCatalogRow = [this](PageSettingId id,
+                              DataFieldListener *listener = nullptr) {
+    const auto &desc = AirspaceDisplaySetting::Get(id);
+    DisplaySettingConfigPanel::AddRow(
+      *this, desc, AirspaceDisplaySetting::GetValue(bundle, id), listener);
+  };
 
-#ifdef HAVE_HTTP
-  AddBoolean(_("Show NOTAM labels"),
-             _("Show brief NOTAM text labels on the map when zoomed in sufficiently."),
-             renderer.show_notam_labels);
-  SetExpertRow(ShowNotamLabels);
-#endif
+  AddCatalogRow(PageSettingId::AIRSPACE_DISPLAY, this);
+  AddCatalogRow(PageSettingId::AIRSPACE_LABEL_VISIBILITY);
+  SetExpertRow(unsigned(ControlIndex::LABEL_VISIBILITY));
+
+  AddCatalogRow(PageSettingId::AIRSPACE_SHOW_NOTAM_LABELS);
+  SetExpertRow(unsigned(ControlIndex::SHOW_NOTAM_LABELS));
 
   AddFloat(_("Clip altitude"),
            _("For clip airspace mode, this is the altitude below which airspace is displayed."),
@@ -192,42 +226,41 @@ AirspaceConfigPanel::Prepare(ContainerWindow &parent,
   AddBoolean(_("Warnings dialog"),
              _("Enable/disable displaying airspaces warnings dialog."),
              ui_settings.enable_airspace_warning_dialog, this);
-  SetExpertRow(WarningDialog);
+  SetExpertRow(unsigned(ControlIndex::WARNING_DIALOG));
 
   AddDuration(_("Warning time"),
               _("This is the time before an airspace incursion is estimated at which the system will warn the pilot."),
               seconds{10}, seconds{1000}, seconds{5},
               computer.warnings.warning_time);
-  SetExpertRow(WarningTime);
+  SetExpertRow(unsigned(ControlIndex::WARNING_TIME));
 
   AddBoolean(_("Repetitive sound"),
              _("Enable/disable repetitive warning sound when airspaces warnings dialog is displayed."),
              computer.warnings.repetitive_sound, this);
-  SetExpertRow(RepetitiveSound);
+  SetExpertRow(unsigned(ControlIndex::REPETITIVE_SOUND));
 
   AddDuration(_("Acknowledge time"),
               _("This is the time period in which an acknowledged airspace warning will not be repeated."),
               seconds{10}, seconds{1000}, seconds{5},
               computer.warnings.acknowledgement_time);
-  SetExpertRow(AcknowledgeTime);
+  SetExpertRow(unsigned(ControlIndex::ACKNOWLEDGE_TIME));
 
-  AddBoolean(_("Use black outline"),
-             _("Draw a black outline around each airspace rather than the airspace color."),
-             renderer.black_outline);
-  SetExpertRow(UseBlackOutline);
+  AddCatalogRow(PageSettingId::AIRSPACE_BLACK_OUTLINE);
+  SetExpertRow(unsigned(ControlIndex::BLACK_OUTLINE));
 
-  AddEnum(_("Airspace fill mode"),
-          _("Specifies the mode for filling the airspace area."),
-          as_fill_mode_list, (unsigned)renderer.fill_mode);
-  SetExpertRow(AirspaceFillMode);
+  AddCatalogRow(PageSettingId::AIRSPACE_FILL_MODE);
+  SetExpertRow(unsigned(ControlIndex::FILL_MODE));
 
 #if defined(HAVE_HATCHED_BRUSH) && defined(HAVE_ALPHA_BLEND)
   AddBoolean(_("Airspace transparency"), _("If enabled, then airspaces are filled transparently."),
              renderer.transparency);
-  SetExpertRow(AirspaceTransparency);
+  SetExpertRow(unsigned(ControlIndex::TRANSPARENCY));
 #endif
 
-  ShowDisplayControls(renderer.altitude_mode); // TODO make this work the first time
+  SyncCatalogFromForm();
+  initial_bundle = bundle;
+
+  ShowDisplayControls(bundle.airspace.altitude_mode);
   ShowWarningControls(computer.enable_warnings);
 }
 
@@ -243,44 +276,46 @@ AirspaceConfigPanel::Save(bool &_changed) noexcept
     CommonInterface::SetMapSettings().airspace;
   UISettings &ui_settings = CommonInterface::SetUISettings();
 
-  changed |= SaveValueEnum(AirspaceDisplay, ProfileKeys::AltMode, renderer.altitude_mode);
+  SyncCatalogFromForm();
+  AirspaceDisplaySetting::ApplyLive(bundle);
+  changed |= AirspaceDisplaySetting::SaveGlobal(bundle, initial_bundle);
 
-  changed |= SaveValueEnum(AirspaceLabelSelection, ProfileKeys::AirspaceLabelSelection, renderer.label_selection);
+  changed |= SaveValue(unsigned(ControlIndex::CLIP_ALTITUDE),
+                       UnitGroup::ALTITUDE, ProfileKeys::ClipAlt,
+                       renderer.clip_altitude);
 
-#ifdef HAVE_HTTP
-  changed |= SaveValue(ShowNotamLabels, ProfileKeys::AirspaceShowNOTAMLabels,
-                       renderer.show_notam_labels);
-#endif
+  changed |= SaveValue(unsigned(ControlIndex::ALT_WARNING_MARGIN),
+                       UnitGroup::ALTITUDE, ProfileKeys::AltMargin,
+                       computer.warnings.altitude_warning_margin);
 
-  changed |= SaveValue(ClipAltitude, UnitGroup::ALTITUDE, ProfileKeys::ClipAlt, renderer.clip_altitude);
+  changed |= SaveValue(unsigned(ControlIndex::AIRSPACE_WARNINGS),
+                       ProfileKeys::AirspaceWarning,
+                       computer.enable_warnings);
 
-  changed |= SaveValue(AltWarningMargin, UnitGroup::ALTITUDE, ProfileKeys::AltMargin, computer.warnings.altitude_warning_margin);
-
-  changed |= SaveValue(AirspaceWarnings, ProfileKeys::AirspaceWarning, computer.enable_warnings);
-
-  changed |= SaveValue(WarningDialog, ProfileKeys::AirspaceWarningDialog,
+  changed |= SaveValue(unsigned(ControlIndex::WARNING_DIALOG),
+                       ProfileKeys::AirspaceWarningDialog,
                        ui_settings.enable_airspace_warning_dialog);
 
-  if (SaveValue(WarningTime, ProfileKeys::WarningTime, computer.warnings.warning_time)) {
+  if (SaveValue(unsigned(ControlIndex::WARNING_TIME), ProfileKeys::WarningTime,
+                computer.warnings.warning_time)) {
     changed = true;
     require_restart = true;
   }
 
-  changed |= SaveValue(RepetitiveSound, ProfileKeys::RepetitiveSound,
+  changed |= SaveValue(unsigned(ControlIndex::REPETITIVE_SOUND),
+                       ProfileKeys::RepetitiveSound,
                        computer.warnings.repetitive_sound);
 
-  if (SaveValue(AcknowledgeTime, ProfileKeys::AcknowledgementTime,
+  if (SaveValue(unsigned(ControlIndex::ACKNOWLEDGE_TIME),
+                ProfileKeys::AcknowledgementTime,
                 computer.warnings.acknowledgement_time)) {
     changed = true;
     require_restart = true;
   }
 
-  changed |= SaveValue(UseBlackOutline, ProfileKeys::AirspaceBlackOutline, renderer.black_outline);
-
-  changed |= SaveValueEnum(AirspaceFillMode, ProfileKeys::AirspaceFillMode, renderer.fill_mode);
-
 #if defined(HAVE_HATCHED_BRUSH) && defined(HAVE_ALPHA_BLEND)
-  changed |= SaveValue(AirspaceTransparency, ProfileKeys::AirspaceTransparency,
+  changed |= SaveValue(unsigned(ControlIndex::TRANSPARENCY),
+                       ProfileKeys::AirspaceTransparency,
                        renderer.transparency);
 #endif
 

@@ -76,6 +76,17 @@ enum class WaypointsBundleField : uint8_t {
   COUNT
 };
 
+/** Field within #AirspaceDisplaySetting::Bundle. */
+enum class AirspaceBundleField : uint8_t {
+  DISPLAY,
+  LABEL_VISIBILITY,
+  SHOW_NOTAM_LABELS,
+  BLACK_OUTLINE,
+  FILL_MODE,
+
+  COUNT
+};
+
 /**
  * Active bundle field for a catalog row.  #PageSettingGroup selects which
  * member is valid; add a member here when introducing a new settings group.
@@ -85,6 +96,7 @@ union PageSettingBundleField {
   OrientationBundleField orientation;
   ElementsBundleField elements;
   WaypointsBundleField waypoints;
+  AirspaceBundleField airspace;
 };
 
 /** How a catalog value is stored in the profile file. */
@@ -104,8 +116,8 @@ enum class ProfileWireFormat : uint8_t {
  *
  * Adding a group: extend #PageSettingGroup and #PageSettingBundleField,
  * add #PageSettingId values, implement *DisplaySetting.cpp catalog rows
- * using {.terrain = ...}, {.orientation = ...}, {.elements = ...}, or
- * {.waypoints = ...}.
+ * using {.terrain = ...}, {.orientation = ...}, {.elements = ...},
+ * {.waypoints = ...}, or {.airspace = ...}.
  */
 struct PageSettingDescriptor {
   PageSettingId id;
