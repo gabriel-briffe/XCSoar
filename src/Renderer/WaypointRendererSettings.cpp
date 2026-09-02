@@ -37,14 +37,7 @@ WaypointRendererSettings::LoadFromProfile() noexcept
 bool
 WaypointRendererSettings::IsWaypointDisplayed(const Waypoint &waypoint) const noexcept
 {
-  if (!IsTypeDisplayed(waypoint.type))
-    return false;
-
-  if (!display_non_icao_airports && waypoint.IsAirport() &&
-      waypoint.shortname.length() != 4)
-    return false;
-
-  return true;
+  return IsTypeDisplayed(waypoint.type);
 }
 
 bool
@@ -72,11 +65,4 @@ WaypointRendererSettings::SaveTypeDisplay(Waypoint::Type type,
 
   display_types[type_index] = display;
   WaypointMapFilterProfile::SaveTypeDisplay(type_index, display);
-}
-
-void
-WaypointRendererSettings::SaveNonIcaoAirportsDisplay(bool display) noexcept
-{
-  display_non_icao_airports = display;
-  WaypointMapFilterProfile::SaveNonIcaoAirports(display);
 }

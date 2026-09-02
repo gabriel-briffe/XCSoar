@@ -7,6 +7,7 @@
 #include "ui/canvas/Color.hpp"
 
 struct PixelPoint;
+struct PixelRect;
 class Canvas;
 class AbstractAirspace;
 struct AirspaceRendererSettings;
@@ -33,4 +34,9 @@ namespace AirspacePreviewRenderer
             const PixelPoint pt, unsigned radius,
             const AirspaceRendererSettings &settings,
             const AirspaceLook &look);
+
+  /** Fill + outline rectangle used by airspace colour list rows. */
+  void DrawClassSwatch(Canvas &canvas, const PixelRect &rc,
+                       AirspaceClass type, const AirspaceLook &look,
+                       const AirspaceRendererSettings &settings) noexcept;
 }

@@ -32,6 +32,9 @@ IsValidValue(const PageSettingDescriptor &desc, int value) noexcept
     return (value - desc.int_min) % desc.int_step == 0;
   }
 
+  if (desc.type == PageSettingType::COLOR)
+    return value >= 0 && value <= 0xffffff;
+
   assert(desc.choices != nullptr);
   for (const StaticEnumChoice *c = desc.choices;
        c->display_string != nullptr; ++c)
@@ -44,6 +47,8 @@ void
 FillDataFieldEnum(DataFieldEnum &df, const PageSettingDescriptor &desc,
                   int value) noexcept
 {
+  assert(desc.type != PageSettingType::COLOR);
+
   df.ClearChoices();
 
   if (desc.type == PageSettingType::INTEGER) {

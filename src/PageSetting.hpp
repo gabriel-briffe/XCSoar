@@ -33,9 +33,10 @@ enum class PageSettingGroup : uint8_t {
  *
  * Airspace class filters occupy
  * [#AIRSPACE_CLASS_FILTER_BEGIN, #AIRSPACE_CLASS_FILL_COLOR_BEGIN).
- * Class fill and border colours follow (one per #AirspaceClass except OTHER).
+ * Class fill/border colours, border width, and fill mode follow
+ * (one each per #AirspaceClass except OTHER).
  */
-enum class PageSettingId : uint8_t {
+enum class PageSettingId : uint16_t {
   TERRAIN_ENABLE = 0,
   TOPOGRAPHY_ENABLE,
   TERRAIN_COLORS,
@@ -75,10 +76,8 @@ enum class PageSettingId : uint8_t {
 
   WAYPOINT_TYPE_FILTER_BEGIN,
 
-  WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS =
+  AIRSPACE_DISPLAY =
     WAYPOINT_TYPE_FILTER_BEGIN + PageSettingWaypointMapFilterTypeCount,
-
-  AIRSPACE_DISPLAY,
   AIRSPACE_LABEL_VISIBILITY,
   AIRSPACE_SHOW_NOTAM_LABELS,
   AIRSPACE_CLIP_ALTITUDE,
@@ -100,8 +99,17 @@ enum class PageSettingId : uint8_t {
   AIRSPACE_CLASS_BORDER_COLOR_BEGIN =
     AIRSPACE_CLASS_FILL_COLOR_BEGIN + (AIRSPACECLASSCOUNT - 1),
 
-  COUNT = AIRSPACE_CLASS_BORDER_COLOR_BEGIN + (AIRSPACECLASSCOUNT - 1)
+  AIRSPACE_CLASS_BORDER_WIDTH_BEGIN =
+    AIRSPACE_CLASS_BORDER_COLOR_BEGIN + (AIRSPACECLASSCOUNT - 1),
+
+  AIRSPACE_CLASS_FILL_MODE_BEGIN =
+    AIRSPACE_CLASS_BORDER_WIDTH_BEGIN + (AIRSPACECLASSCOUNT - 1),
+
+  COUNT = AIRSPACE_CLASS_FILL_MODE_BEGIN + (AIRSPACECLASSCOUNT - 1)
 };
+
+static_assert(unsigned(PageSettingId::COUNT) <= 65535,
+              "PageSettingId must fit in uint16_t");
 
 constexpr unsigned PageSettingTerrainCount =
   unsigned(PageSettingId::CRUISE_ORIENTATION);
@@ -132,11 +140,17 @@ constexpr unsigned PageSettingAirspaceClassFillColorCount =
   AIRSPACECLASSCOUNT - 1;
 constexpr unsigned PageSettingAirspaceClassBorderColorCount =
   AIRSPACECLASSCOUNT - 1;
+constexpr unsigned PageSettingAirspaceClassBorderWidthCount =
+  AIRSPACECLASSCOUNT - 1;
+constexpr unsigned PageSettingAirspaceClassFillModeCount =
+  AIRSPACECLASSCOUNT - 1;
 constexpr unsigned PageSettingAirspaceBaseCount =
   PageSettingAirspaceCount -
   PageSettingAirspaceClassFilterCount -
   PageSettingAirspaceClassFillColorCount -
-  PageSettingAirspaceClassBorderColorCount;
+  PageSettingAirspaceClassBorderColorCount -
+  PageSettingAirspaceClassBorderWidthCount -
+  PageSettingAirspaceClassFillModeCount;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items
@@ -263,8 +277,8 @@ PageSettingSet(PageSettingId id, int value, unsigned page_index) noexcept;
 
 /**
  * Reload live MapSettings from the global profile for all catalog
- * settings (no map notify).  Pair with #PageSettingApplyPageOverrides
- * then #PageSettingNotifyLive.
+ * settings (no map notify).  Prefer #PageSettingApplyDisplaySettings
+ * on page switches.
  */
 void
 PageSettingApplyGlobalBaseline() noexcept;
@@ -275,6 +289,13 @@ PageSettingApplyGlobalBaseline() noexcept;
  */
 void
 PageSettingApplyPageOverrides(unsigned page_index) noexcept;
+
+/**
+ * Restore previous page overrides (when known) or full global baseline,
+ * then apply @p page_index overrides.  No map notify.
+ */
+void
+PageSettingApplyDisplaySettings(unsigned page_index) noexcept;
 
 /**
  * Rebuild trail pens/brushes when @p before differs from live trail

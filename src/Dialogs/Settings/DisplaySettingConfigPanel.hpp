@@ -64,6 +64,11 @@ SyncBundleFromForm(RowFormWidget &form, Bundle &bundle,
     case PageSettingType::INTEGER:
       set_value(bundle, id, form.GetValueInteger(i));
       break;
+
+    case PageSettingType::COLOR:
+      /* Colours are not hosted in RowForm catalog panels. */
+      assert(false);
+      break;
     }
   }
 }

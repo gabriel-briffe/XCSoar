@@ -11,7 +11,7 @@
 
 /**
  * Airspace settings shared by the Airspace config panel and per-page
- * overrides (display, warnings, filters, and class colours).
+ * overrides (display, warnings, filters, and class colours / style).
  */
 namespace AirspaceDisplaySetting {
 
@@ -97,6 +97,22 @@ constexpr bool
 IsClassBorderColor(PageSettingId id) noexcept
 {
   return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) &&
+         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN);
+}
+
+[[nodiscard]]
+constexpr bool
+IsClassBorderWidth(PageSettingId id) noexcept
+{
+  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) &&
+         unsigned(id) < unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN);
+}
+
+[[nodiscard]]
+constexpr bool
+IsClassFillMode(PageSettingId id) noexcept
+{
+  return unsigned(id) >= unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) &&
          unsigned(id) < unsigned(PageSettingId::COUNT);
 }
 
@@ -128,6 +144,24 @@ ClassFromBorderColorId(PageSettingId id) noexcept
 }
 
 [[nodiscard]]
+constexpr AirspaceClass
+ClassFromBorderWidthId(PageSettingId id) noexcept
+{
+  return AirspaceClass(unsigned(id) -
+                       unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) +
+                       1);
+}
+
+[[nodiscard]]
+constexpr AirspaceClass
+ClassFromFillModeId(PageSettingId id) noexcept
+{
+  return AirspaceClass(unsigned(id) -
+                       unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) +
+                       1);
+}
+
+[[nodiscard]]
 constexpr PageSettingId
 FillColorId(AirspaceClass cls) noexcept
 {
@@ -144,20 +178,58 @@ BorderColorId(AirspaceClass cls) noexcept
 }
 
 [[nodiscard]]
+constexpr PageSettingId
+BorderWidthId(AirspaceClass cls) noexcept
+{
+  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) +
+                       unsigned(cls) - 1);
+}
+
+[[nodiscard]]
+constexpr PageSettingId
+FillModeId(AirspaceClass cls) noexcept
+{
+  return PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) +
+                       unsigned(cls) - 1);
+}
+
+/**
+ * True for any per-class colour / style catalog id (fill/border colour,
+ * border width, fill mode).  The Pages UI collapses these into one row.
+ */
+[[nodiscard]]
 constexpr bool
 IsClassColor(PageSettingId id) noexcept
 {
-  return IsClassFillColor(id) || IsClassBorderColor(id);
+  return IsClassFillColor(id) || IsClassBorderColor(id) ||
+         IsClassBorderWidth(id) || IsClassFillMode(id);
 }
 
 [[nodiscard]]
 constexpr AirspaceClass
 ClassFromColorId(PageSettingId id) noexcept
 {
-  return IsClassFillColor(id)
-    ? ClassFromFillColorId(id)
-    : ClassFromBorderColorId(id);
+  if (IsClassFillColor(id))
+    return ClassFromFillColorId(id);
+  if (IsClassBorderColor(id))
+    return ClassFromBorderColorId(id);
+  if (IsClassBorderWidth(id))
+    return ClassFromBorderWidthId(id);
+  return ClassFromFillModeId(id);
 }
+
+[[nodiscard]]
+bool
+HasColorOverride(const PageSettingOverrides &overrides,
+                 AirspaceClass cls) noexcept;
+
+void
+AddColorOverrides(PageSettingOverrides &overrides,
+                  AirspaceClass cls) noexcept;
+
+void
+RemoveColorOverrides(PageSettingOverrides &overrides,
+                     AirspaceClass cls) noexcept;
 
 [[nodiscard]]
 constexpr unsigned

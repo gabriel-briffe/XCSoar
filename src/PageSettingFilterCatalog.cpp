@@ -42,15 +42,13 @@ MakeEnumFilter(PageSettingId id, const char *label, const char *help,
 }
 
 PageSettingDescriptor
-MakeColorFilter(PageSettingId id, const char *label, const char *help,
-                const char *override_key,
-                PageSettingBundleField bundle_field,
-                int profile_default,
-                const StaticEnumChoice *choices) noexcept
+MakeColorOverride(PageSettingId id, const char *label, const char *help,
+                  const char *override_key,
+                  PageSettingBundleField bundle_field,
+                  int profile_default) noexcept
 {
-  return PageSettingCatalog::CatalogEnum(
-    id, label, help, override_key, {}, bundle_field,
-    ProfileWireFormat::UINT8_ENUM, profile_default, choices,
+  return PageSettingCatalog::CatalogColor(
+    id, label, help, override_key, bundle_field, profile_default,
     SECTION_COLOURS);
 }
 

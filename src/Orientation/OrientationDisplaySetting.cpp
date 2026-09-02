@@ -128,64 +128,12 @@ using Impl = PageSettingModuleImpl::Module<
 
 } // namespace
 
-unsigned
-Count() noexcept
-{
-  return Impl::Count();
-}
-
-const PageSettingDescriptor &
-Get(PageSettingId id) noexcept
-{
-  return Impl::Get(id);
-}
-
-const PageSettingDescriptor &
-Get(unsigned index) noexcept
-{
-  return Impl::Get(index);
-}
-
-bool
-IsValidValue(PageSettingId id, int value) noexcept
-{
-  return Impl::IsValidValue(id, value);
-}
-
-int
-GetLive(PageSettingId id) noexcept
-{
-  return Impl::GetLive(id);
-}
-
-void
-SetLive(PageSettingId id, int value) noexcept
-{
-  Impl::SetLive(id, value);
-}
+PAGE_SETTING_MODULE_FORWARD_API(Impl)
 
 int
 LoadGlobal(PageSettingId id) noexcept
 {
   return Impl::LoadGlobal(id);
-}
-
-void
-SaveGlobal(PageSettingId id, int value) noexcept
-{
-  Impl::SaveGlobal(id, value);
-}
-
-int
-GetValue(const Bundle &bundle, PageSettingId id) noexcept
-{
-  return Impl::GetValue(bundle, id);
-}
-
-void
-SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
-{
-  Impl::SetValue(bundle, id, value);
 }
 
 void

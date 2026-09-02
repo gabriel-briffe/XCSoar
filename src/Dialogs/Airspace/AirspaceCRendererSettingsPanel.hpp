@@ -5,7 +5,6 @@
 
 #include "Widget/RowFormWidget.hpp"
 #include "Airspace/AirspaceClass.hpp"
-#include "Airspace/AirspaceClass.hpp"
 #include "Dialogs/Airspace/Airspace.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
 
@@ -34,7 +33,4 @@ public:
 
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
   bool Save(bool &changed) noexcept override;
-
-private:
-  void FillAirspaceClasses() noexcept;
 };

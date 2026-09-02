@@ -17,6 +17,8 @@ enum class PageSettingType : uint8_t {
   ENUM,
   BOOL,
   INTEGER,
+  /** Packed RGB24 (0..0xffffff); edited via colour dialog, not enum. */
+  COLOR,
 };
 
 /** Field within #TerrainDisplaySetting::Bundle. */
@@ -77,7 +79,6 @@ enum class WaypointsBundleField : uint8_t {
 
   /** Catalog-only; handled by custom get/set (not in field accessors). */
   TYPE_FILTER,
-  NON_ICAO_FILTER,
 };
 
 /** Field within #AirspaceDisplaySetting::Bundle. */
@@ -102,6 +103,8 @@ enum class AirspaceBundleField : uint8_t {
   CLASS_FILTER,
   CLASS_FILL_COLOR,
   CLASS_BORDER_COLOR,
+  CLASS_BORDER_WIDTH,
+  CLASS_FILL_MODE,
 };
 
 /**

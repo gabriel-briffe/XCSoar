@@ -176,64 +176,12 @@ using Impl = PageSettingModuleImpl::Module<
 
 } // namespace
 
-unsigned
-Count() noexcept
-{
-  return Impl::Count();
-}
-
-const PageSettingDescriptor &
-Get(PageSettingId id) noexcept
-{
-  return Impl::Get(id);
-}
-
-const PageSettingDescriptor &
-Get(unsigned index) noexcept
-{
-  return Impl::Get(index);
-}
-
-bool
-IsValidValue(PageSettingId id, int value) noexcept
-{
-  return Impl::IsValidValue(id, value);
-}
-
-int
-GetLive(PageSettingId id) noexcept
-{
-  return Impl::GetLive(id);
-}
-
-void
-SetLive(PageSettingId id, int value) noexcept
-{
-  Impl::SetLive(id, value);
-}
+PAGE_SETTING_MODULE_FORWARD_API(Impl)
 
 int
 LoadGlobal(PageSettingId id) noexcept
 {
   return Impl::LoadGlobal(id);
-}
-
-void
-SaveGlobal(PageSettingId id, int value) noexcept
-{
-  Impl::SaveGlobal(id, value);
-}
-
-int
-GetValue(const Bundle &bundle, PageSettingId id) noexcept
-{
-  return Impl::GetValue(bundle, id);
-}
-
-void
-SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
-{
-  Impl::SetValue(bundle, id, value);
 }
 
 void
@@ -266,25 +214,7 @@ LoadGlobal(Bundle &bundle) noexcept
 bool
 SaveGlobal(const Bundle &current, const Bundle &initial) noexcept
 {
-  bool changed = false;
-
-  if (current.terrain != initial.terrain) {
-    Profile::Set(ProfileKeys::DrawTerrain, current.terrain.enable);
-    Profile::Set(ProfileKeys::TerrainContrast, current.terrain.contrast);
-    Profile::Set(ProfileKeys::TerrainBrightness, current.terrain.brightness);
-    Profile::Set(ProfileKeys::TerrainRamp, current.terrain.ramp);
-    Profile::SetEnum(ProfileKeys::SlopeShadingType,
-                     current.terrain.slope_shading);
-    Profile::SetEnum(ProfileKeys::TerrainContours, current.terrain.contours);
-    changed = true;
-  }
-
-  if (current.topography_enabled != initial.topography_enabled) {
-    Profile::Set(ProfileKeys::DrawTopography, current.topography_enabled);
-    changed = true;
-  }
-
-  return changed;
+  return Impl::SaveGlobalBundle(current, initial);
 }
 
 } // namespace TerrainDisplaySetting

@@ -32,9 +32,9 @@ ShowAirspaceListDialog(const Airspaces &airspace_database,
 
 struct PageSettingOverrides;
 
+/** When set, the dialog edits draft page colour / style overrides. */
 struct PageAirspaceRendererSettingsContext {
   PageSettingOverrides *overrides = nullptr;
-  unsigned page_index = 0;
 };
 
 bool ShowAirspaceClassRendererSettingsDialog(

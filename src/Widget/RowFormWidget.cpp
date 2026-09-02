@@ -232,13 +232,6 @@ RowFormWidget::SetRowAvailable(unsigned i, bool available) noexcept
 }
 
 void
-RowFormWidget::ClearRows() noexcept
-{
-  assert(IsDefined());
-  rows.clear();
-}
-
-void
 RowFormWidget::SetRowVisible(unsigned i, bool visible) noexcept
 {
   rows[i].SetVisible((ContainerWindow &)GetWindow(), visible);

@@ -36,13 +36,16 @@ MakeEnumFilter(PageSettingId id, const char *label, const char *help,
                ProfileWireFormat wire, int profile_default,
                const StaticEnumChoice *choices) noexcept;
 
+/**
+ * Catalog row for a packed RGB colour override (0..0xffffff).
+ * Not edited via #FillDataFieldEnum; UI uses a colour dialog / swatch.
+ */
 [[nodiscard]]
 PageSettingDescriptor
-MakeColorFilter(PageSettingId id, const char *label, const char *help,
-                const char *override_key,
-                PageSettingBundleField bundle_field,
-                int profile_default,
-                const StaticEnumChoice *choices) noexcept;
+MakeColorOverride(PageSettingId id, const char *label, const char *help,
+                  const char *override_key,
+                  PageSettingBundleField bundle_field,
+                  int profile_default) noexcept;
 
 using FilterLabelFn = const char *(*)(PageSettingId id) noexcept;
 

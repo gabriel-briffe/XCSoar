@@ -4,7 +4,6 @@
 #pragma once
 
 #include "Engine/Airspace/AirspaceClass.hpp"
-#include "Form/DataField/Enum.hpp"
 #include "ui/canvas/PortableColor.hpp"
 
 /**
@@ -38,9 +37,6 @@ IsValid(int packed) noexcept
   return packed >= 0 && packed <= 0xffffff;
 }
 
-void
-InitPresetChoices(StaticEnumChoice *choices, char labels[][16]) noexcept;
-
 [[nodiscard]]
 int
 LoadFill(AirspaceClass cls) noexcept;
@@ -54,5 +50,19 @@ LoadBorder(AirspaceClass cls) noexcept;
 
 void
 SaveBorder(AirspaceClass cls, int packed) noexcept;
+
+[[nodiscard]]
+int
+LoadBorderWidth(AirspaceClass cls) noexcept;
+
+void
+SaveBorderWidth(AirspaceClass cls, int width) noexcept;
+
+[[nodiscard]]
+int
+LoadFillMode(AirspaceClass cls) noexcept;
+
+void
+SaveFillMode(AirspaceClass cls, int mode) noexcept;
 
 } // namespace AirspaceClassColorProfile

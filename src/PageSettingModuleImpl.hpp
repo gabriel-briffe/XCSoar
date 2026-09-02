@@ -230,4 +230,118 @@ struct DynamicModule {
   }
 };
 
+/**
+ * Emit the standard free-function module API that forwards to @p Impl
+ * (Count/Get/IsValidValue/GetLive/SetLive/LoadGlobal/SaveGlobal/
+ * GetValue/SetValue).  Place inside the display-setting namespace after
+ * `using Impl = ...` / `using Dyn = ...`.
+ */
+#define PAGE_SETTING_MODULE_FORWARD_API(Impl)                              \
+unsigned                                                                   \
+Count() noexcept                                                           \
+{                                                                          \
+  return Impl::Count();                                                    \
+}                                                                          \
+                                                                           \
+const PageSettingDescriptor &                                              \
+Get(PageSettingId id) noexcept                                             \
+{                                                                          \
+  return Impl::Get(id);                                                    \
+}                                                                          \
+                                                                           \
+const PageSettingDescriptor &                                              \
+Get(unsigned index) noexcept                                               \
+{                                                                          \
+  return Impl::Get(index);                                                 \
+}                                                                          \
+                                                                           \
+bool                                                                       \
+IsValidValue(PageSettingId id, int value) noexcept                         \
+{                                                                          \
+  return Impl::IsValidValue(id, value);                                    \
+}                                                                          \
+                                                                           \
+int                                                                        \
+GetLive(PageSettingId id) noexcept                                         \
+{                                                                          \
+  return Impl::GetLive(id);                                                \
+}                                                                          \
+                                                                           \
+void                                                                       \
+SetLive(PageSettingId id, int value) noexcept                              \
+{                                                                          \
+  Impl::SetLive(id, value);                                                \
+}                                                                          \
+                                                                           \
+void                                                                       \
+SaveGlobal(PageSettingId id, int value) noexcept                           \
+{                                                                          \
+  Impl::SaveGlobal(id, value);                                             \
+}                                                                          \
+                                                                           \
+int                                                                        \
+GetValue(const Bundle &bundle, PageSettingId id) noexcept                  \
+{                                                                          \
+  return Impl::GetValue(bundle, id);                                       \
+}                                                                          \
+                                                                           \
+void                                                                       \
+SetValue(Bundle &bundle, PageSettingId id, int value) noexcept             \
+{                                                                          \
+  Impl::SetValue(bundle, id, value);                                       \
+}
+
+/**
+ * Like #PAGE_SETTING_MODULE_FORWARD_API but without GetValue/SetValue
+ * (for #DynamicModule, where those stay as hand-written Impl helpers).
+ */
+#define PAGE_SETTING_DYNAMIC_MODULE_FORWARD_API(Impl)                      \
+unsigned                                                                   \
+Count() noexcept                                                           \
+{                                                                          \
+  return Impl::Count();                                                    \
+}                                                                          \
+                                                                           \
+const PageSettingDescriptor &                                              \
+Get(PageSettingId id) noexcept                                             \
+{                                                                          \
+  return Impl::Get(id);                                                    \
+}                                                                          \
+                                                                           \
+const PageSettingDescriptor &                                              \
+Get(unsigned index) noexcept                                               \
+{                                                                          \
+  return Impl::Get(index);                                                 \
+}                                                                          \
+                                                                           \
+bool                                                                       \
+IsValidValue(PageSettingId id, int value) noexcept                         \
+{                                                                          \
+  return Impl::IsValidValue(id, value);                                    \
+}                                                                          \
+                                                                           \
+int                                                                        \
+GetLive(PageSettingId id) noexcept                                         \
+{                                                                          \
+  return Impl::GetLive(id);                                                \
+}                                                                          \
+                                                                           \
+void                                                                       \
+SetLive(PageSettingId id, int value) noexcept                              \
+{                                                                          \
+  Impl::SetLive(id, value);                                                \
+}                                                                          \
+                                                                           \
+int                                                                        \
+LoadGlobal(PageSettingId id) noexcept                                      \
+{                                                                          \
+  return Impl::LoadGlobal(id);                                             \
+}                                                                          \
+                                                                           \
+void                                                                       \
+SaveGlobal(PageSettingId id, int value) noexcept                           \
+{                                                                          \
+  Impl::SaveGlobal(id, value);                                             \
+}
+
 } // namespace PageSettingModuleImpl

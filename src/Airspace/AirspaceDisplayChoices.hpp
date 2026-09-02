@@ -69,3 +69,11 @@ static constexpr StaticEnumChoice airspace_class_filter_mode_choices[] = {
     N_("Draw this airspace class on the map and enable warnings.") },
   nullptr
 };
+
+/** Per-class fill (same labels as the class renderer settings dialog). */
+static constexpr StaticEnumChoice airspace_class_fill_mode_choices[] = {
+  { AirspaceClassRendererSettings::FillMode::ALL, N_("Filled"), },
+  { AirspaceClassRendererSettings::FillMode::PADDING, N_("Only padding"), },
+  { AirspaceClassRendererSettings::FillMode::NONE, N_("Not filled"), },
+  nullptr
+};

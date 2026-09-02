@@ -11,7 +11,7 @@
 /**
  * Map Display → Waypoints: shared catalog and get/set for global profile
  * and live MapSettings.  Per-type map filters occupy
- * [#WAYPOINT_TYPE_FILTER_BEGIN, #WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS).
+ * [#WAYPOINT_TYPE_FILTER_BEGIN, #AIRSPACE_DISPLAY).
  */
 namespace WaypointsDisplaySetting {
 
@@ -77,14 +77,7 @@ constexpr bool
 IsTypeFilter(PageSettingId id) noexcept
 {
   return unsigned(id) >= unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN) &&
-         unsigned(id) < unsigned(PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS);
-}
-
-[[nodiscard]]
-constexpr bool
-IsNonIcaoFilter(PageSettingId id) noexcept
-{
-  return id == PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS;
+         unsigned(id) < unsigned(PageSettingId::AIRSPACE_DISPLAY);
 }
 
 [[nodiscard]]
@@ -99,7 +92,7 @@ TypeFromFilterId(PageSettingId id) noexcept
 constexpr unsigned
 FilterDialogRowCount() noexcept
 {
-  return PageSettingWaypointTypeFilterCount + 1;
+  return PageSettingWaypointTypeFilterCount;
 }
 
 [[nodiscard]]

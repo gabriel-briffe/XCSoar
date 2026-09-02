@@ -111,8 +111,6 @@ constexpr std::string_view AppIndLandable = "AppIndLandable";
 constexpr std::string_view AppUseSWLandablesRendering = "AppUseSWLandablesRendering";
 constexpr std::string_view AppLandableRenderingScale = "AppLandableRenderingScale";
 constexpr std::string_view MapWaypointIconScale = "MapWaypointIconScale";
-constexpr std::string_view WaypointDisplayNonIcaoAirports =
-  "WaypointDisplayNonIcaoAirports";
 constexpr std::string_view AppScaleRunwayLength = "AppScaleRunwayLength";
 
 /** deprecated, use #DarkMode */

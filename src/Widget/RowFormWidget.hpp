@@ -40,7 +40,7 @@ class Button;
 class RowFormWidget : public WindowWidget {
 public:
   /** Largest row count in any single form. */
-  static constexpr unsigned MAX_ROWS = 160u;
+  static constexpr unsigned MAX_ROWS = 48u;
 
 private:
   struct Row {
@@ -497,12 +497,6 @@ public:
    * Modify the "available" flag on this row.
    */
   void SetRowAvailable(unsigned i, bool available) noexcept;
-
-  /**
-   * Remove all rows and destroy their controls.  Only valid after
-   * Prepare() and before Unprepare().
-   */
-  void ClearRows() noexcept;
 
   void SetRowVisible(unsigned i, bool visible) noexcept;
 

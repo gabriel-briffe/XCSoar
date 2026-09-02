@@ -63,18 +63,10 @@ AirspaceColorListWidget::OnPaintItem(Canvas &canvas, PixelRect rc,
 
   const int padding = Layout::GetTextPadding();
 
-  const Color text_color = canvas.GetTextColor();
-  if (AirspacePreviewRenderer::PrepareFill(
-      canvas, type, look, renderer)) {
-    canvas.DrawRectangle({second_x, rc.top + padding, rc.right - padding,
-                          rc.bottom - padding});
-  }
-  AirspacePreviewRenderer::UnprepareFill(canvas, text_color);
-  if (AirspacePreviewRenderer::PrepareOutline(
-      canvas, type, look, renderer)) {
-    canvas.DrawRectangle({second_x, rc.top + padding, rc.right - padding,
-                          rc.bottom - padding});
-  }
+  AirspacePreviewRenderer::DrawClassSwatch(
+    canvas,
+    {second_x, rc.top + padding, rc.right - padding, rc.bottom - padding},
+    type, look, renderer);
 
   row_renderer.DrawTextRow(canvas, rc, name);
 }

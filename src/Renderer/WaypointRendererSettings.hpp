@@ -66,12 +66,6 @@ struct WaypointRendererSettings {
   /** Per #Waypoint::Type map symbol filter (indexed by type). */
   bool display_types[WAYPOINT_TYPE_COUNT];
 
-  /**
-   * When false, hide airports whose short name is not exactly four
-   * characters (typical ICAO code length).
-   */
-  bool display_non_icao_airports;
-
   [[gnu::pure]]
   bool IsTypeDisplayed(Waypoint::Type type) const noexcept {
     const unsigned i = unsigned(type);
@@ -95,16 +89,12 @@ struct WaypointRendererSettings {
 
     for (bool &display : display_types)
       display = true;
-
-    display_non_icao_airports = true;
   }
 
   void LoadFromProfile() noexcept;
 
   /** Persist one type's display flag to the profile. */
   void SaveTypeDisplay(Waypoint::Type type, bool display) noexcept;
-
-  void SaveNonIcaoAirportsDisplay(bool display) noexcept;
 };
 
 class MapWindowProjection;

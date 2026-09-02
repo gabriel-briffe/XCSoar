@@ -5,7 +5,6 @@
 #include "PageSettingDescriptor.hpp"
 #include "ActionInterface.hpp"
 #include "Interface.hpp"
-#include "LogFile.hpp"
 #include "MainWindow.hpp"
 #include "MapSettings.hpp"
 #include "PageSettingModule.hpp"
@@ -209,11 +208,8 @@ void
 PageSettingSet(PageSettingId id, int value) noexcept
 {
   const auto &module = PageSettingModuleRegistry::GetById(id);
-  if (!module.is_valid_value(id, value)) {
-    LogFmt("perPage: Set global reject id={} value={} (invalid)",
-           unsigned(id), value);
+  if (!module.is_valid_value(id, value))
     return;
-  }
 
   if (value == PageSettingOverrides::INHERIT)
     value = module.load_global(id);
@@ -224,8 +220,6 @@ PageSettingSet(PageSettingId id, int value) noexcept
   const AirspaceRendererSettings old_airspace =
     CommonInterface::GetMapSettings().airspace;
 
-  const auto &desc = module.get(id);
-  LogFmt("perPage: Set global '{}' value={}", desc.label, value);
   module.set_live(id, value);
   module.save_global(id, value);
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
@@ -237,41 +231,49 @@ PageSettingSet(PageSettingId id, int value) noexcept
 void
 PageSettingSet(PageSettingId id, int value, unsigned page_index) noexcept
 {
-  if (!PageSettingModuleRegistry::GetById(id).is_valid_value(id, value)) {
-    LogFmt("perPage: Set page reject index={} id={} value={} (invalid)",
-           page_index, unsigned(id), value);
+  if (!PageSettingModuleRegistry::GetById(id).is_valid_value(id, value))
     return;
-  }
 
   auto &pages = CommonInterface::SetUISettings().pages;
-  if (page_index >= PageSettings::MAX_PAGES) {
-    LogFmt("perPage: Set page reject index={} id={}",
-           page_index, unsigned(id));
+  if (page_index >= PageSettings::MAX_PAGES)
     return;
-  }
 
-  const auto &desc = PageSettingModuleRegistry::GetById(id).get(id);
-  LogFmt("perPage: Set page={} '{}' value={}",
-         page_index, desc.label, value);
   pages.overrides[page_index].SetValue(id, value);
 }
+
+namespace {
+
+bool have_applied_page = false;
+unsigned last_applied_page = 0;
+
+void
+RestoreOverridesToGlobal(unsigned page_index) noexcept
+{
+  if (page_index >= PageSettings::MAX_PAGES)
+    return;
+
+  const auto &overrides =
+    CommonInterface::GetUISettings().pages.overrides[page_index];
+
+  for (unsigned i = 0; i < overrides.n_items; ++i) {
+    const auto id = overrides.items[i].id;
+    const auto &module = PageSettingModuleRegistry::GetById(id);
+    module.set_live(id, module.load_global(id));
+  }
+}
+
+} // namespace
 
 void
 PageSettingApplyGlobalBaseline() noexcept
 {
-  LogFmt("perPage: ApplyGlobalBaseline ({} settings)",
-         PageSettingRegistry::Count());
   for (unsigned m = 0; m < PageSettingModuleRegistry::Count(); ++m) {
     const auto &module = PageSettingModuleRegistry::Get(m);
     for (unsigned i = 0; i < module.count(); ++i) {
-      const auto &desc = module.get(PageSettingId(unsigned(module.id_start) +
-                                                  i));
-      const auto id = desc.id;
+      const auto id = PageSettingId(unsigned(module.id_start) + i);
       const int value = module.load_global(id);
-      const int live = module.get_live(id);
-      LogFmt("perPage:   baseline '{}' = {} (live was {})",
-             desc.label, value, live);
-      module.set_live(id, value);
+      if (module.get_live(id) != value)
+        module.set_live(id, value);
     }
   }
 }
@@ -279,34 +281,43 @@ PageSettingApplyGlobalBaseline() noexcept
 void
 PageSettingApplyPageOverrides(unsigned page_index) noexcept
 {
-  if (page_index >= PageSettings::MAX_PAGES) {
-    LogFmt("perPage: ApplyPageOverrides skip bad index={}", page_index);
+  if (page_index >= PageSettings::MAX_PAGES)
     return;
-  }
 
   const auto &overrides =
     CommonInterface::GetUISettings().pages.overrides[page_index];
 
-  LogFmt("perPage: ApplyPageOverrides page={} n_items={}",
-         page_index, overrides.n_items);
-
   for (unsigned i = 0; i < overrides.n_items; ++i) {
     const auto &item = overrides.items[i];
     const auto &module = PageSettingModuleRegistry::GetById(item.id);
-    const auto &desc = module.get(item.id);
 
-    if (item.value == PageSettingOverrides::INHERIT) {
-      LogFmt("perPage:   override '{}' inherit (skip)", desc.label);
+    if (item.value == PageSettingOverrides::INHERIT)
       continue;
-    }
 
-    if (!module.is_valid_value(item.id, item.value)) {
-      LogFmt("perPage:   override '{}' value={} invalid (skip)",
-             desc.label, item.value);
+    if (!module.is_valid_value(item.id, item.value))
       continue;
-    }
 
-    LogFmt("perPage:   override '{}' = {}", desc.label, item.value);
     module.set_live(item.id, item.value);
   }
+}
+
+/**
+ * Apply global baseline + page overrides with a cheap page-switch path:
+ * when leaving page A for B, restore only A's override ids, then apply B.
+ * Same-page refresh (or first apply) still does a full baseline.
+ */
+void
+PageSettingApplyDisplaySettings(unsigned page_index) noexcept
+{
+  if (page_index >= PageSettings::MAX_PAGES)
+    return;
+
+  if (have_applied_page && last_applied_page != page_index)
+    RestoreOverridesToGlobal(last_applied_page);
+  else
+    PageSettingApplyGlobalBaseline();
+
+  PageSettingApplyPageOverrides(page_index);
+  last_applied_page = page_index;
+  have_applied_page = true;
 }

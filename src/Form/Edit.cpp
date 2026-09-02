@@ -135,16 +135,6 @@ WndProperty::SetCaptionWidth(int _caption_width) noexcept
   UpdateLayout();
 }
 
-void
-WndProperty::SetCaptionSelected(bool selected) noexcept
-{
-  if (caption_selected == selected)
-    return;
-
-  caption_selected = selected;
-  Invalidate();
-}
-
 bool
 WndProperty::BeginEditing() noexcept
 {
@@ -217,18 +207,6 @@ WndProperty::UpdateLayout() noexcept
   Invalidate();
 }
 
-bool
-WndProperty::IsPointInCaption(PixelPoint p) const noexcept
-{
-  if (caption.empty())
-    return false;
-
-  if (caption_width >= 0)
-    return p.x < edit_rc.left;
-
-  return p.y < edit_rc.top;
-}
-
 void
 WndProperty::OnResize(PixelSize new_size) noexcept
 {
@@ -251,7 +229,7 @@ WndProperty::OnMouseDown([[maybe_unused]] PixelPoint p) noexcept
 }
 
 bool
-WndProperty::OnMouseUp(PixelPoint p) noexcept
+WndProperty::OnMouseUp([[maybe_unused]] PixelPoint p) noexcept
 {
   if (dragging) {
     dragging = false;
@@ -260,13 +238,7 @@ WndProperty::OnMouseUp(PixelPoint p) noexcept
     if (pressed) {
       pressed = false;
       Invalidate();
-      if (caption_click_selects && IsPointInCaption(p)) {
-        /* Caption click: select the row for actions such as Delete. */
-        SetFocus();
-        if (caption_selected_callback)
-          caption_selected_callback();
-      } else
-        BeginEditing();
+      BeginEditing();
     }
 
     return true;
@@ -341,9 +313,6 @@ WndProperty::OnPaint(Canvas &canvas) noexcept
     visible_edit_rc.bottom = canvas_height;
 
   const bool focused = HasCursorKeys() && HasFocus();
-  /* Touch selection for Delete uses the same focus blue as Quick
-     Menu buttons (#look.focused), even when HasCursorKeys() is false. */
-  const bool caption_hilite = caption_selected && !pressed;
 
   /* background and selector */
   if (pressed)
@@ -360,32 +329,22 @@ WndProperty::OnPaint(Canvas &canvas) noexcept
 
     PixelPoint org;
     unsigned clip_width;
-    PixelRect caption_rc;
     if (caption_width < 0) {
       org.x = edit_rc.left;
       org.y = edit_rc.top - tsize.height;
       clip_width = canvas.GetWidth();
-      caption_rc = PixelRect(0, 0, canvas_width, edit_rc.top);
     } else {
       org.x = Layout::GetTextPadding();
       org.y = (canvas.GetHeight() - tsize.height) / 2;
       clip_width = caption_width;
-      caption_rc = PixelRect(0, 0, edit_rc.left, canvas_height);
     }
 
     if (org.x < 1)
       org.x = 1;
 
-    if (caption_hilite) {
-      /* Same blue as Quick Menu focused buttons (#look.focused). */
-      canvas.DrawFilledRectangle(caption_rc,
-                                 look.focused.background_color);
-      canvas.SetTextColor(look.focused.text_color);
-    } else {
-      canvas.SetTextColor(focused && !pressed
-                            ? look.focused.text_color
-                            : look.text_color);
-    }
+    canvas.SetTextColor(focused && !pressed
+                          ? look.focused.text_color
+                          : look.text_color);
     canvas.SetBackgroundTransparent();
     canvas.Select(look.text_font);
 

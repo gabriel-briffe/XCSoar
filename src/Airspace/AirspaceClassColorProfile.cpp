@@ -3,33 +3,39 @@
 
 #include "Airspace/AirspaceClassColorProfile.hpp"
 
-#include "Look/AirspaceLook.hpp"
 #include "Profile/AirspaceConfig.hpp"
 #include "Profile/Current.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
-#include "util/StringFormat.hpp"
+
+#include <cassert>
 
 namespace AirspaceClassColorProfile {
 
-void
-InitPresetChoices(StaticEnumChoice *choices, char labels[][16]) noexcept
-{
-  for (unsigned i = 0; i < NUMAIRSPACECOLORS; ++i) {
-    const RGB8Color color = AirspaceLook::preset_colors[i];
-    StringFormat(labels[i], 16, "#%02X%02X%02X",
-                 color.Red(), color.Green(), color.Blue());
-    choices[i] = StaticEnumChoice(Pack(color), labels[i]);
-  }
+namespace {
 
-  choices[NUMAIRSPACECOLORS] = StaticEnumChoice(nullptr);
+[[nodiscard]]
+AirspaceClassRendererSettings
+LoadClassSettings(AirspaceClass cls) noexcept
+{
+  assert(unsigned(cls) < AIRSPACECLASSCOUNT);
+
+  /* Same order as MapSettings airspace load: per-class defaults, then
+     profile overlay.  Without defaults, a missing AirspaceFillColorN
+     leaves RGB8Color uninitialized and page baseline apply can paint
+     every class with garbage (often seen as magenta/pink). */
+  AirspaceRendererSettings defaults;
+  defaults.SetDefaults();
+  AirspaceClassRendererSettings settings = defaults.classes[unsigned(cls)];
+  Profile::Load(Profile::map, unsigned(cls), settings);
+  return settings;
 }
+
+} // namespace
 
 int
 LoadFill(AirspaceClass cls) noexcept
 {
-  AirspaceClassRendererSettings settings;
-  Profile::Load(Profile::map, unsigned(cls), settings);
-  return Pack(settings.fill_color);
+  return Pack(LoadClassSettings(cls).fill_color);
 }
 
 void
@@ -41,15 +47,39 @@ SaveFill(AirspaceClass cls, int packed) noexcept
 int
 LoadBorder(AirspaceClass cls) noexcept
 {
-  AirspaceClassRendererSettings settings;
-  Profile::Load(Profile::map, unsigned(cls), settings);
-  return Pack(settings.border_color);
+  return Pack(LoadClassSettings(cls).border_color);
 }
 
 void
 SaveBorder(AirspaceClass cls, int packed) noexcept
 {
   Profile::SetAirspaceBorderColor(Profile::map, unsigned(cls), Unpack(packed));
+}
+
+int
+LoadBorderWidth(AirspaceClass cls) noexcept
+{
+  return int(LoadClassSettings(cls).border_width);
+}
+
+void
+SaveBorderWidth(AirspaceClass cls, int width) noexcept
+{
+  assert(width >= 0);
+  Profile::SetAirspaceBorderWidth(Profile::map, unsigned(cls),
+                                  unsigned(width));
+}
+
+int
+LoadFillMode(AirspaceClass cls) noexcept
+{
+  return int(LoadClassSettings(cls).fill_mode);
+}
+
+void
+SaveFillMode(AirspaceClass cls, int mode) noexcept
+{
+  Profile::SetAirspaceFillMode(Profile::map, unsigned(cls), uint8_t(mode));
 }
 
 } // namespace AirspaceClassColorProfile

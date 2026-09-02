@@ -7,6 +7,8 @@
 #include "Language/Language.hpp"
 #include "PageSettingCatalog.hpp"
 
+#include <cassert>
+
 namespace DisplaySettingConfigPanel {
 
 void
@@ -51,6 +53,9 @@ AddRow(RowFormWidget &form, const PageSettingDescriptor &desc, int value,
     break;
   case PageSettingType::INTEGER:
     AddIntegerRow(form, desc, value, listener);
+    break;
+  case PageSettingType::COLOR:
+    assert(false);
     break;
   }
 }

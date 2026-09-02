@@ -155,3 +155,19 @@ AirspacePreviewRenderer::Draw(Canvas &canvas, const AbstractAirspace &airspace,
   if (PrepareOutline(canvas, as_type_or_class, look, settings))
     DrawShape(canvas, shape, pt, radius, pts);
 }
+
+void
+AirspacePreviewRenderer::DrawClassSwatch(
+    Canvas &canvas, const PixelRect &rc, AirspaceClass type,
+    const AirspaceLook &look,
+    const AirspaceRendererSettings &settings) noexcept
+{
+  const Color text_color = canvas.GetTextColor();
+  if (PrepareFill(canvas, type, look, settings)) {
+    canvas.DrawRectangle(rc);
+    UnprepareFill(canvas, text_color);
+  }
+
+  if (PrepareOutline(canvas, type, look, settings))
+    canvas.DrawRectangle(rc);
+}

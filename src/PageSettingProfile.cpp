@@ -3,14 +3,11 @@
 
 #include "PageSettingProfile.hpp"
 
-#include "MapSettings.hpp"
 #include "PageSettingCatalog.hpp"
 #include "PageSettingDescriptor.hpp"
 #include "Profile/Current.hpp"
 #include "Profile/Profile.hpp"
 #include "Terrain/TerrainDisplayChoices.hpp"
-#include "Terrain/TerrainRenderer.hpp"
-#include "Terrain/TerrainSettings.hpp"
 #include "util/Macros.hpp"
 
 #include <cstdint>
@@ -48,7 +45,7 @@ LoadUnsigned(const PageSettingDescriptor &desc) noexcept
 {
   unsigned value = unsigned(desc.profile_default);
   if (!Profile::Get(desc.profile_key, value) ||
-      value >= TerrainRendererSettings::NUM_RAMPS)
+      !PageSettingCatalog::IsValidValue(desc, int(value)))
     value = unsigned(desc.profile_default);
   return int(value);
 }

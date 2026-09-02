@@ -98,4 +98,23 @@ CatalogInteger(PageSettingId id, const char *label, const char *help,
   };
 }
 
+/**
+ * Packed RGB24 colour override (0..0xffffff).  Not edited via
+ * #FillDataFieldEnum — UI uses a colour dialog / swatch.
+ */
+[[nodiscard]]
+constexpr PageSettingDescriptor
+CatalogColor(PageSettingId id, const char *label, const char *help,
+             const char *override_key,
+             PageSettingBundleField bundle_field,
+             int profile_default,
+             const char *section = nullptr) noexcept
+{
+  return {
+    id, PageSettingType::COLOR, label, help, override_key, {},
+    bundle_field, ProfileWireFormat::INT, profile_default,
+    nullptr, 0, 0xffffff, 1, "%06X", section,
+  };
+}
+
 } // namespace PageSettingCatalog

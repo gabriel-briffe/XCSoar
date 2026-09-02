@@ -3,7 +3,6 @@
 
 #include "Waypoints/WaypointMapFilterProfile.hpp"
 
-#include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "Renderer/WaypointRendererSettings.hpp"
 #include "util/StringFormat.hpp"
@@ -47,27 +46,11 @@ SaveTypeDisplay(unsigned type_index, bool display) noexcept
   Profile::Set(name, display);
 }
 
-bool
-LoadNonIcaoAirports() noexcept
-{
-  bool display = true;
-  Profile::Get(ProfileKeys::WaypointDisplayNonIcaoAirports, display);
-  return display;
-}
-
-void
-SaveNonIcaoAirports(bool display) noexcept
-{
-  Profile::Set(ProfileKeys::WaypointDisplayNonIcaoAirports, display);
-}
-
 void
 Load(WaypointRendererSettings &settings) noexcept
 {
   for (unsigned i = 0; i < WAYPOINT_TYPE_COUNT; ++i)
     settings.display_types[i] = LoadTypeDisplay(i);
-
-  settings.display_non_icao_airports = LoadNonIcaoAirports();
 }
 
 } // namespace WaypointMapFilterProfile

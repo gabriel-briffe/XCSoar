@@ -35,7 +35,7 @@ static_assert(PageSettingWaypointsBaseCount == 9,
               "Waypoints base catalog size mismatch");
 static_assert(PageSettingWaypointsCount ==
               PageSettingWaypointsBaseCount +
-              PageSettingWaypointTypeFilterCount + 1,
+              PageSettingWaypointTypeFilterCount,
               "Waypoints catalog size mismatch");
 static_assert(WAYPOINT_MAP_FILTER_TYPE_COUNT ==
               PageSettingWaypointMapFilterTypeCount,
@@ -172,7 +172,7 @@ static_assert(ARRAY_SIZE(field_accessors) ==
 static char filter_override_keys[PageSettingWaypointTypeFilterCount][40];
 static char type_profile_keys[PageSettingWaypointTypeFilterCount][32];
 static PageSettingDescriptor catalog[PageSettingWaypointsCount];
-static PageSettingId filter_dialog_order[PageSettingWaypointTypeFilterCount + 1];
+static PageSettingId filter_dialog_order[PageSettingWaypointTypeFilterCount];
 static bool catalog_ready = false;
 
 [[nodiscard]]
@@ -190,8 +190,6 @@ InitFilterDialogOrder() noexcept
     filter_dialog_order,
     PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN,
     PageSettingWaypointTypeFilterCount);
-  filter_dialog_order[PageSettingWaypointTypeFilterCount] =
-    PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS;
 
   PageSettingFilterCatalog::InitSortedOrder(
     filter_dialog_order, FilterDialogRowCount(), FilterDialogLabel);
@@ -225,16 +223,6 @@ EnsureCatalog() noexcept
         type_profile_keys[i],
         {.waypoints = WaypointsBundleField::TYPE_FILTER});
   }
-
-  catalog[PageSettingWaypointsBaseCount +
-          PageSettingWaypointTypeFilterCount] =
-    PageSettingFilterCatalog::MakeBoolFilter(
-      PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS,
-      N_("Non-ICAO airports"),
-      N_("Display airports whose short name is not exactly four characters."),
-      "OverrideWaypointDisplayNonIcaoAirports",
-      ProfileKeys::WaypointDisplayNonIcaoAirports,
-      {.waypoints = WaypointsBundleField::NON_ICAO_FILTER});
 
   InitFilterDialogOrder();
   catalog_ready = true;
@@ -275,9 +263,6 @@ GetValueImpl(const Bundle &bundle, PageSettingId id) noexcept
   if (IsTypeFilter(id))
     return bundle.waypoint.display_types[unsigned(TypeFromFilterId(id))] ? 1 : 0;
 
-  if (IsNonIcaoFilter(id))
-    return bundle.waypoint.display_non_icao_airports ? 1 : 0;
-
   return BaseImpl::GetValue(bundle, id);
 }
 
@@ -294,11 +279,6 @@ SetValueImpl(Bundle &bundle, PageSettingId id, int value) noexcept
     return;
   }
 
-  if (IsNonIcaoFilter(id)) {
-    bundle.waypoint.display_non_icao_airports = value != 0;
-    return;
-  }
-
   BaseImpl::SetValue(bundle, id, value);
 }
 
@@ -309,9 +289,6 @@ LoadGlobalImpl(PageSettingId id) noexcept
   if (IsTypeFilter(id))
     return WaypointMapFilterProfile::LoadTypeDisplay(
       unsigned(TypeFromFilterId(id))) ? 1 : 0;
-
-  if (IsNonIcaoFilter(id))
-    return WaypointMapFilterProfile::LoadNonIcaoAirports() ? 1 : 0;
 
   EnsureCatalog();
   return PageSettingProfile::Load(
@@ -329,11 +306,6 @@ SaveGlobalImpl(PageSettingId id, int value) noexcept
   if (IsTypeFilter(id)) {
     WaypointMapFilterProfile::SaveTypeDisplay(
       unsigned(TypeFromFilterId(id)), value != 0);
-    return;
-  }
-
-  if (IsNonIcaoFilter(id)) {
-    WaypointMapFilterProfile::SaveNonIcaoAirports(value != 0);
     return;
   }
 

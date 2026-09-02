@@ -68,7 +68,9 @@ ElementsConfigPanel::SyncBundleFromForm() noexcept
 void
 ElementsConfigPanel::ApplyBundleLive() noexcept
 {
+  const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
   ElementsDisplaySetting::ApplyLive(bundle);
+  PageSettingReinitialiseTrailLookIfChanged(old_trail);
   ActionInterface::SendMapSettings(true);
 }
 

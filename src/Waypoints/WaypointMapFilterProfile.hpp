@@ -10,8 +10,7 @@
 struct WaypointRendererSettings;
 
 /**
- * Profile keys for map waypoint type filters (#WaypointTypeDisplay%u,
- * #WaypointDisplayNonIcaoAirports).
+ * Profile keys for map waypoint type filters (#WaypointTypeDisplay%u).
  */
 namespace WaypointMapFilterProfile {
 
@@ -25,13 +24,6 @@ LoadTypeDisplay(unsigned type_index) noexcept;
 
 void
 SaveTypeDisplay(unsigned type_index, bool display) noexcept;
-
-[[nodiscard]]
-bool
-LoadNonIcaoAirports() noexcept;
-
-void
-SaveNonIcaoAirports(bool display) noexcept;
 
 void
 Load(WaypointRendererSettings &settings) noexcept;

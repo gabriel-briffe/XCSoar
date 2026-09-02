@@ -7,7 +7,6 @@
 #include "UIState.hpp"
 #include "Interface.hpp"
 #include "ActionInterface.hpp"
-#include "LogFile.hpp"
 #include "MainWindow.hpp"
 #include "util/ScopeExit.hxx"
 #include "CrossSection/CrossSectionWidget.hpp"
@@ -350,8 +349,6 @@ PageActions::LeavePage()
 {
   PagesState &state = CommonInterface::SetUIState().pages;
 
-  LogFmt("perPage: LeavePage index={} special={}",
-         state.current_index, state.special_page.IsDefined());
 
   LeaveWeatherOverlayPage(GetActiveLayout());
 
@@ -365,8 +362,6 @@ PageActions::LeavePage()
     page.cruise_scale = map_settings.cruise_scale;
     page.circling_scale = map_settings.circling_scale;
     page.auto_zoom_enabled = map_settings.auto_zoom_enabled;
-    LogFmt("perPage:   zoom snapshot cruise={} circling={} auto_zoom={}",
-           page.cruise_scale, page.circling_scale, page.auto_zoom_enabled);
   }
 }
 
@@ -390,21 +385,15 @@ void
 PageActions::ApplyPageDisplaySettings() noexcept
 {
   const PagesState &state = CommonInterface::GetUIState().pages;
-  if (state.special_page.IsDefined()) {
-    LogFmt("perPage: ApplyPageDisplaySettings skip (special page)");
+  if (state.special_page.IsDefined())
     return;
-  }
-
-  LogFmt("perPage: ApplyPageDisplaySettings index={}",
-         state.current_index);
 
   const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
   const WaypointRendererSettings old_waypoint =
     CommonInterface::GetMapSettings().waypoint;
   const AirspaceRendererSettings old_airspace =
     CommonInterface::GetMapSettings().airspace;
-  PageSettingApplyGlobalBaseline();
-  PageSettingApplyPageOverrides(state.current_index);
+  PageSettingApplyDisplaySettings(state.current_index);
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
   PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
   PageSettingReinitialiseAirspaceLookIfChanged(old_airspace);
@@ -431,17 +420,13 @@ PageActions::RestoreMapZoom()
 
     map_settings.auto_zoom_enabled = page.auto_zoom_enabled;
 
-    LogFmt("perPage: RestoreMapZoom index={} cruise={} circling={} auto_zoom={}",
-           state.current_index, map_settings.cruise_scale,
-           map_settings.circling_scale, map_settings.auto_zoom_enabled);
 
     GlueMapWindow *map = UIGlobals::GetMapIfActive();
     if (map != nullptr) {
       map->RestoreMapScale();
       map->QuickRedraw();
     }
-  } else
-    LogFmt("perPage: RestoreMapZoom skip (distinct_zoom off)");
+  }
 }
 
 const PageLayout &
@@ -480,19 +465,14 @@ PageActions::Update()
      LoadLayout() calls DisablePan() without Restore(), which would leave
      the UI stuck on FullScreen without the configured bottom widget. */
   if (IsPanning()) {
-    LogFmt("perPage: Update skip (panning)");
     return;
   }
 
   if (IsStuckPanFullScreenLayout()) {
-    LogFmt("perPage: Update restore stuck pan fullscreen");
     Restore();
     return;
   }
 
-  const PagesState &state = CommonInterface::GetUIState().pages;
-  LogFmt("perPage: Update LoadLayout index={} special={}",
-         state.current_index, state.special_page.IsDefined());
   LoadLayout(GetCurrentLayout());
   ApplyPageDisplaySettings();
 }
@@ -526,10 +506,8 @@ PageActions::Next()
   LeavePage();
 
   PagesState &state = CommonInterface::SetUIState().pages;
-  const unsigned from = state.current_index;
   state.current_index = NextIndex();
   state.special_page.SetUndefined();
-  LogFmt("perPage: Next {} -> {}", from, state.current_index);
 
   Update();
   RestoreMapZoom();
@@ -557,10 +535,8 @@ PageActions::Prev()
   LeavePage();
 
   PagesState &state = CommonInterface::SetUIState().pages;
-  const unsigned from = state.current_index;
   state.current_index = PrevIndex();
   state.special_page.SetUndefined();
-  LogFmt("perPage: Prev {} -> {}", from, state.current_index);
 
   Update();
   RestoreMapZoom();
