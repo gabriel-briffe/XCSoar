@@ -5,8 +5,6 @@
 #include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
 #include "Terrain/TerrainDisplaySetting.hpp"
 #include "Form/DataField/Listener.hpp"
-#include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Boolean.hpp"
 #include "Language/Language.hpp"
 #include "Terrain/TerrainRenderer.hpp"
 #include "Topography/TopographyRenderer.hpp"
@@ -20,6 +18,7 @@
 #include "Widget/RowFormWidget.hpp"
 #include "Look/DialogLook.hpp"
 #include "Look/MapLook.hpp"
+#include "PageSetting.hpp"
 #include "UIGlobals.hpp"
 #include "Message.hpp"
 
@@ -27,17 +26,31 @@
 #include "ui/canvas/opengl/Scissor.hpp"
 #endif
 
-enum ControlIndex {
-  EnableTerrain,
-  EnableTopography,
-  TerrainColors,
-  TerrainSlopeShading,
-  TerrainContrast,
-  TerrainBrightness,
-  TerrainContours,
-  TerrainSpacer,
+namespace {
+
+enum ControlIndex : unsigned {
+  CATALOG_END = PageSettingTerrainCount,
+
+  TerrainSpacer = CATALOG_END,
   TerrainPreview,
 };
+
+[[nodiscard]]
+bool
+IsExpertRow(unsigned control) noexcept
+{
+  return control >= unsigned(PageSettingId::TERRAIN_SLOPE_SHADING) &&
+         control < PageSettingTerrainCount;
+}
+
+[[nodiscard]]
+bool
+NeedsListener(unsigned) noexcept
+{
+  return true;
+}
+
+} // namespace
 
 class TerrainPreviewWindow : public PaintWindow {
   TerrainRenderer renderer;
@@ -120,11 +133,11 @@ void
 TerrainDisplayConfigPanel::ShowTerrainControls() noexcept
 {
   const bool show = bundle.terrain.enable;
-  SetRowVisible(TerrainColors, show);
-  SetRowVisible(TerrainSlopeShading, show);
-  SetRowVisible(TerrainContrast, show);
-  SetRowVisible(TerrainBrightness, show);
-  SetRowVisible(TerrainContours, show);
+  SetRowVisible(unsigned(PageSettingId::TERRAIN_COLORS), show);
+  SetRowVisible(unsigned(PageSettingId::TERRAIN_SLOPE_SHADING), show);
+  SetRowVisible(unsigned(PageSettingId::TERRAIN_CONTRAST), show);
+  SetRowVisible(unsigned(PageSettingId::TERRAIN_BRIGHTNESS), show);
+  SetRowVisible(unsigned(PageSettingId::TERRAIN_CONTOURS), show);
   if (have_terrain_preview) {
     SetRowVisible(TerrainSpacer, show);
     SetRowVisible(TerrainPreview, show);
@@ -146,7 +159,7 @@ TerrainDisplayConfigPanel::OnModified(DataField &df) noexcept
 {
   SyncBundleFromForm();
 
-  if (IsDataField(EnableTerrain, df)) {
+  if (IsDataField(unsigned(PageSettingId::TERRAIN_ENABLE), df)) {
     Message::AddMessage(bundle.terrain.enable
                         ? _("Terrain shown")
                         : _("Terrain hidden"));
@@ -156,7 +169,7 @@ TerrainDisplayConfigPanel::OnModified(DataField &df) noexcept
     return;
   }
 
-  if (IsDataField(EnableTopography, df)) {
+  if (IsDataField(unsigned(PageSettingId::TOPOGRAPHY_ENABLE), df)) {
     Message::AddMessage(bundle.topography_enabled
                         ? _("Topography shown")
                         : _("Topography hidden"));
@@ -212,54 +225,10 @@ TerrainDisplayConfigPanel::Prepare(ContainerWindow &parent,
 
   TerrainDisplaySetting::ReadLive(bundle);
 
-  const auto &terrain_enable =
-    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_ENABLE);
-  DisplaySettingConfigPanel::AddBooleanRow(*this, terrain_enable,
-                                           bundle.terrain.enable);
-  GetDataField(EnableTerrain).SetListener(this);
-
-  const auto &topography_enable =
-    TerrainDisplaySetting::Get(PageSettingId::TOPOGRAPHY_ENABLE);
-  DisplaySettingConfigPanel::AddBooleanRow(*this, topography_enable,
-                                           bundle.topography_enabled);
-  GetDataField(EnableTopography).SetListener(this);
-
-  const auto &colors =
-    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_COLORS);
-  DisplaySettingConfigPanel::AddEnumRow(*this, colors, bundle.terrain.ramp);
-  GetDataField(TerrainColors).SetListener(this);
-
-  const auto &slope =
-    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_SLOPE_SHADING);
-  DisplaySettingConfigPanel::AddEnumRow(*this, slope,
-                                        unsigned(bundle.terrain.slope_shading));
-  GetDataField(TerrainSlopeShading).SetListener(this);
-  SetExpertRow(TerrainSlopeShading);
-
-  const auto &contrast =
-    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_CONTRAST);
-  DisplaySettingConfigPanel::AddIntegerRow(
-    *this, contrast,
-    TerrainDisplaySetting::GetValue(bundle,
-                                    PageSettingId::TERRAIN_CONTRAST));
-  GetDataField(TerrainContrast).SetListener(this);
-  SetExpertRow(TerrainContrast);
-
-  const auto &brightness =
-    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_BRIGHTNESS);
-  DisplaySettingConfigPanel::AddIntegerRow(
-    *this, brightness,
-    TerrainDisplaySetting::GetValue(bundle,
-                                    PageSettingId::TERRAIN_BRIGHTNESS));
-  GetDataField(TerrainBrightness).SetListener(this);
-  SetExpertRow(TerrainBrightness);
-
-  const auto &contours =
-    TerrainDisplaySetting::Get(PageSettingId::TERRAIN_CONTOURS);
-  DisplaySettingConfigPanel::AddEnumRow(*this, contours,
-                                        unsigned(bundle.terrain.contours));
-  GetDataField(TerrainContours).SetListener(this);
-  SetExpertRow(TerrainContours);
+  DisplaySettingConfigPanel::AddCatalogRows(
+    *this, bundle, 0, PageSettingTerrainCount,
+    TerrainDisplaySetting::Get, TerrainDisplaySetting::GetValue,
+    IsExpertRow, this, NeedsListener);
 
   have_terrain_preview = data_components->terrain != nullptr;
   if (have_terrain_preview) {

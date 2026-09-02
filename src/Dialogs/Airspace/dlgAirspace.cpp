@@ -4,9 +4,11 @@
 #include "Airspace.hpp"
 #include "Dialogs/WidgetDialog.hpp"
 #include "Widget/ListWidget.hpp"
-#include "Profile/Current.hpp"
 #include "Profile/Profile.hpp"
-#include "Profile/AirspaceConfig.hpp"
+#include "Airspace/AirspaceClassFilterProfile.hpp"
+#include "Airspace/AirspaceDisplaySetting.hpp"
+#include "PageSetting.hpp"
+#include "PageSettingCatalog.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "Screen/Layout.hpp"
 #include "Renderer/TextRowRenderer.hpp"
@@ -25,6 +27,16 @@
 static_assert(OTHER == 0,
               "Airspace settings list skips OTHER as the first enum value");
 
+[[nodiscard]]
+static int
+NextClassFilterMode(int mode) noexcept
+{
+  ++mode;
+  if (mode > int(AirspaceClassFilterMode::WARN_AND_DISPLAY))
+    return int(AirspaceClassFilterMode::NONE);
+  return mode;
+}
+
 class AirspaceSettingsListWidget : public ListWidget {
   const bool color_mode;
   bool changed;
@@ -39,23 +51,22 @@ public:
     return changed;
   }
 
-  /* virtual methods from class Widget */
-
   void Prepare(ContainerWindow &parent,
                const PixelRect &rc) noexcept override {
     const auto &look = UIGlobals::GetDialogLook();
     ListControl &list = CreateList(parent, look, rc,
                                    row_renderer.CalculateLayout(*look.list.font));
-    /* Skip OTHER ("Unknown"): empty AY uses GetTypeOrClass() so its
-       warn/display/colour settings have no effect (#1772). */
-    list.SetLength(AIRSPACECLASSCOUNT - 1);
+    if (color_mode) {
+      /* Skip OTHER ("Unknown"): empty AY uses GetTypeOrClass() so its
+         warn/display/colour settings have no effect (#1772). */
+      list.SetLength(AIRSPACECLASSCOUNT - 1);
+    } else
+      list.SetLength(AirspaceDisplaySetting::FilterDialogRowCount());
   }
 
-  /* virtual methods from class ListItemRenderer */
   void OnPaintItem(Canvas &canvas, const PixelRect rc,
                    unsigned idx) noexcept override;
 
-  /* virtual methods from class ListCursorHandler */
   bool CanActivateItem([[maybe_unused]] unsigned index) const noexcept override {
     return true;
   }
@@ -67,18 +78,17 @@ void
 AirspaceSettingsListWidget::OnPaintItem(Canvas &canvas, PixelRect rc,
                                         unsigned i) noexcept
 {
-  assert(i + 1 < AIRSPACECLASSCOUNT);
-  const AirspaceClass type = AirspaceClass(i + 1);
-
-  const AirspaceComputerSettings &computer =
-    CommonInterface::GetComputerSettings().airspace;
-  const AirspaceRendererSettings &renderer =
-    CommonInterface::GetMapSettings().airspace;
-  const AirspaceLook &look = CommonInterface::main_window->GetLook().map.airspace;
-
-  const char *const name = AirspaceFormatter::GetClass(type);
-
   if (color_mode) {
+    assert(i + 1 < AIRSPACECLASSCOUNT);
+    const AirspaceClass type = AirspaceClass(i + 1);
+
+    const AirspaceRendererSettings &renderer =
+      CommonInterface::GetMapSettings().airspace;
+    const AirspaceLook &look =
+      CommonInterface::main_window->GetLook().map.airspace;
+
+    const char *const name = AirspaceFormatter::GetClass(type);
+
     int second_x = row_renderer.NextColumn(canvas, rc, name);
 
     const int padding = Layout::GetTextPadding();
@@ -86,40 +96,48 @@ AirspaceSettingsListWidget::OnPaintItem(Canvas &canvas, PixelRect rc,
     const Color text_color = canvas.GetTextColor();
     if (AirspacePreviewRenderer::PrepareFill(
         canvas, type, look, renderer)) {
-      canvas.DrawRectangle({second_x, rc.top + padding, rc.right - padding, rc.bottom - padding});
-      AirspacePreviewRenderer::UnprepareFill(canvas, text_color);
+      canvas.DrawRectangle({second_x, rc.top + padding, rc.right - padding,
+                            rc.bottom - padding});
     }
+    AirspacePreviewRenderer::UnprepareFill(canvas, text_color);
     if (AirspacePreviewRenderer::PrepareOutline(
         canvas, type, look, renderer)) {
-      canvas.DrawRectangle({second_x, rc.top + padding, rc.right - padding, rc.bottom - padding});
+      canvas.DrawRectangle({second_x, rc.top + padding, rc.right - padding,
+                            rc.bottom - padding});
     }
-  } else {
-    rc.right = renderer.classes[type].display
-      ? row_renderer.DrawRightColumn(canvas, rc, _("Display"))
-      : row_renderer.PreviousRightColumn(canvas, rc, _("Display"));
 
-    rc.right = computer.warnings.class_warnings[type]
-      ? row_renderer.DrawRightColumn(canvas, rc, _("Warn"))
-      : row_renderer.PreviousRightColumn(canvas, rc, _("Warn"));
+    row_renderer.DrawTextRow(canvas, rc, name);
+    return;
   }
 
-  row_renderer.DrawTextRow(canvas, rc, name);
+  assert(i < AirspaceDisplaySetting::FilterDialogRowCount());
+  const auto id = AirspaceDisplaySetting::FilterDialogRowId(i);
+  const auto &desc = AirspaceDisplaySetting::Get(id);
+  const int mode = AirspaceDisplaySetting::GetLive(id);
+
+  rc.right = AirspaceClassFilterProfile::Display(mode)
+    ? row_renderer.DrawRightColumn(canvas, rc, _("Display"))
+    : row_renderer.PreviousRightColumn(canvas, rc, _("Display"));
+
+  rc.right = AirspaceClassFilterProfile::Warn(mode)
+    ? row_renderer.DrawRightColumn(canvas, rc, _("Warn"))
+    : row_renderer.PreviousRightColumn(canvas, rc, _("Warn"));
+
+  row_renderer.DrawTextRow(canvas, rc,
+                           PageSettingCatalog::GettextOptional(desc.label));
 }
 
 void
 AirspaceSettingsListWidget::OnActivateItem(unsigned index) noexcept
 {
-  assert(index + 1 < AIRSPACECLASSCOUNT);
-  const AirspaceClass type = AirspaceClass(index + 1);
-
-  AirspaceComputerSettings &computer =
-    CommonInterface::SetComputerSettings().airspace;
-  AirspaceRendererSettings &renderer =
-    CommonInterface::SetMapSettings().airspace;
-
   if (color_mode) {
+    assert(index + 1 < AIRSPACECLASSCOUNT);
+    const AirspaceClass type = AirspaceClass(index + 1);
+
     AirspaceLook &look =
       CommonInterface::main_window->SetLook().map.airspace;
+    const AirspaceRendererSettings &renderer =
+      CommonInterface::GetMapSettings().airspace;
 
     if (!ShowAirspaceClassRendererSettingsDialog(type))
       return;
@@ -127,16 +145,11 @@ AirspaceSettingsListWidget::OnActivateItem(unsigned index) noexcept
     ActionInterface::SendMapSettings();
     look.Reinitialise(renderer);
   } else {
-    renderer.classes[type].display = !renderer.classes[type].display;
-    if (!renderer.classes[type].display)
-      computer.warnings.class_warnings[type] =
-        !computer.warnings.class_warnings[type];
-
-    Profile::SetAirspaceMode(Profile::map,
-                             type, renderer.classes[type].display,
-                             computer.warnings.class_warnings[type]);
+    assert(index < AirspaceDisplaySetting::FilterDialogRowCount());
+    const auto id = AirspaceDisplaySetting::FilterDialogRowId(index);
+    const int mode = AirspaceDisplaySetting::GetLive(id);
+    PageSettingSet(id, NextClassFilterMode(mode));
     changed = true;
-    ActionInterface::SendMapSettings();
   }
 
   GetList().Invalidate();
@@ -154,8 +167,6 @@ dlgAirspaceShowModal(bool color_mode)
 
   dialog.ShowModal();
 
-  // now retrieve back the properties...
-  if (dialog.GetWidget().IsModified()) {
+  if (dialog.GetWidget().IsModified())
     Profile::Save();
-  }
 }

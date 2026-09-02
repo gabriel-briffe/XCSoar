@@ -122,3 +122,6 @@ bool
 PopupNearestWaypointDetails(Waypoints &waypoints,
                             const GeoPoint &location,
                             double range);
+
+void
+dlgWaypointFilterShowModal() noexcept;

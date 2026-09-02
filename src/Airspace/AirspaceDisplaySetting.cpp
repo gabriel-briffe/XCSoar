@@ -3,6 +3,7 @@
 
 #include "Airspace/AirspaceDisplaySetting.hpp"
 
+#include "Airspace/AirspaceClassFilterProfile.hpp"
 #include "Airspace/AirspaceDisplayChoices.hpp"
 #include "Formatter/AirspaceFormatter.hpp"
 #include "Interface.hpp"
@@ -10,6 +11,7 @@
 #include "PageSetting.hpp"
 #include "PageSettingCatalog.hpp"
 #include "PageSettingFieldAccessors.hpp"
+#include "PageSettingFilterCatalog.hpp"
 #include "PageSettingModuleImpl.hpp"
 #include "PageSettingProfile.hpp"
 #include "Profile/AirspaceConfig.hpp"
@@ -23,7 +25,6 @@
 
 #include <cassert>
 #include <cstdint>
-#include <cstring>
 
 namespace AirspaceDisplaySetting {
 
@@ -41,28 +42,6 @@ static_assert(PageSettingAirspaceCount ==
               PageSettingAirspaceBaseCount +
               PageSettingAirspaceClassFilterCount,
               "Airspace catalog size mismatch");
-
-[[nodiscard]]
-constexpr int
-EncodeClassFilter(bool display, bool warn) noexcept
-{
-  return (display ? int(AirspaceClassFilterMode::DISPLAY) : 0) |
-         (warn ? int(AirspaceClassFilterMode::WARN) : 0);
-}
-
-[[nodiscard]]
-constexpr bool
-ClassFilterDisplay(int mode) noexcept
-{
-  return (mode & int(AirspaceClassFilterMode::DISPLAY)) != 0;
-}
-
-[[nodiscard]]
-constexpr bool
-ClassFilterWarn(int mode) noexcept
-{
-  return (mode & int(AirspaceClassFilterMode::WARN)) != 0;
-}
 
 static constexpr PageSettingDescriptor base_catalog[] = {
   PageSettingCatalog::CatalogEnum(
@@ -250,7 +229,30 @@ static_assert(ARRAY_SIZE(field_accessors) ==
 
 static char filter_override_keys[PageSettingAirspaceClassFilterCount][40];
 static PageSettingDescriptor catalog[PageSettingAirspaceCount];
+static PageSettingId
+  filter_dialog_order[PageSettingAirspaceClassFilterCount];
 static bool catalog_ready = false;
+
+[[nodiscard]]
+const char *
+FilterDialogLabel(PageSettingId id) noexcept
+{
+  return PageSettingCatalog::GettextOptional(
+    catalog[unsigned(id) - PageSettingAirspaceStart].label);
+}
+
+void
+InitFilterDialogOrder() noexcept
+{
+  for (unsigned i = 0; i < PageSettingAirspaceClassFilterCount; ++i)
+    filter_dialog_order[i] =
+      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) + i);
+
+  PageSettingFilterCatalog::SortByLabel(
+    filter_dialog_order,
+    filter_dialog_order + FilterDialogRowCount(),
+    FilterDialogLabel);
+}
 
 void
 EnsureCatalog() noexcept
@@ -258,7 +260,8 @@ EnsureCatalog() noexcept
   if (catalog_ready)
     return;
 
-  std::memcpy(catalog, base_catalog, sizeof(base_catalog));
+  PageSettingFilterCatalog::CopyBase(catalog, base_catalog,
+                                     PageSettingAirspaceBaseCount);
 
   for (unsigned i = 0; i < PageSettingAirspaceClassFilterCount; ++i) {
     const AirspaceClass cls = AirspaceClass(i + 1);
@@ -269,19 +272,18 @@ EnsureCatalog() noexcept
                  "OverrideAirspaceFilter%u", unsigned(cls));
 
     catalog[PageSettingAirspaceBaseCount + i] =
-      PageSettingCatalog::CatalogEnum(
+      PageSettingFilterCatalog::MakeEnumFilter(
         id,
         AirspaceFormatter::GetClass(cls),
         N_("Display and warning filter for this airspace class."),
         filter_override_keys[i],
-        {},
-        {.airspace = AirspaceBundleField::DISPLAY},
+        {.airspace = AirspaceBundleField::CLASS_FILTER},
         ProfileWireFormat::UINT8_ENUM,
-        EncodeClassFilter(true, true),
-        airspace_class_filter_mode_choices,
-        N_("Filters"));
+        AirspaceClassFilterProfile::Encode(true, true),
+        airspace_class_filter_mode_choices);
   }
 
+  InitFilterDialogOrder();
   catalog_ready = true;
 }
 
@@ -289,6 +291,8 @@ EnsureCatalog() noexcept
 AirspaceBundleField
 FieldFromDescriptor(const PageSettingDescriptor &desc) noexcept
 {
+  assert(unsigned(desc.bundle_field.airspace) <
+         unsigned(AirspaceBundleField::COUNT));
   return desc.bundle_field.airspace;
 }
 
@@ -311,7 +315,7 @@ int
 GetClassFilterValue(const Bundle &bundle, AirspaceClass cls) noexcept
 {
   assert(unsigned(cls) < AIRSPACECLASSCOUNT);
-  return EncodeClassFilter(
+  return AirspaceClassFilterProfile::Encode(
     bundle.airspace.classes[unsigned(cls)].display,
     bundle.computer.warnings.class_warnings[unsigned(cls)]);
 }
@@ -320,96 +324,33 @@ void
 SetClassFilterValue(Bundle &bundle, AirspaceClass cls, int value) noexcept
 {
   assert(unsigned(cls) < AIRSPACECLASSCOUNT);
-  bundle.airspace.classes[unsigned(cls)].display = ClassFilterDisplay(value);
+  bundle.airspace.classes[unsigned(cls)].display =
+    AirspaceClassFilterProfile::Display(value);
   bundle.computer.warnings.class_warnings[unsigned(cls)] =
-    ClassFilterWarn(value);
+    AirspaceClassFilterProfile::Warn(value);
 }
 
-[[nodiscard]]
-int
-LoadClassFilterGlobal(AirspaceClass cls) noexcept
-{
-  bool display = true;
-  bool warn = true;
-
-  char name[64];
-  StringFormat(name, sizeof(name), "AirspaceDisplay%u", unsigned(cls));
-  if (!Profile::Get(name, display)) {
-    unsigned legacy = 0;
-    StringFormat(name, sizeof(name), "AirspaceMode%u", unsigned(cls));
-    if (Profile::Get(name, legacy))
-      display = (legacy & 0x1) != 0;
-  }
-
-  StringFormat(name, sizeof(name), "AirspaceWarning%u", unsigned(cls));
-  if (!Profile::Get(name, warn)) {
-    unsigned legacy = 0;
-    StringFormat(name, sizeof(name), "AirspaceMode%u", unsigned(cls));
-    if (Profile::Get(name, legacy))
-      warn = (legacy & 0x2) != 0;
-  }
-
-  return EncodeClassFilter(display, warn);
-}
-
-void
-SaveClassFilterGlobal(AirspaceClass cls, int value) noexcept
-{
-  Profile::SetAirspaceMode(Profile::map, unsigned(cls),
-                           ClassFilterDisplay(value),
-                           ClassFilterWarn(value));
-}
-
-using Impl = PageSettingModuleImpl::Module<
+using BaseImpl = PageSettingModuleImpl::Module<
   Bundle, AirspaceBundleField, catalog, PageSettingAirspaceBaseCount,
   PageSettingAirspaceStart, FieldFromDescriptor,
   GetBundleField, SetBundleField, ReadLive, ApplyLive>;
 
-} // namespace
-
-unsigned
-Count() noexcept
-{
-  return PageSettingAirspaceCount;
-}
-
-const PageSettingDescriptor &
-Get(PageSettingId id) noexcept
-{
-  EnsureCatalog();
-  assert(unsigned(id) >= PageSettingAirspaceStart);
-  assert(unsigned(id) < unsigned(PageSettingId::COUNT));
-  return catalog[unsigned(id) - PageSettingAirspaceStart];
-}
-
-const PageSettingDescriptor &
-Get(unsigned index) noexcept
-{
-  EnsureCatalog();
-  assert(index < PageSettingAirspaceCount);
-  return catalog[index];
-}
-
-bool
-IsValidValue(PageSettingId id, int value) noexcept
-{
-  EnsureCatalog();
-  return PageSettingCatalog::IsValidValue(Get(id), value);
-}
-
+[[nodiscard]]
 int
-GetValue(const Bundle &bundle, PageSettingId id) noexcept
+GetValueImpl(const Bundle &bundle, PageSettingId id) noexcept
 {
   if (IsClassFilter(id))
     return GetClassFilterValue(bundle, ClassFromId(id));
 
-  return Impl::GetValue(bundle, id);
+  return BaseImpl::GetValue(bundle, id);
 }
 
 void
-SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
+SetValueImpl(Bundle &bundle, PageSettingId id, int value) noexcept
 {
-  if (!IsValidValue(id, value))
+  EnsureCatalog();
+  if (!PageSettingCatalog::IsValidValue(
+        catalog[unsigned(id) - PageSettingAirspaceStart], value))
     return;
 
   if (IsClassFilter(id)) {
@@ -417,45 +358,120 @@ SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
     return;
   }
 
-  Impl::SetValue(bundle, id, value);
+  BaseImpl::SetValue(bundle, id, value);
+}
+
+[[nodiscard]]
+int
+LoadGlobalImpl(PageSettingId id) noexcept
+{
+  if (IsClassFilter(id))
+    return AirspaceClassFilterProfile::Load(ClassFromId(id));
+
+  EnsureCatalog();
+  return PageSettingProfile::Load(
+    catalog[unsigned(id) - PageSettingAirspaceStart]);
+}
+
+void
+SaveGlobalImpl(PageSettingId id, int value) noexcept
+{
+  EnsureCatalog();
+  if (!PageSettingCatalog::IsValidValue(
+        catalog[unsigned(id) - PageSettingAirspaceStart], value))
+    return;
+
+  if (IsClassFilter(id)) {
+    AirspaceClassFilterProfile::Save(ClassFromId(id), value);
+    return;
+  }
+
+  PageSettingProfile::Save(
+    catalog[unsigned(id) - PageSettingAirspaceStart], value);
+}
+
+using Dyn = PageSettingModuleImpl::DynamicModule<
+  Bundle,
+  PageSettingAirspaceCount,
+  PageSettingAirspaceStart,
+  unsigned(PageSettingId::COUNT),
+  catalog,
+  EnsureCatalog,
+  GetValueImpl,
+  SetValueImpl,
+  LoadGlobalImpl,
+  SaveGlobalImpl,
+  ReadLive,
+  ApplyLive>;
+
+} // namespace
+
+PageSettingId
+FilterDialogRowId(unsigned row) noexcept
+{
+  assert(row < FilterDialogRowCount());
+  EnsureCatalog();
+  return filter_dialog_order[row];
+}
+
+unsigned
+Count() noexcept
+{
+  return Dyn::Count();
+}
+
+const PageSettingDescriptor &
+Get(PageSettingId id) noexcept
+{
+  return Dyn::Get(id);
+}
+
+const PageSettingDescriptor &
+Get(unsigned index) noexcept
+{
+  return Dyn::Get(index);
+}
+
+bool
+IsValidValue(PageSettingId id, int value) noexcept
+{
+  return Dyn::IsValidValue(id, value);
+}
+
+int
+GetValue(const Bundle &bundle, PageSettingId id) noexcept
+{
+  return GetValueImpl(bundle, id);
+}
+
+void
+SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
+{
+  SetValueImpl(bundle, id, value);
 }
 
 int
 GetLive(PageSettingId id) noexcept
 {
-  return PageSettingCatalog::GetLive<Bundle>(id, ReadLive, GetValue);
+  return Dyn::GetLive(id);
 }
 
 void
 SetLive(PageSettingId id, int value) noexcept
 {
-  PageSettingCatalog::SetLive<Bundle>(id, value, ReadLive, ApplyLive,
-                                      SetValue, IsValidValue);
+  Dyn::SetLive(id, value);
 }
 
 int
 LoadGlobal(PageSettingId id) noexcept
 {
-  if (IsClassFilter(id))
-    return LoadClassFilterGlobal(ClassFromId(id));
-
-  EnsureCatalog();
-  return PageSettingProfile::Load(Get(id));
+  return Dyn::LoadGlobal(id);
 }
 
 void
 SaveGlobal(PageSettingId id, int value) noexcept
 {
-  if (!IsValidValue(id, value))
-    return;
-
-  if (IsClassFilter(id)) {
-    SaveClassFilterGlobal(ClassFromId(id), value);
-    return;
-  }
-
-  EnsureCatalog();
-  PageSettingProfile::Save(Get(id), value);
+  Dyn::SaveGlobal(id, value);
 }
 
 void
@@ -530,18 +546,7 @@ LoadGlobal(Bundle &bundle) noexcept
 bool
 SaveGlobal(const Bundle &current, const Bundle &initial) noexcept
 {
-  bool changed = false;
-
-  for (unsigned i = 0; i < PageSettingAirspaceCount; ++i) {
-    const auto id = PageSettingId(PageSettingAirspaceStart + i);
-    if (GetValue(current, id) == GetValue(initial, id))
-      continue;
-
-    SaveGlobal(id, GetValue(current, id));
-    changed = true;
-  }
-
-  return changed;
+  return Dyn::SaveGlobalBundle(current, initial);
 }
 
 } // namespace AirspaceDisplaySetting

@@ -108,6 +108,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Waypoint/dlgWaypointDetails.cpp \
 	$(SRC)/Dialogs/Waypoint/Manager.cpp \
 	$(SRC)/Dialogs/Waypoint/dlgWaypointEdit.cpp \
+	$(SRC)/Dialogs/Waypoint/dlgWaypointFilter.cpp \
 	$(SRC)/Dialogs/Waypoint/WaypointList.cpp \
 	$(SRC)/Dialogs/Waypoint/GetWaypointReachability.cpp \
 	$(SRC)/Dialogs/Waypoint/NearestWaypoint.cpp \
@@ -356,13 +357,17 @@ XCSOAR_SOURCES := \
 	$(SRC)/PageSettings.cpp \
 	$(SRC)/PageSetting.cpp \
 	$(SRC)/PageSettingCatalog.cpp \
+	$(SRC)/PageSettingFilterCatalog.cpp \
 	$(SRC)/PageSettingModule.cpp \
 	$(SRC)/PageSettingProfile.cpp \
 	$(SRC)/Dialogs/Settings/DisplaySettingConfigPanel.cpp \
 	$(SRC)/Orientation/OrientationDisplaySetting.cpp \
 	$(SRC)/Elements/ElementsDisplaySetting.cpp \
 	$(SRC)/Waypoints/WaypointsDisplaySetting.cpp \
+	$(SRC)/Waypoints/WaypointMapFilterProfile.cpp \
+	$(SRC)/Waypoints/WaypointMapFilterTypes.cpp \
 	$(SRC)/Airspace/AirspaceDisplaySetting.cpp \
+	$(SRC)/Airspace/AirspaceClassFilterProfile.cpp \
 	$(SRC)/Terrain/TerrainDisplaySetting.cpp \
 	$(SRC)/PageOverlayTitle.cpp \
 	$(SRC)/PageState.cpp \

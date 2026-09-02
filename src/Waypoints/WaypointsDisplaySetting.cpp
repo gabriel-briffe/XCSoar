@@ -4,14 +4,20 @@
 #include "Waypoints/WaypointsDisplaySetting.hpp"
 
 #include "Interface.hpp"
+#include "Language/Language.hpp"
 #include "PageSetting.hpp"
 #include "PageSettingCatalog.hpp"
 #include "PageSettingFieldAccessors.hpp"
+#include "PageSettingFilterCatalog.hpp"
 #include "PageSettingModuleImpl.hpp"
 #include "PageSettingProfile.hpp"
 #include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
+#include "Waypoints/WaypointMapFilterProfile.hpp"
 #include "Waypoints/WaypointsDisplayChoices.hpp"
+#include "Waypoints/WaypointMapFilterTypes.hpp"
 #include "util/Macros.hpp"
+#include "util/StringFormat.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -25,7 +31,17 @@ namespace {
 
 using Bundle = WaypointsDisplaySetting::Bundle;
 
-static constexpr PageSettingDescriptor catalog[] = {
+static_assert(PageSettingWaypointsBaseCount == 9,
+              "Waypoints base catalog size mismatch");
+static_assert(PageSettingWaypointsCount ==
+              PageSettingWaypointsBaseCount +
+              PageSettingWaypointTypeFilterCount + 1,
+              "Waypoints catalog size mismatch");
+static_assert(WAYPOINT_MAP_FILTER_TYPE_COUNT ==
+              PageSettingWaypointMapFilterTypeCount,
+              "Waypoint filter catalog must match filter type table");
+
+static constexpr PageSettingDescriptor base_catalog[] = {
   PageSettingCatalog::CatalogEnum(
     PageSettingId::WAYPOINT_LABEL_FORMAT,
     N_("Label format"),
@@ -115,8 +131,8 @@ static constexpr PageSettingDescriptor catalog[] = {
     {.waypoints = WaypointsBundleField::SCALE_RUNWAY_LENGTH}),
 };
 
-static_assert(ARRAY_SIZE(catalog) == PageSettingWaypointsCount,
-              "Catalog size must match waypoints PageSettingId count");
+static_assert(ARRAY_SIZE(base_catalog) == PageSettingWaypointsBaseCount,
+              "Base catalog size must match PageSettingWaypointsBaseCount");
 
 struct FieldAccessor {
   int (*get)(const Bundle &) noexcept;
@@ -153,10 +169,84 @@ static_assert(ARRAY_SIZE(field_accessors) ==
               unsigned(WaypointsBundleField::COUNT),
               "Waypoints field accessors must match WaypointsBundleField::COUNT");
 
+static char filter_override_keys[PageSettingWaypointTypeFilterCount][40];
+static char type_profile_keys[PageSettingWaypointTypeFilterCount][32];
+static PageSettingDescriptor catalog[PageSettingWaypointsCount];
+static PageSettingId filter_dialog_order[PageSettingWaypointTypeFilterCount + 1];
+static bool catalog_ready = false;
+
+[[nodiscard]]
+const char *
+FilterDialogLabel(PageSettingId id) noexcept
+{
+  return PageSettingCatalog::GettextOptional(
+    catalog[unsigned(id) - PageSettingWaypointsStart].label);
+}
+
+void
+InitFilterDialogOrder() noexcept
+{
+  for (unsigned i = 0; i < PageSettingWaypointTypeFilterCount; ++i)
+    filter_dialog_order[i] =
+      PageSettingId(unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN) + i);
+  filter_dialog_order[PageSettingWaypointTypeFilterCount] =
+    PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS;
+
+  PageSettingFilterCatalog::SortByLabel(
+    filter_dialog_order,
+    filter_dialog_order + FilterDialogRowCount(),
+    FilterDialogLabel);
+}
+
+void
+EnsureCatalog() noexcept
+{
+  if (catalog_ready)
+    return;
+
+  PageSettingFilterCatalog::CopyBase(catalog, base_catalog,
+                                     PageSettingWaypointsBaseCount);
+
+  for (unsigned i = 0; i < PageSettingWaypointTypeFilterCount; ++i) {
+    const Waypoint::Type type = waypoint_map_filter_types[i];
+    const PageSettingId id =
+      PageSettingId(unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN) + i);
+
+    StringFormat(filter_override_keys[i], sizeof(filter_override_keys[i]),
+                 "OverrideWaypointTypeDisplay%u", unsigned(type));
+    WaypointMapFilterProfile::FormatTypeDisplayKey(
+      type_profile_keys[i], sizeof(type_profile_keys[i]), unsigned(type));
+
+    catalog[PageSettingWaypointsBaseCount + i] =
+      PageSettingFilterCatalog::MakeBoolFilter(
+        id,
+        GetWaypointMapFilterTypeName(type),
+        N_("Display this waypoint type on the map."),
+        filter_override_keys[i],
+        type_profile_keys[i],
+        {.waypoints = WaypointsBundleField::TYPE_FILTER});
+  }
+
+  catalog[PageSettingWaypointsBaseCount +
+          PageSettingWaypointTypeFilterCount] =
+    PageSettingFilterCatalog::MakeBoolFilter(
+      PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS,
+      N_("Non-ICAO airports"),
+      N_("Display airports whose short name is not exactly four characters."),
+      "OverrideWaypointDisplayNonIcaoAirports",
+      ProfileKeys::WaypointDisplayNonIcaoAirports,
+      {.waypoints = WaypointsBundleField::NON_ICAO_FILTER});
+
+  InitFilterDialogOrder();
+  catalog_ready = true;
+}
+
 [[nodiscard]]
 WaypointsBundleField
 FieldFromDescriptor(const PageSettingDescriptor &desc) noexcept
 {
+  assert(unsigned(desc.bundle_field.waypoints) <
+         unsigned(WaypointsBundleField::COUNT));
   return desc.bundle_field.waypoints;
 }
 
@@ -174,71 +264,166 @@ SetBundleField(Bundle &bundle, WaypointsBundleField field,
   field_accessors[unsigned(field)].set(bundle, value);
 }
 
-using Impl = PageSettingModuleImpl::Module<
-  Bundle, WaypointsBundleField, catalog, PageSettingWaypointsCount,
+using BaseImpl = PageSettingModuleImpl::Module<
+  Bundle, WaypointsBundleField, catalog, PageSettingWaypointsBaseCount,
   PageSettingWaypointsStart, FieldFromDescriptor,
   GetBundleField, SetBundleField, ReadLive, ApplyLive>;
 
+[[nodiscard]]
+int
+GetValueImpl(const Bundle &bundle, PageSettingId id) noexcept
+{
+  if (IsTypeFilter(id))
+    return bundle.waypoint.display_types[unsigned(TypeFromFilterId(id))] ? 1 : 0;
+
+  if (IsNonIcaoFilter(id))
+    return bundle.waypoint.display_non_icao_airports ? 1 : 0;
+
+  return BaseImpl::GetValue(bundle, id);
+}
+
+void
+SetValueImpl(Bundle &bundle, PageSettingId id, int value) noexcept
+{
+  EnsureCatalog();
+  if (!PageSettingCatalog::IsValidValue(
+        catalog[unsigned(id) - PageSettingWaypointsStart], value))
+    return;
+
+  if (IsTypeFilter(id)) {
+    bundle.waypoint.display_types[unsigned(TypeFromFilterId(id))] = value != 0;
+    return;
+  }
+
+  if (IsNonIcaoFilter(id)) {
+    bundle.waypoint.display_non_icao_airports = value != 0;
+    return;
+  }
+
+  BaseImpl::SetValue(bundle, id, value);
+}
+
+[[nodiscard]]
+int
+LoadGlobalImpl(PageSettingId id) noexcept
+{
+  if (IsTypeFilter(id))
+    return WaypointMapFilterProfile::LoadTypeDisplay(
+      unsigned(TypeFromFilterId(id))) ? 1 : 0;
+
+  if (IsNonIcaoFilter(id))
+    return WaypointMapFilterProfile::LoadNonIcaoAirports() ? 1 : 0;
+
+  EnsureCatalog();
+  return PageSettingProfile::Load(
+    catalog[unsigned(id) - PageSettingWaypointsStart]);
+}
+
+void
+SaveGlobalImpl(PageSettingId id, int value) noexcept
+{
+  EnsureCatalog();
+  if (!PageSettingCatalog::IsValidValue(
+        catalog[unsigned(id) - PageSettingWaypointsStart], value))
+    return;
+
+  if (IsTypeFilter(id)) {
+    WaypointMapFilterProfile::SaveTypeDisplay(
+      unsigned(TypeFromFilterId(id)), value != 0);
+    return;
+  }
+
+  if (IsNonIcaoFilter(id)) {
+    WaypointMapFilterProfile::SaveNonIcaoAirports(value != 0);
+    return;
+  }
+
+  PageSettingProfile::Save(
+    catalog[unsigned(id) - PageSettingWaypointsStart], value);
+}
+
+using Dyn = PageSettingModuleImpl::DynamicModule<
+  Bundle,
+  PageSettingWaypointsCount,
+  PageSettingWaypointsStart,
+  PageSettingAirspaceStart,
+  catalog,
+  EnsureCatalog,
+  GetValueImpl,
+  SetValueImpl,
+  LoadGlobalImpl,
+  SaveGlobalImpl,
+  ReadLive,
+  ApplyLive>;
+
 } // namespace
+
+PageSettingId
+FilterDialogRowId(unsigned row) noexcept
+{
+  assert(row < FilterDialogRowCount());
+  EnsureCatalog();
+  return filter_dialog_order[row];
+}
 
 unsigned
 Count() noexcept
 {
-  return Impl::Count();
+  return Dyn::Count();
 }
 
 const PageSettingDescriptor &
 Get(PageSettingId id) noexcept
 {
-  return Impl::Get(id);
+  return Dyn::Get(id);
 }
 
 const PageSettingDescriptor &
 Get(unsigned index) noexcept
 {
-  return Impl::Get(index);
+  return Dyn::Get(index);
 }
 
 bool
 IsValidValue(PageSettingId id, int value) noexcept
 {
-  return Impl::IsValidValue(id, value);
-}
-
-int
-GetLive(PageSettingId id) noexcept
-{
-  return Impl::GetLive(id);
-}
-
-void
-SetLive(PageSettingId id, int value) noexcept
-{
-  Impl::SetLive(id, value);
-}
-
-int
-LoadGlobal(PageSettingId id) noexcept
-{
-  return Impl::LoadGlobal(id);
-}
-
-void
-SaveGlobal(PageSettingId id, int value) noexcept
-{
-  Impl::SaveGlobal(id, value);
+  return Dyn::IsValidValue(id, value);
 }
 
 int
 GetValue(const Bundle &bundle, PageSettingId id) noexcept
 {
-  return Impl::GetValue(bundle, id);
+  return GetValueImpl(bundle, id);
 }
 
 void
 SetValue(Bundle &bundle, PageSettingId id, int value) noexcept
 {
-  Impl::SetValue(bundle, id, value);
+  SetValueImpl(bundle, id, value);
+}
+
+int
+GetLive(PageSettingId id) noexcept
+{
+  return Dyn::GetLive(id);
+}
+
+void
+SetLive(PageSettingId id, int value) noexcept
+{
+  Dyn::SetLive(id, value);
+}
+
+int
+LoadGlobal(PageSettingId id) noexcept
+{
+  return Dyn::LoadGlobal(id);
+}
+
+void
+SaveGlobal(PageSettingId id, int value) noexcept
+{
+  Dyn::SaveGlobal(id, value);
 }
 
 void
@@ -263,7 +448,7 @@ LoadGlobal(Bundle &bundle) noexcept
 bool
 SaveGlobal(const Bundle &current, const Bundle &initial) noexcept
 {
-  return Impl::SaveGlobalBundle(current, initial);
+  return Dyn::SaveGlobalBundle(current, initial);
 }
 
 } // namespace WaypointsDisplaySetting

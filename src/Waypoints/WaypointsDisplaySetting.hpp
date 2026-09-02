@@ -4,11 +4,14 @@
 #pragma once
 
 #include "PageSettingDescriptor.hpp"
+#include "Engine/Waypoint/Waypoint.hpp"
 #include "Renderer/WaypointRendererSettings.hpp"
+#include "Waypoints/WaypointMapFilterTypes.hpp"
 
 /**
  * Map Display → Waypoints: shared catalog and get/set for global profile
- * and live MapSettings.
+ * and live MapSettings.  Per-type map filters occupy
+ * [#WAYPOINT_TYPE_FILTER_BEGIN, #WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS).
  */
 namespace WaypointsDisplaySetting {
 
@@ -68,5 +71,39 @@ LoadGlobal(Bundle &bundle) noexcept;
  */
 bool
 SaveGlobal(const Bundle &current, const Bundle &initial) noexcept;
+
+[[nodiscard]]
+constexpr bool
+IsTypeFilter(PageSettingId id) noexcept
+{
+  return unsigned(id) >= unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN) &&
+         unsigned(id) < unsigned(PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS);
+}
+
+[[nodiscard]]
+constexpr bool
+IsNonIcaoFilter(PageSettingId id) noexcept
+{
+  return id == PageSettingId::WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS;
+}
+
+[[nodiscard]]
+constexpr Waypoint::Type
+TypeFromFilterId(PageSettingId id) noexcept
+{
+  return waypoint_map_filter_types[unsigned(id) -
+                                   unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN)];
+}
+
+[[nodiscard]]
+constexpr unsigned
+FilterDialogRowCount() noexcept
+{
+  return PageSettingWaypointTypeFilterCount + 1;
+}
+
+[[nodiscard]]
+PageSettingId
+FilterDialogRowId(unsigned row) noexcept;
 
 } // namespace WaypointsDisplaySetting

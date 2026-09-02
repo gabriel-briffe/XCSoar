@@ -3,7 +3,9 @@
 
 #include "WaypointDisplayConfigPanel.hpp"
 #include "Waypoints/WaypointsDisplaySetting.hpp"
+#include "ConfigPanel.hpp"
 #include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
+#include "Dialogs/Waypoint/WaypointDialogs.hpp"
 #include "ActionInterface.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Form/DataField/Listener.hpp"
@@ -30,8 +32,8 @@ enum ControlIndex : unsigned {
   COUNT
 };
 
-static_assert(unsigned(ControlIndex::COUNT) == PageSettingWaypointsCount,
-              "Waypoints config controls must match catalog size");
+static_assert(unsigned(ControlIndex::COUNT) == PageSettingWaypointsBaseCount,
+              "Waypoints config controls must match base catalog size");
 
 [[nodiscard]]
 bool
@@ -69,6 +71,8 @@ public:
   /* methods from Widget */
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
   bool Save(bool &changed) noexcept override;
+  void Show(const PixelRect &rc) noexcept override;
+  void Hide() noexcept override;
 
 private:
   /* methods from DataFieldListener */
@@ -79,7 +83,7 @@ void
 WaypointDisplayConfigPanel::SyncBundleFromForm() noexcept
 {
   DisplaySettingConfigPanel::SyncBundleFromForm(
-    *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsCount,
+    *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsBaseCount,
     WaypointsDisplaySetting::Get, WaypointsDisplaySetting::SetValue);
 }
 
@@ -122,7 +126,7 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
   WaypointsDisplaySetting::ReadLive(bundle);
 
   DisplaySettingConfigPanel::AddCatalogRows(
-    *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsCount,
+    *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsBaseCount,
     WaypointsDisplaySetting::Get, WaypointsDisplaySetting::GetValue,
     IsExpertRow, this, nullptr,
     unsigned(ControlIndex::DETAILED_LANDABLES));
@@ -130,6 +134,23 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
   SyncBundleFromForm();
   initial_bundle = bundle;
   UpdateVisibilities();
+}
+
+void
+WaypointDisplayConfigPanel::Show(const PixelRect &rc) noexcept
+{
+  ConfigPanel::BorrowExtraButton(2, _("Filter"), [](){
+    dlgWaypointFilterShowModal();
+  });
+
+  RowFormWidget::Show(rc);
+}
+
+void
+WaypointDisplayConfigPanel::Hide() noexcept
+{
+  RowFormWidget::Hide();
+  ConfigPanel::ReturnExtraButton(2);
 }
 
 bool

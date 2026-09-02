@@ -73,7 +73,11 @@ enum class WaypointsBundleField : uint8_t {
   LANDABLE_SIZE,
   SCALE_RUNWAY_LENGTH,
 
-  COUNT
+  COUNT,
+
+  /** Catalog-only; handled by custom get/set (not in field accessors). */
+  TYPE_FILTER,
+  NON_ICAO_FILTER,
 };
 
 /** Field within #AirspaceDisplaySetting::Bundle. */
@@ -92,7 +96,10 @@ enum class AirspaceBundleField : uint8_t {
   FILL_MODE,
   TRANSPARENCY,
 
-  COUNT
+  COUNT,
+
+  /** Catalog-only; handled by custom get/set (not in field accessors). */
+  CLASS_FILTER,
 };
 
 /**

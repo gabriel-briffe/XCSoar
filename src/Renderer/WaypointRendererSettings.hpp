@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include "Engine/Waypoint/Waypoint.hpp"
 #include "LabelShape.hpp"
+#include "Waypoints/WaypointMapFilterTypes.hpp"
 
 #include <cstdint>
 
@@ -61,6 +63,24 @@ struct WaypointRendererSettings {
    */
   int map_waypoint_icon_scale;
 
+  /** Per #Waypoint::Type map symbol filter (indexed by type). */
+  bool display_types[WAYPOINT_TYPE_COUNT];
+
+  /**
+   * When false, hide airports whose short name is not exactly four
+   * characters (typical ICAO code length).
+   */
+  bool display_non_icao_airports;
+
+  [[gnu::pure]]
+  bool IsTypeDisplayed(Waypoint::Type type) const noexcept {
+    const unsigned i = unsigned(type);
+    return i >= WAYPOINT_TYPE_COUNT || display_types[i];
+  }
+
+  [[gnu::pure]]
+  bool IsWaypointDisplayed(const Waypoint &waypoint) const noexcept;
+
   void SetDefaults() noexcept {
     display_text_type = DisplayTextType::SHORT_NAME;
     arrival_height_display = ArrivalHeightDisplay::GLIDE;
@@ -72,7 +92,26 @@ struct WaypointRendererSettings {
     scale_runway_length = false;
     landable_rendering_scale = 100;
     map_waypoint_icon_scale = 100;
+
+    for (bool &display : display_types)
+      display = true;
+
+    display_non_icao_airports = true;
   }
 
   void LoadFromProfile() noexcept;
+
+  /** Persist one type's display flag to the profile. */
+  void SaveTypeDisplay(Waypoint::Type type, bool display) noexcept;
+
+  void SaveNonIcaoAirportsDisplay(bool display) noexcept;
 };
+
+class MapWindowProjection;
+
+[[nodiscard]]
+bool
+IsMapWaypointVisible(const Waypoint &waypoint,
+                     const WaypointRendererSettings &settings,
+                     const MapWindowProjection &projection,
+                     bool in_task) noexcept;

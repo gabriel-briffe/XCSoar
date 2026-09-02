@@ -94,4 +94,15 @@ ClassFromId(PageSettingId id) noexcept
                        1);
 }
 
+[[nodiscard]]
+constexpr unsigned
+FilterDialogRowCount() noexcept
+{
+  return PageSettingAirspaceClassFilterCount;
+}
+
+[[nodiscard]]
+PageSettingId
+FilterDialogRowId(unsigned row) noexcept;
+
 } // namespace AirspaceDisplaySetting

@@ -4,12 +4,16 @@
 #pragma once
 
 #include "Engine/Airspace/AirspaceClass.hpp"
+#include "Waypoints/WaypointMapFilterTypes.hpp"
 
 #include <cstdint>
 #include <type_traits>
 
 struct TrailSettings;
 struct WaypointRendererSettings;
+
+constexpr unsigned PageSettingWaypointMapFilterTypeCount =
+  WAYPOINT_MAP_FILTER_TYPE_COUNT;
 
 enum class PageSettingGroup : uint8_t {
   TERRAIN,
@@ -68,6 +72,11 @@ enum class PageSettingId : uint8_t {
   WAYPOINT_LANDABLE_SIZE,
   WAYPOINT_SCALE_RUNWAY_LENGTH,
 
+  WAYPOINT_TYPE_FILTER_BEGIN,
+
+  WAYPOINT_DISPLAY_NON_ICAO_AIRPORTS =
+    WAYPOINT_TYPE_FILTER_BEGIN + PageSettingWaypointMapFilterTypeCount,
+
   AIRSPACE_DISPLAY,
   AIRSPACE_LABEL_VISIBILITY,
   AIRSPACE_SHOW_NOTAM_LABELS,
@@ -103,6 +112,11 @@ constexpr unsigned PageSettingElementsCount =
   PageSettingWaypointsStart - PageSettingElementsStart;
 constexpr unsigned PageSettingWaypointsCount =
   PageSettingAirspaceStart - PageSettingWaypointsStart;
+constexpr unsigned PageSettingWaypointTypeFilterCount =
+  PageSettingWaypointMapFilterTypeCount;
+constexpr unsigned PageSettingWaypointsBaseCount =
+  unsigned(PageSettingId::WAYPOINT_TYPE_FILTER_BEGIN) -
+  PageSettingWaypointsStart;
 constexpr unsigned PageSettingAirspaceCount =
   unsigned(PageSettingId::COUNT) - PageSettingAirspaceStart;
 constexpr unsigned PageSettingAirspaceClassFilterCount =
@@ -119,7 +133,7 @@ constexpr unsigned PageSettingAirspaceBaseCount =
  * may grow much larger).  Keep #RowFormWidget::MAX_ROWS >= MAX_ITEMS.
  */
 struct PageSettingOverrides {
-  static constexpr unsigned MAX_ITEMS = 128;
+  static constexpr unsigned MAX_ITEMS = 160;
 
   /** Sentinel: follow the global / profile value. */
   static constexpr int INHERIT = -1;

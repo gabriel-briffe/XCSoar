@@ -8,19 +8,42 @@
 #include "ActionInterface.hpp"
 #include "Form/DataField/Listener.hpp"
 #include "Interface.hpp"
-#include "Language/Language.hpp"
+#include "PageSetting.hpp"
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
 
-enum ControlIndex {
-  OrientationCruise,
-  OrientationCircling,
-  CirclingZoom,
-  MAP_SHIFT_BIAS,
-  GliderScreenPosition,
-  MaxAutoZoomDistance,
+namespace {
+
+enum ControlIndex : unsigned {
+  CATALOG_END = PageSettingOrientationCount,
+
+  MaxAutoZoomDistance = CATALOG_END,
   PAGES_DISTINCT_ZOOM,
 };
+
+[[nodiscard]]
+bool
+IsExpertRow(unsigned control) noexcept
+{
+  return control == unsigned(PageSettingId::MAP_SHIFT_BIAS) -
+         PageSettingOrientationStart ||
+         control == unsigned(PageSettingId::GLIDER_SCREEN_POSITION) -
+         PageSettingOrientationStart;
+}
+
+[[nodiscard]]
+bool
+NeedsListener(unsigned control) noexcept
+{
+  return control == unsigned(PageSettingId::CRUISE_ORIENTATION) -
+         PageSettingOrientationStart ||
+         control == unsigned(PageSettingId::CIRCLING_ORIENTATION) -
+         PageSettingOrientationStart ||
+         control == unsigned(PageSettingId::MAP_SHIFT_BIAS) -
+         PageSettingOrientationStart;
+}
+
+} // namespace
 
 class OrientationConfigPanel final
   : public RowFormWidget, DataFieldListener {
@@ -64,7 +87,8 @@ OrientationConfigPanel::ApplyBundleLive() noexcept
 void
 OrientationConfigPanel::UpdateVisibilities()
 {
-  SetRowVisible(MAP_SHIFT_BIAS,
+  SetRowVisible(unsigned(PageSettingId::MAP_SHIFT_BIAS) -
+                PageSettingOrientationStart,
                 bundle.cruise_orientation == MapOrientation::NORTH_UP ||
                 bundle.cruise_orientation == MapOrientation::WIND_UP);
 }
@@ -74,9 +98,12 @@ OrientationConfigPanel::OnModified(DataField &df) noexcept
 {
   SyncBundleFromForm();
 
-  if (IsDataField(OrientationCruise, df) ||
-      IsDataField(OrientationCircling, df) ||
-      IsDataField(MAP_SHIFT_BIAS, df))
+  if (IsDataField(unsigned(PageSettingId::CRUISE_ORIENTATION) -
+                  PageSettingOrientationStart, df) ||
+      IsDataField(unsigned(PageSettingId::CIRCLING_ORIENTATION) -
+                  PageSettingOrientationStart, df) ||
+      IsDataField(unsigned(PageSettingId::MAP_SHIFT_BIAS) -
+                  PageSettingOrientationStart, df))
     UpdateVisibilities();
 
   ApplyBundleLive();
@@ -92,32 +119,10 @@ OrientationConfigPanel::Prepare(ContainerWindow &parent,
 
   const PageSettings &page_settings = CommonInterface::GetUISettings().pages;
 
-  DisplaySettingConfigPanel::AddEnumRow(
-    *this,
-    OrientationDisplaySetting::Get(PageSettingId::CRUISE_ORIENTATION),
-    unsigned(bundle.cruise_orientation), this);
-
-  DisplaySettingConfigPanel::AddEnumRow(
-    *this,
-    OrientationDisplaySetting::Get(PageSettingId::CIRCLING_ORIENTATION),
-    unsigned(bundle.circling_orientation), this);
-
-  DisplaySettingConfigPanel::AddBooleanRow(
-    *this,
-    OrientationDisplaySetting::Get(PageSettingId::CIRCLING_ZOOM),
-    bundle.circle_zoom_enabled);
-
-  DisplaySettingConfigPanel::AddEnumRow(
-    *this,
-    OrientationDisplaySetting::Get(PageSettingId::MAP_SHIFT_BIAS),
-    unsigned(bundle.map_shift_bias), this);
-  SetExpertRow(MAP_SHIFT_BIAS);
-
-  DisplaySettingConfigPanel::AddIntegerRow(
-    *this,
-    OrientationDisplaySetting::Get(PageSettingId::GLIDER_SCREEN_POSITION),
-    bundle.glider_screen_position);
-  SetExpertRow(GliderScreenPosition);
+  DisplaySettingConfigPanel::AddCatalogRows(
+    *this, bundle, PageSettingOrientationStart, PageSettingOrientationCount,
+    OrientationDisplaySetting::Get, OrientationDisplaySetting::GetValue,
+    IsExpertRow, this, NeedsListener);
 
   AddFloat(_("Max. auto zoom distance"),
            _("The upper limit for auto zoom distance."),
