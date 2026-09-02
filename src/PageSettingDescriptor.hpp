@@ -61,6 +61,21 @@ enum class ElementsBundleField : uint8_t {
   COUNT
 };
 
+/** Field within #WaypointsDisplaySetting::Bundle. */
+enum class WaypointsBundleField : uint8_t {
+  LABEL_FORMAT,
+  ARRIVAL_HEIGHT,
+  LABEL_STYLE,
+  LABEL_VISIBILITY,
+  LANDABLE_SYMBOLS,
+  ICON_SCALE,
+  DETAILED_LANDABLES,
+  LANDABLE_SIZE,
+  SCALE_RUNWAY_LENGTH,
+
+  COUNT
+};
+
 /**
  * Active bundle field for a catalog row.  #PageSettingGroup selects which
  * member is valid; add a member here when introducing a new settings group.
@@ -69,6 +84,7 @@ union PageSettingBundleField {
   TerrainBundleField terrain;
   OrientationBundleField orientation;
   ElementsBundleField elements;
+  WaypointsBundleField waypoints;
 };
 
 /** How a catalog value is stored in the profile file. */
@@ -88,7 +104,8 @@ enum class ProfileWireFormat : uint8_t {
  *
  * Adding a group: extend #PageSettingGroup and #PageSettingBundleField,
  * add #PageSettingId values, implement *DisplaySetting.cpp catalog rows
- * using {.terrain = ...}, {.orientation = ...}, or {.elements = ...}.
+ * using {.terrain = ...}, {.orientation = ...}, {.elements = ...}, or
+ * {.waypoints = ...}.
  */
 struct PageSettingDescriptor {
   PageSettingId id;

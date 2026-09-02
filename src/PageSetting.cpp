@@ -148,6 +148,19 @@ PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept
 }
 
 void
+PageSettingReinitialiseWaypointLookIfChanged(
+  const WaypointRendererSettings &before) noexcept
+{
+  const WaypointRendererSettings &after =
+    CommonInterface::GetMapSettings().waypoint;
+  if (before.landable_style == after.landable_style)
+    return;
+
+  if (CommonInterface::main_window != nullptr)
+    CommonInterface::main_window->ReinitialiseLook();
+}
+
+void
 PageSettingNotifyLive() noexcept
 {
   ActionInterface::SendMapSettings(true);
@@ -187,12 +200,15 @@ PageSettingSet(PageSettingId id, int value) noexcept
     value = module.load_global(id);
 
   const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
+  const WaypointRendererSettings old_waypoint =
+    CommonInterface::GetMapSettings().waypoint;
 
   const auto &desc = module.get(id);
   LogFmt("perPage: Set global '{}' value={}", desc.label, value);
   module.set_live(id, value);
   module.save_global(id, value);
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
+  PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
   PageSettingNotifyLive();
 }
 

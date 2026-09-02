@@ -38,6 +38,11 @@ class Button;
  * methods!
  */
 class RowFormWidget : public WindowWidget {
+public:
+  /** Largest form in the app (Pages custom settings). */
+  static constexpr unsigned MAX_ROWS = 48u;
+
+private:
   struct Row {
     enum class Type : uint8_t {
       /**
@@ -266,7 +271,7 @@ class RowFormWidget : public WindowWidget {
    */
   const bool vertical;
 
-  boost::container::static_vector<Row, 32u> rows;
+  boost::container::static_vector<Row, MAX_ROWS> rows;
 
 public:
   RowFormWidget(const DialogLook &look, bool vertical=false) noexcept;

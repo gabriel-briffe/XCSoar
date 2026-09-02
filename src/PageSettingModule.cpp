@@ -7,6 +7,7 @@
 #include "Language/Language.hpp"
 #include "Orientation/OrientationDisplaySetting.hpp"
 #include "Terrain/TerrainDisplaySetting.hpp"
+#include "Waypoints/WaypointsDisplaySetting.hpp"
 #include "util/Macros.hpp"
 
 #include <cassert>
@@ -51,6 +52,18 @@ static const PageSettingModule modules[] = {
     ElementsDisplaySetting::SetLive,
     ElementsDisplaySetting::LoadGlobal,
     ElementsDisplaySetting::SaveGlobal,
+  },
+  {
+    PageSettingGroup::WAYPOINTS,
+    PageSettingId::WAYPOINT_LABEL_FORMAT,
+    N_("Waypoints"),
+    WaypointsDisplaySetting::Count,
+    WaypointsDisplaySetting::Get,
+    WaypointsDisplaySetting::IsValidValue,
+    WaypointsDisplaySetting::GetLive,
+    WaypointsDisplaySetting::SetLive,
+    WaypointsDisplaySetting::LoadGlobal,
+    WaypointsDisplaySetting::SaveGlobal,
   },
 };
 

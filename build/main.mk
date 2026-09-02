@@ -361,6 +361,7 @@ XCSOAR_SOURCES := \
 	$(SRC)/DisplaySettingConfigPanel.cpp \
 	$(SRC)/Orientation/OrientationDisplaySetting.cpp \
 	$(SRC)/Elements/ElementsDisplaySetting.cpp \
+	$(SRC)/Waypoints/WaypointsDisplaySetting.cpp \
 	$(SRC)/Terrain/TerrainDisplaySetting.cpp \
 	$(SRC)/PageOverlayTitle.cpp \
 	$(SRC)/PageState.cpp \

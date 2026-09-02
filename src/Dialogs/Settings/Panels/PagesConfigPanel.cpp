@@ -33,6 +33,10 @@
 #include "Weather/EDL/StateController.hpp"
 #endif
 #include "Widget/RowFormWidget.hpp"
+
+static_assert(unsigned(PageSettingId::COUNT) <= RowFormWidget::MAX_ROWS,
+              "RowFormWidget::MAX_ROWS must fit page settings catalog");
+
 #include "Widget/ListWidget.hpp"
 #include "Widget/TwoWidgets.hpp"
 #include "Widget/ButtonPanelWidget.hpp"

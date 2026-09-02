@@ -43,6 +43,8 @@ Profile::Load(const ProfileMap &map, MapSettings &settings)
                 settings.online_traffic_map_mode);
 
   settings.waypoint.LoadFromProfile();
+  /* Waypoint display keys are also loaded via PageSettingProfile when
+     applying page-setting catalogs. */
 
   Load(map, settings.airspace);
 

@@ -399,9 +399,12 @@ PageActions::ApplyPageDisplaySettings() noexcept
          state.current_index);
 
   const TrailSettings old_trail = CommonInterface::GetMapSettings().trail;
+  const WaypointRendererSettings old_waypoint =
+    CommonInterface::GetMapSettings().waypoint;
   PageSettingApplyGlobalBaseline();
   PageSettingApplyPageOverrides(state.current_index);
   PageSettingReinitialiseTrailLookIfChanged(old_trail);
+  PageSettingReinitialiseWaypointLookIfChanged(old_waypoint);
   PageSettingNotifyLive();
 }
 

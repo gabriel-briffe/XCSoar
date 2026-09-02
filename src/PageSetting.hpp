@@ -7,11 +7,13 @@
 #include <type_traits>
 
 struct TrailSettings;
+struct WaypointRendererSettings;
 
 enum class PageSettingGroup : uint8_t {
   TERRAIN,
   ORIENTATION,
   ELEMENTS,
+  WAYPOINTS,
 
   COUNT
 };
@@ -19,7 +21,7 @@ enum class PageSettingGroup : uint8_t {
 /**
  * Identifiers for settings that may be overridden per page.
  * The registry in PageSetting.cpp is the catalog (terrain, orientation,
- * then elements).
+ * elements, then waypoints).
  */
 enum class PageSettingId : uint8_t {
   TERRAIN_ENABLE = 0,
@@ -49,6 +51,16 @@ enum class PageSettingId : uint8_t {
   ONLINE_TRAFFIC_MAP_MODE,
   DISTANCE_RINGS,
 
+  WAYPOINT_LABEL_FORMAT,
+  WAYPOINT_ARRIVAL_HEIGHT,
+  WAYPOINT_LABEL_STYLE,
+  WAYPOINT_LABEL_VISIBILITY,
+  WAYPOINT_LANDABLE_SYMBOLS,
+  WAYPOINT_ICON_SCALE,
+  WAYPOINT_DETAILED_LANDABLES,
+  WAYPOINT_LANDABLE_SIZE,
+  WAYPOINT_SCALE_RUNWAY_LENGTH,
+
   COUNT
 };
 
@@ -58,10 +70,14 @@ constexpr unsigned PageSettingOrientationStart =
   unsigned(PageSettingId::CRUISE_ORIENTATION);
 constexpr unsigned PageSettingElementsStart =
   unsigned(PageSettingId::GROUND_TRACK);
+constexpr unsigned PageSettingWaypointsStart =
+  unsigned(PageSettingId::WAYPOINT_LABEL_FORMAT);
 constexpr unsigned PageSettingOrientationCount =
   PageSettingElementsStart - PageSettingOrientationStart;
 constexpr unsigned PageSettingElementsCount =
-  unsigned(PageSettingId::COUNT) - PageSettingElementsStart;
+  PageSettingWaypointsStart - PageSettingElementsStart;
+constexpr unsigned PageSettingWaypointsCount =
+  unsigned(PageSettingId::COUNT) - PageSettingWaypointsStart;
 
 /**
  * Sparse per-page setting overrides.  Only entries present in #items
@@ -72,7 +88,7 @@ constexpr unsigned PageSettingElementsCount =
  * #PageSettingId::COUNT.
  */
 struct PageSettingOverrides {
-  static constexpr unsigned MAX_ITEMS = 32;
+  static constexpr unsigned MAX_ITEMS = 48;
 
   /** Sentinel: follow the global / profile value. */
   static constexpr int INHERIT = -1;
@@ -211,6 +227,14 @@ PageSettingApplyPageOverrides(unsigned page_index) noexcept;
  */
 void
 PageSettingReinitialiseTrailLookIfChanged(const TrailSettings &before) noexcept;
+
+/**
+ * Rebuild waypoint look when @p before.landable_style differs from live
+ * map settings.
+ */
+void
+PageSettingReinitialiseWaypointLookIfChanged(
+  const WaypointRendererSettings &before) noexcept;
 
 /** Push live MapSettings to the map (one FullRedraw). */
 void
