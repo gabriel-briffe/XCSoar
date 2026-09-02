@@ -115,16 +115,4 @@ AddCatalogRows(RowFormWidget &form, const Bundle &bundle,
   return count;
 }
 
-/**
- * Append controls after a catalog block.  @p after_control is the
- * value returned by #AddCatalogRows (index of the first non-catalog
- * row).  @p add receives that base index for offset enums.
- */
-template<typename Fn>
-void
-AddNonCatalogRowsAfter(unsigned after_control, Fn &&add) noexcept
-{
-  std::forward<Fn>(add)(after_control);
-}
-
 } // namespace DisplaySettingConfigPanel

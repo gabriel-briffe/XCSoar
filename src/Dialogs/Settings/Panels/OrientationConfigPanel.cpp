@@ -139,20 +139,19 @@ OrientationConfigPanel::Prepare(ContainerWindow &parent,
     OrientationDisplaySetting::Get, OrientationDisplaySetting::GetValue,
     IsExpertRow, this, NeedsListener);
 
-  DisplaySettingConfigPanel::AddNonCatalogRowsAfter(
-    non_catalog_start, [this, &page_settings](unsigned base) {
-      AddFloat(_("Max. auto zoom distance"),
-               _("The upper limit for auto zoom distance."),
-               "%.0f %s", "%.0f", 20, 250, 10, false,
-               UnitGroup::DISTANCE,
-               CommonInterface::GetMapSettings().max_auto_zoom_distance);
-      SetExpertRow(base + unsigned(NonCatalogRow::MaxAutoZoomDistance));
+  AddFloat(_("Max. auto zoom distance"),
+           _("The upper limit for auto zoom distance."),
+           "%.0f %s", "%.0f", 20, 250, 10, false,
+           UnitGroup::DISTANCE,
+           CommonInterface::GetMapSettings().max_auto_zoom_distance);
+  SetExpertRow(non_catalog_start +
+               unsigned(NonCatalogRow::MaxAutoZoomDistance));
 
-      AddBoolean(_("Distinct page zoom"),
-                 _("Maintain one map zoom level on each page."),
-                 page_settings.distinct_zoom);
-      SetExpertRow(base + unsigned(NonCatalogRow::PagesDistinctZoom));
-    });
+  AddBoolean(_("Distinct page zoom"),
+             _("Maintain one map zoom level on each page."),
+             page_settings.distinct_zoom);
+  SetExpertRow(non_catalog_start +
+               unsigned(NonCatalogRow::PagesDistinctZoom));
 
   SyncBundleFromForm();
   initial_bundle = bundle;

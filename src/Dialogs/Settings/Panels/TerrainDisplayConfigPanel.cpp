@@ -255,25 +255,21 @@ TerrainDisplayConfigPanel::Prepare(ContainerWindow &parent,
     IsExpertRow, this, NeedsListener);
 
   have_terrain_preview = data_components->terrain != nullptr;
-  DisplaySettingConfigPanel::AddNonCatalogRowsAfter(
-    non_catalog_start, [this](unsigned) {
-      if (!have_terrain_preview)
-        return;
+  if (have_terrain_preview) {
+    AddSpacer();
 
-      AddSpacer();
+    WindowStyle style;
+    style.Border();
 
-      WindowStyle style;
-      style.Border();
-
-      const auto &map_look = UIGlobals::GetMapLook();
-      auto preview = std::make_unique<TerrainPreviewWindow>(
-        *data_components->terrain,
-        data_components->topography.get(),
-        map_look.topography,
-        bundle.topography_enabled);
-      preview->Create((ContainerWindow &)GetWindow(), {0, 0, 100, 100}, style);
-      AddRemaining(std::move(preview));
-    });
+    const auto &map_look = UIGlobals::GetMapLook();
+    auto preview = std::make_unique<TerrainPreviewWindow>(
+      *data_components->terrain,
+      data_components->topography.get(),
+      map_look.topography,
+      bundle.topography_enabled);
+    preview->Create((ContainerWindow &)GetWindow(), {0, 0, 100, 100}, style);
+    AddRemaining(std::move(preview));
+  }
 
   ShowTerrainControls();
   UpdateTerrainPreview();

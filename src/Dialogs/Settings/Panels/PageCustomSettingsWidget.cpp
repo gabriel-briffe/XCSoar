@@ -6,7 +6,6 @@
 #include "Dialogs/Airspace/Airspace.hpp"
 #include "Dialogs/ComboPicker.hpp"
 #include "Dialogs/WidgetDialog.hpp"
-#include "Airspace/AirspaceClassColorProfile.hpp"
 #include "Airspace/AirspaceDisplaySetting.hpp"
 #include "Formatter/AirspaceFormatter.hpp"
 #include "Engine/Airspace/AirspaceClass.hpp"
@@ -329,38 +328,21 @@ PageCustomSettingsWidget::OnAddClicked() noexcept
 AirspaceRendererSettings
 PageCustomSettingsWidget::BuildPreviewRenderer() const noexcept
 {
-  AirspaceRendererSettings renderer =
-    CommonInterface::GetMapSettings().airspace;
+  AirspaceDisplaySetting::Bundle bundle{};
+  bundle.airspace = CommonInterface::GetMapSettings().airspace;
 
   for (unsigned i = 0; i < overrides.n_items; ++i) {
     const PageSettingId id = overrides.items[i].id;
     const int value = overrides.items[i].value;
     if (value == PageSettingOverrides::INHERIT)
       continue;
+    if (!AirspaceDisplaySetting::IsClassColor(id))
+      continue;
 
-    if (AirspaceDisplaySetting::IsClassFillColor(id)) {
-      const AirspaceClass cls =
-        AirspaceDisplaySetting::ClassFromFillColorId(id);
-      renderer.classes[unsigned(cls)].fill_color =
-        AirspaceClassColorProfile::Unpack(value);
-    } else if (AirspaceDisplaySetting::IsClassBorderColor(id)) {
-      const AirspaceClass cls =
-        AirspaceDisplaySetting::ClassFromBorderColorId(id);
-      renderer.classes[unsigned(cls)].border_color =
-        AirspaceClassColorProfile::Unpack(value);
-    } else if (AirspaceDisplaySetting::IsClassBorderWidth(id)) {
-      const AirspaceClass cls =
-        AirspaceDisplaySetting::ClassFromBorderWidthId(id);
-      renderer.classes[unsigned(cls)].border_width = unsigned(value);
-    } else if (AirspaceDisplaySetting::IsClassFillMode(id)) {
-      const AirspaceClass cls =
-        AirspaceDisplaySetting::ClassFromFillModeId(id);
-      renderer.classes[unsigned(cls)].fill_mode =
-        AirspaceClassRendererSettings::FillMode(value);
-    }
+    AirspaceDisplaySetting::SetValue(bundle, id, value);
   }
 
-  return renderer;
+  return bundle.airspace;
 }
 
 void

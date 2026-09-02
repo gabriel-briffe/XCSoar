@@ -254,13 +254,13 @@ CountVisibleCustomRows(const PageSettingOverrides &overrides) noexcept;
 
 [[nodiscard]]
 constexpr unsigned
-FilterDialogRowCount() noexcept
+ClassDialogRowCount() noexcept
 {
   return PageSettingAirspaceClassFilterCount;
 }
 
 [[nodiscard]]
 PageSettingId
-FilterDialogRowId(unsigned row) noexcept;
+ClassDialogRowId(unsigned row) noexcept;
 
 } // namespace AirspaceDisplaySetting

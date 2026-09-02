@@ -30,7 +30,7 @@ public:
     const auto &look = UIGlobals::GetDialogLook();
     ListControl &list = CreateList(parent, look, rc,
                                    row_renderer.CalculateLayout(*look.list.font));
-    list.SetLength(AirspaceDisplaySetting::FilterDialogRowCount());
+    list.SetLength(AirspaceDisplaySetting::ClassDialogRowCount());
   }
 
   void OnPaintItem(Canvas &canvas, const PixelRect rc,
@@ -47,9 +47,9 @@ void
 AirspaceColorListWidget::OnPaintItem(Canvas &canvas, PixelRect rc,
                                      unsigned i) noexcept
 {
-  assert(i < AirspaceDisplaySetting::FilterDialogRowCount());
+  assert(i < AirspaceDisplaySetting::ClassDialogRowCount());
 
-  const PageSettingId id = AirspaceDisplaySetting::FilterDialogRowId(i);
+  const PageSettingId id = AirspaceDisplaySetting::ClassDialogRowId(i);
   const AirspaceClass type = AirspaceDisplaySetting::ClassFromFilterId(id);
 
   const AirspaceRendererSettings &renderer =
@@ -74,9 +74,9 @@ AirspaceColorListWidget::OnPaintItem(Canvas &canvas, PixelRect rc,
 void
 AirspaceColorListWidget::OnActivateItem(unsigned index) noexcept
 {
-  assert(index < AirspaceDisplaySetting::FilterDialogRowCount());
+  assert(index < AirspaceDisplaySetting::ClassDialogRowCount());
 
-  const PageSettingId id = AirspaceDisplaySetting::FilterDialogRowId(index);
+  const PageSettingId id = AirspaceDisplaySetting::ClassDialogRowId(index);
   const AirspaceClass type = AirspaceDisplaySetting::ClassFromFilterId(id);
 
   AirspaceLook &look =
@@ -111,8 +111,8 @@ dlgAirspaceShowModal(bool color_mode)
            UIGlobals::GetDialogLook(),
            _("Airspace"));
   dialog.AddButton(_("Close"), mrOK);
-  dialog.SetWidget(AirspaceDisplaySetting::FilterDialogRowCount,
-                   AirspaceDisplaySetting::FilterDialogRowId,
+  dialog.SetWidget(AirspaceDisplaySetting::ClassDialogRowCount,
+                   AirspaceDisplaySetting::ClassDialogRowId,
                    AirspaceDisplaySetting::GetLive,
                    PageSettingFilterList::PaintAirspaceClassFilterColumns,
                    PageSettingFilterList::ActivateAirspaceClassFilter);

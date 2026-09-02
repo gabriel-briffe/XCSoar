@@ -5,11 +5,10 @@
 #include "Airspace/AirspaceDisplaySetting.hpp"
 #include "ConfigPanel.hpp"
 #include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
-#include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Boolean.hpp"
 #include "Form/DataField/Listener.hpp"
 #include "Widget/RowFormWidget.hpp"
 #include "Dialogs/Airspace/Airspace.hpp"
+#include "ActionInterface.hpp"
 #include "Language/Language.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
 #include "Interface.hpp"
@@ -40,14 +39,9 @@ IsExpertRow(unsigned control) noexcept
 
 [[nodiscard]]
 bool
-NeedsListener(unsigned control) noexcept
+NeedsListener(unsigned) noexcept
 {
-  using DisplaySettingConfigPanel::CatalogRow;
-
-  return control == CatalogRow(PageSettingId::AIRSPACE_DISPLAY,
-                               PageSettingAirspaceStart) ||
-         control == CatalogRow(PageSettingId::AIRSPACE_WARNINGS,
-                               PageSettingAirspaceStart);
+  return true;
 }
 
 } // namespace
@@ -58,6 +52,7 @@ class AirspaceConfigPanel final
   AirspaceDisplaySetting::Bundle initial_bundle;
 
   void SyncCatalogFromForm() noexcept;
+  void ApplyBundleLive() noexcept;
 
 public:
   AirspaceConfigPanel()
@@ -83,6 +78,17 @@ AirspaceConfigPanel::SyncCatalogFromForm() noexcept
   DisplaySettingConfigPanel::SyncBundleFromForm(
     *this, bundle, PageSettingAirspaceStart, PageSettingAirspaceBaseCount,
     AirspaceDisplaySetting::Get, AirspaceDisplaySetting::SetValue);
+}
+
+void
+AirspaceConfigPanel::ApplyBundleLive() noexcept
+{
+  const AirspaceRendererSettings old_airspace =
+    CommonInterface::GetMapSettings().airspace;
+
+  AirspaceDisplaySetting::ApplyLive(bundle);
+  PageSettingReinitialiseAirspaceLookIfChanged(old_airspace);
+  ActionInterface::SendMapSettings(true);
 }
 
 void
@@ -140,18 +146,19 @@ AirspaceConfigPanel::Hide() noexcept
 void
 AirspaceConfigPanel::OnModified(DataField &df) noexcept
 {
+  SyncCatalogFromForm();
+
   using DisplaySettingConfigPanel::CatalogRow;
 
   if (IsDataField(CatalogRow(PageSettingId::AIRSPACE_DISPLAY,
                              PageSettingAirspaceStart), df)) {
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    AirspaceDisplayMode mode = (AirspaceDisplayMode)dfe.GetValue();
-    ShowDisplayControls(mode);
+    ShowDisplayControls(bundle.airspace.altitude_mode);
   } else if (IsDataField(CatalogRow(PageSettingId::AIRSPACE_WARNINGS,
                                     PageSettingAirspaceStart), df)) {
-    const DataFieldBoolean &dfb = (const DataFieldBoolean &)df;
-    ShowWarningControls(dfb.GetValue());
+    ShowWarningControls(bundle.computer.enable_warnings);
   }
+
+  ApplyBundleLive();
 }
 
 void

@@ -232,7 +232,7 @@ static_assert(ARRAY_SIZE(field_accessors) ==
               unsigned(AirspaceBundleField::COUNT),
               "Airspace field accessors must match AirspaceBundleField::COUNT");
 
-static char filter_override_keys[PageSettingAirspaceClassFilterCount][40];
+static char filter_override_keys[PageSettingAirspaceClassFilterCount][48];
 static char fill_color_override_keys[PageSettingAirspaceClassFillColorCount][48];
 static char border_color_override_keys[PageSettingAirspaceClassBorderColorCount][48];
 static char border_width_override_keys[PageSettingAirspaceClassBorderWidthCount][48];
@@ -243,27 +243,113 @@ static char border_width_labels[PageSettingAirspaceClassBorderWidthCount][64];
 static char fill_mode_labels[PageSettingAirspaceClassFillModeCount][64];
 static PageSettingDescriptor catalog[PageSettingAirspaceCount];
 static PageSettingId
-  filter_dialog_order[PageSettingAirspaceClassFilterCount];
+  class_dialog_order[PageSettingAirspaceClassFilterCount];
 static bool catalog_ready = false;
 
 [[nodiscard]]
+PageSettingDescriptor
+MakeFilterEntry(PageSettingId id, AirspaceClass /*cls*/,
+                const char *label, const char *override_key) noexcept
+{
+  return PageSettingFilterCatalog::MakeEnumFilter(
+    id, label,
+    N_("Display and warning filter for this airspace class."),
+    override_key,
+    {.airspace = AirspaceBundleField::CLASS_FILTER},
+    ProfileWireFormat::UINT8_ENUM,
+    AirspaceClassFilterProfile::Encode(true, true),
+    airspace_class_filter_mode_choices);
+}
+
+[[nodiscard]]
+PageSettingDescriptor
+MakeFillColorEntry(PageSettingId id, AirspaceClass cls,
+                   const char *label, const char *override_key) noexcept
+{
+  return PageSettingFilterCatalog::MakeColorOverride(
+    id, label,
+    N_("Fill colour for this airspace class on the map."),
+    override_key,
+    {.airspace = AirspaceBundleField::CLASS_FILL_COLOR},
+    AirspaceClassColorProfile::LoadFill(cls));
+}
+
+[[nodiscard]]
+PageSettingDescriptor
+MakeBorderColorEntry(PageSettingId id, AirspaceClass cls,
+                     const char *label, const char *override_key) noexcept
+{
+  return PageSettingFilterCatalog::MakeColorOverride(
+    id, label,
+    N_("Border colour for this airspace class on the map."),
+    override_key,
+    {.airspace = AirspaceBundleField::CLASS_BORDER_COLOR},
+    AirspaceClassColorProfile::LoadBorder(cls));
+}
+
+[[nodiscard]]
+PageSettingDescriptor
+MakeBorderWidthEntry(PageSettingId id, AirspaceClass cls,
+                     const char *label, const char *override_key) noexcept
+{
+  return PageSettingCatalog::CatalogInteger(
+    id, label,
+    N_("The width of the border drawn around each airspace. "
+       "Set this value to zero to hide the border."),
+    override_key, {},
+    {.airspace = AirspaceBundleField::CLASS_BORDER_WIDTH},
+    ProfileWireFormat::INT,
+    AirspaceClassColorProfile::LoadBorderWidth(cls),
+    0, 5, 1, "%d",
+    PageSettingFilterCatalog::SECTION_COLOURS);
+}
+
+[[nodiscard]]
+PageSettingDescriptor
+MakeFillModeEntry(PageSettingId id, AirspaceClass cls,
+                  const char *label, const char *override_key) noexcept
+{
+  return PageSettingCatalog::CatalogEnum(
+    id, label,
+    N_("Defines how the airspace is filled with the configured color."),
+    override_key, {},
+    {.airspace = AirspaceBundleField::CLASS_FILL_MODE},
+    ProfileWireFormat::UINT8_ENUM,
+    AirspaceClassColorProfile::LoadFillMode(cls),
+    airspace_class_fill_mode_choices,
+    PageSettingFilterCatalog::SECTION_COLOURS);
+}
+
+struct ClassCatalogRange {
+  PageSettingId id_begin;
+  unsigned count;
+  char (*keys)[48];
+  char (*labels)[64];
+  const char *key_fmt;
+  /** nullptr: use #AirspaceFormatter::GetClass as the catalog label. */
+  const char *label_fmt;
+  PageSettingDescriptor (*make)(PageSettingId, AirspaceClass,
+                                const char *, const char *) noexcept;
+};
+
+[[nodiscard]]
 const char *
-FilterDialogLabel(PageSettingId id) noexcept
+ClassDialogLabel(PageSettingId id) noexcept
 {
   return PageSettingCatalog::GettextOptional(
     catalog[unsigned(id) - PageSettingAirspaceStart].label);
 }
 
 void
-InitFilterDialogOrder() noexcept
+InitClassDialogOrder() noexcept
 {
   PageSettingFilterCatalog::FillConsecutiveIds(
-    filter_dialog_order,
+    class_dialog_order,
     PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN,
     PageSettingAirspaceClassFilterCount);
 
   PageSettingFilterCatalog::InitSortedOrder(
-    filter_dialog_order, FilterDialogRowCount(), FilterDialogLabel);
+    class_dialog_order, ClassDialogRowCount(), ClassDialogLabel);
 }
 
 void
@@ -275,140 +361,72 @@ EnsureCatalog() noexcept
   PageSettingFilterCatalog::CopyBase(catalog, base_catalog,
                                      PageSettingAirspaceBaseCount);
 
-  for (unsigned i = 0; i < PageSettingAirspaceClassFilterCount; ++i) {
-    const AirspaceClass cls = AirspaceClass(i + 1);
-    const PageSettingId id =
-      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN) + i);
+  static const ClassCatalogRange ranges[] = {
+    {
+      PageSettingId::AIRSPACE_CLASS_FILTER_BEGIN,
+      PageSettingAirspaceClassFilterCount,
+      filter_override_keys, nullptr,
+      "OverrideAirspaceFilter%u", nullptr,
+      MakeFilterEntry,
+    },
+    {
+      PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN,
+      PageSettingAirspaceClassFillColorCount,
+      fill_color_override_keys, fill_color_labels,
+      "OverrideAirspaceFillColor%u", "%s fill colour",
+      MakeFillColorEntry,
+    },
+    {
+      PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN,
+      PageSettingAirspaceClassBorderColorCount,
+      border_color_override_keys, border_color_labels,
+      "OverrideAirspaceBorderColor%u", "%s border colour",
+      MakeBorderColorEntry,
+    },
+    {
+      PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN,
+      PageSettingAirspaceClassBorderWidthCount,
+      border_width_override_keys, border_width_labels,
+      "OverrideAirspaceBorderWidth%u", "%s border width",
+      MakeBorderWidthEntry,
+    },
+    {
+      PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN,
+      PageSettingAirspaceClassFillModeCount,
+      fill_mode_override_keys, fill_mode_labels,
+      "OverrideAirspaceClassFillMode%u", "%s fill mode",
+      MakeFillModeEntry,
+    },
+  };
 
-    StringFormat(filter_override_keys[i], sizeof(filter_override_keys[i]),
-                 "OverrideAirspaceFilter%u", unsigned(cls));
+  unsigned catalog_index = PageSettingAirspaceBaseCount;
+  for (const ClassCatalogRange &range : ranges) {
+    for (unsigned i = 0; i < range.count; ++i) {
+      const AirspaceClass cls = AirspaceClass(i + 1);
+      const PageSettingId id =
+        PageSettingId(unsigned(range.id_begin) + i);
+      const char *class_name = AirspaceFormatter::GetClass(cls);
 
-    catalog[PageSettingAirspaceBaseCount + i] =
-      PageSettingFilterCatalog::MakeEnumFilter(
-        id,
-        AirspaceFormatter::GetClass(cls),
-        N_("Display and warning filter for this airspace class."),
-        filter_override_keys[i],
-        {.airspace = AirspaceBundleField::CLASS_FILTER},
-        ProfileWireFormat::UINT8_ENUM,
-        AirspaceClassFilterProfile::Encode(true, true),
-        airspace_class_filter_mode_choices);
+      StringFormat(range.keys[i], sizeof(range.keys[i]),
+                   range.key_fmt, unsigned(cls));
+
+      const char *label;
+      if (range.label_fmt != nullptr) {
+        StringFormat(range.labels[i], sizeof(range.labels[i]),
+                     range.label_fmt, class_name);
+        label = range.labels[i];
+      } else {
+        label = class_name;
+      }
+
+      catalog[catalog_index++] =
+        range.make(id, cls, label, range.keys[i]);
+    }
   }
 
-  for (unsigned i = 0; i < PageSettingAirspaceClassFillColorCount; ++i) {
-    const AirspaceClass cls = AirspaceClass(i + 1);
-    const PageSettingId id =
-      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILL_COLOR_BEGIN) +
-                    i);
-    const unsigned catalog_index =
-      PageSettingAirspaceBaseCount + PageSettingAirspaceClassFilterCount + i;
+  assert(catalog_index == PageSettingAirspaceCount);
 
-    StringFormat(fill_color_override_keys[i],
-                 sizeof(fill_color_override_keys[i]),
-                 "OverrideAirspaceFillColor%u", unsigned(cls));
-
-    StringFormat(fill_color_labels[i], sizeof(fill_color_labels[i]),
-                 "%s fill colour",
-                 AirspaceFormatter::GetClass(cls));
-
-    catalog[catalog_index] =
-      PageSettingFilterCatalog::MakeColorOverride(
-        id, fill_color_labels[i],
-        N_("Fill colour for this airspace class on the map."),
-        fill_color_override_keys[i],
-        {.airspace = AirspaceBundleField::CLASS_FILL_COLOR},
-        AirspaceClassColorProfile::LoadFill(cls));
-  }
-
-  for (unsigned i = 0; i < PageSettingAirspaceClassBorderColorCount; ++i) {
-    const AirspaceClass cls = AirspaceClass(i + 1);
-    const PageSettingId id =
-      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_COLOR_BEGIN) +
-                    i);
-    const unsigned catalog_index =
-      PageSettingAirspaceBaseCount + PageSettingAirspaceClassFilterCount +
-      PageSettingAirspaceClassFillColorCount + i;
-
-    StringFormat(border_color_override_keys[i],
-                 sizeof(border_color_override_keys[i]),
-                 "OverrideAirspaceBorderColor%u", unsigned(cls));
-
-    StringFormat(border_color_labels[i], sizeof(border_color_labels[i]),
-                 "%s border colour",
-                 AirspaceFormatter::GetClass(cls));
-
-    catalog[catalog_index] =
-      PageSettingFilterCatalog::MakeColorOverride(
-        id, border_color_labels[i],
-        N_("Border colour for this airspace class on the map."),
-        border_color_override_keys[i],
-        {.airspace = AirspaceBundleField::CLASS_BORDER_COLOR},
-        AirspaceClassColorProfile::LoadBorder(cls));
-  }
-
-  for (unsigned i = 0; i < PageSettingAirspaceClassBorderWidthCount; ++i) {
-    const AirspaceClass cls = AirspaceClass(i + 1);
-    const PageSettingId id =
-      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_BORDER_WIDTH_BEGIN) +
-                    i);
-    const unsigned catalog_index =
-      PageSettingAirspaceBaseCount + PageSettingAirspaceClassFilterCount +
-      PageSettingAirspaceClassFillColorCount +
-      PageSettingAirspaceClassBorderColorCount + i;
-
-    StringFormat(border_width_override_keys[i],
-                 sizeof(border_width_override_keys[i]),
-                 "OverrideAirspaceBorderWidth%u", unsigned(cls));
-
-    StringFormat(border_width_labels[i], sizeof(border_width_labels[i]),
-                 "%s border width",
-                 AirspaceFormatter::GetClass(cls));
-
-    catalog[catalog_index] =
-      PageSettingCatalog::CatalogInteger(
-        id, border_width_labels[i],
-        N_("The width of the border drawn around each airspace. "
-           "Set this value to zero to hide the border."),
-        border_width_override_keys[i], {},
-        {.airspace = AirspaceBundleField::CLASS_BORDER_WIDTH},
-        ProfileWireFormat::INT,
-        AirspaceClassColorProfile::LoadBorderWidth(cls),
-        0, 5, 1, "%d",
-        PageSettingFilterCatalog::SECTION_COLOURS);
-  }
-
-  for (unsigned i = 0; i < PageSettingAirspaceClassFillModeCount; ++i) {
-    const AirspaceClass cls = AirspaceClass(i + 1);
-    const PageSettingId id =
-      PageSettingId(unsigned(PageSettingId::AIRSPACE_CLASS_FILL_MODE_BEGIN) +
-                    i);
-    const unsigned catalog_index =
-      PageSettingAirspaceBaseCount + PageSettingAirspaceClassFilterCount +
-      PageSettingAirspaceClassFillColorCount +
-      PageSettingAirspaceClassBorderColorCount +
-      PageSettingAirspaceClassBorderWidthCount + i;
-
-    StringFormat(fill_mode_override_keys[i],
-                 sizeof(fill_mode_override_keys[i]),
-                 "OverrideAirspaceClassFillMode%u", unsigned(cls));
-
-    StringFormat(fill_mode_labels[i], sizeof(fill_mode_labels[i]),
-                 "%s fill mode",
-                 AirspaceFormatter::GetClass(cls));
-
-    catalog[catalog_index] =
-      PageSettingCatalog::CatalogEnum(
-        id, fill_mode_labels[i],
-        N_("Defines how the airspace is filled with the configured color."),
-        fill_mode_override_keys[i], {},
-        {.airspace = AirspaceBundleField::CLASS_FILL_MODE},
-        ProfileWireFormat::UINT8_ENUM,
-        AirspaceClassColorProfile::LoadFillMode(cls),
-        airspace_class_fill_mode_choices,
-        PageSettingFilterCatalog::SECTION_COLOURS);
-  }
-
-  InitFilterDialogOrder();
+  InitClassDialogOrder();
   catalog_ready = true;
 }
 
@@ -530,20 +548,95 @@ using BaseImpl = PageSettingModuleImpl::Module<
   PageSettingAirspaceStart, FieldFromDescriptor,
   GetBundleField, SetBundleField, ReadLive, ApplyLive>;
 
+struct ClassStyleOps {
+  bool (*is_id)(PageSettingId) noexcept;
+  AirspaceClass (*class_from_id)(PageSettingId) noexcept;
+  int (*get_bundle)(const Bundle &, AirspaceClass) noexcept;
+  void (*set_bundle)(Bundle &, AirspaceClass, int) noexcept;
+  int (*load_global)(AirspaceClass) noexcept;
+  void (*save_global)(AirspaceClass, int) noexcept;
+  bool color_packed;
+};
+
+[[nodiscard]]
+int
+LoadClassFilter(AirspaceClass cls) noexcept
+{
+  return AirspaceClassFilterProfile::Load(cls);
+}
+
+void
+SaveClassFilter(AirspaceClass cls, int value) noexcept
+{
+  AirspaceClassFilterProfile::Save(cls, value);
+}
+
+static constexpr ClassStyleOps class_style_ops[] = {
+  {
+    IsClassFilter, ClassFromFilterId,
+    GetClassFilterValue, SetClassFilterValue,
+    LoadClassFilter, SaveClassFilter,
+    false,
+  },
+  {
+    IsClassFillColor, ClassFromFillColorId,
+    GetClassFillColorValue, SetClassFillColorValue,
+    AirspaceClassColorProfile::LoadFill,
+    AirspaceClassColorProfile::SaveFill,
+    true,
+  },
+  {
+    IsClassBorderColor, ClassFromBorderColorId,
+    GetClassBorderColorValue, SetClassBorderColorValue,
+    AirspaceClassColorProfile::LoadBorder,
+    AirspaceClassColorProfile::SaveBorder,
+    true,
+  },
+  {
+    IsClassBorderWidth, ClassFromBorderWidthId,
+    GetClassBorderWidthValue, SetClassBorderWidthValue,
+    AirspaceClassColorProfile::LoadBorderWidth,
+    AirspaceClassColorProfile::SaveBorderWidth,
+    false,
+  },
+  {
+    IsClassFillMode, ClassFromFillModeId,
+    GetClassFillModeValue, SetClassFillModeValue,
+    AirspaceClassColorProfile::LoadFillMode,
+    AirspaceClassColorProfile::SaveFillMode,
+    false,
+  },
+};
+
+[[nodiscard]]
+const ClassStyleOps *
+FindClassStyleOps(PageSettingId id) noexcept
+{
+  for (const ClassStyleOps &ops : class_style_ops)
+    if (ops.is_id(id))
+      return &ops;
+  return nullptr;
+}
+
+[[nodiscard]]
+bool
+ValidateClassStyleValue(PageSettingId id, int value,
+                        bool color_packed) noexcept
+{
+  if (color_packed)
+    return AirspaceClassColorProfile::IsValid(value);
+
+  EnsureCatalog();
+  return PageSettingCatalog::IsValidValue(
+    catalog[unsigned(id) - PageSettingAirspaceStart], value);
+}
+
 [[nodiscard]]
 int
 GetValueImpl(const Bundle &bundle, PageSettingId id) noexcept
 {
-  if (IsClassFilter(id))
-    return GetClassFilterValue(bundle, ClassFromFilterId(id));
-  if (IsClassFillColor(id))
-    return GetClassFillColorValue(bundle, ClassFromFillColorId(id));
-  if (IsClassBorderColor(id))
-    return GetClassBorderColorValue(bundle, ClassFromBorderColorId(id));
-  if (IsClassBorderWidth(id))
-    return GetClassBorderWidthValue(bundle, ClassFromBorderWidthId(id));
-  if (IsClassFillMode(id))
-    return GetClassFillModeValue(bundle, ClassFromFillModeId(id));
+  if (const ClassStyleOps *ops = FindClassStyleOps(id); ops != nullptr)
+    return ops->get_bundle(bundle, ops->class_from_id(id));
 
   return BaseImpl::GetValue(bundle, id);
 }
@@ -551,34 +644,10 @@ GetValueImpl(const Bundle &bundle, PageSettingId id) noexcept
 void
 SetValueImpl(Bundle &bundle, PageSettingId id, int value) noexcept
 {
-  if (IsClassFillColor(id) || IsClassBorderColor(id)) {
-    if (!AirspaceClassColorProfile::IsValid(value))
+  if (const ClassStyleOps *ops = FindClassStyleOps(id); ops != nullptr) {
+    if (!ValidateClassStyleValue(id, value, ops->color_packed))
       return;
-
-    if (IsClassFillColor(id))
-      SetClassFillColorValue(bundle, ClassFromFillColorId(id), value);
-    else
-      SetClassBorderColorValue(bundle, ClassFromBorderColorId(id), value);
-    return;
-  }
-
-  EnsureCatalog();
-  if (!PageSettingCatalog::IsValidValue(
-        catalog[unsigned(id) - PageSettingAirspaceStart], value))
-    return;
-
-  if (IsClassFilter(id)) {
-    SetClassFilterValue(bundle, ClassFromFilterId(id), value);
-    return;
-  }
-
-  if (IsClassBorderWidth(id)) {
-    SetClassBorderWidthValue(bundle, ClassFromBorderWidthId(id), value);
-    return;
-  }
-
-  if (IsClassFillMode(id)) {
-    SetClassFillModeValue(bundle, ClassFromFillModeId(id), value);
+    ops->set_bundle(bundle, ops->class_from_id(id), value);
     return;
   }
 
@@ -589,16 +658,8 @@ SetValueImpl(Bundle &bundle, PageSettingId id, int value) noexcept
 int
 LoadGlobalImpl(PageSettingId id) noexcept
 {
-  if (IsClassFilter(id))
-    return AirspaceClassFilterProfile::Load(ClassFromFilterId(id));
-  if (IsClassFillColor(id))
-    return AirspaceClassColorProfile::LoadFill(ClassFromFillColorId(id));
-  if (IsClassBorderColor(id))
-    return AirspaceClassColorProfile::LoadBorder(ClassFromBorderColorId(id));
-  if (IsClassBorderWidth(id))
-    return AirspaceClassColorProfile::LoadBorderWidth(ClassFromBorderWidthId(id));
-  if (IsClassFillMode(id))
-    return AirspaceClassColorProfile::LoadFillMode(ClassFromFillModeId(id));
+  if (const ClassStyleOps *ops = FindClassStyleOps(id); ops != nullptr)
+    return ops->load_global(ops->class_from_id(id));
 
   EnsureCatalog();
   return PageSettingProfile::Load(
@@ -608,14 +669,10 @@ LoadGlobalImpl(PageSettingId id) noexcept
 void
 SaveGlobalImpl(PageSettingId id, int value) noexcept
 {
-  if (IsClassFillColor(id) || IsClassBorderColor(id)) {
-    if (!AirspaceClassColorProfile::IsValid(value))
+  if (const ClassStyleOps *ops = FindClassStyleOps(id); ops != nullptr) {
+    if (!ValidateClassStyleValue(id, value, ops->color_packed))
       return;
-
-    if (IsClassFillColor(id))
-      AirspaceClassColorProfile::SaveFill(ClassFromFillColorId(id), value);
-    else
-      AirspaceClassColorProfile::SaveBorder(ClassFromBorderColorId(id), value);
+    ops->save_global(ops->class_from_id(id), value);
     return;
   }
 
@@ -623,23 +680,6 @@ SaveGlobalImpl(PageSettingId id, int value) noexcept
   if (!PageSettingCatalog::IsValidValue(
         catalog[unsigned(id) - PageSettingAirspaceStart], value))
     return;
-
-  if (IsClassFilter(id)) {
-    AirspaceClassFilterProfile::Save(ClassFromFilterId(id), value);
-    return;
-  }
-
-  if (IsClassBorderWidth(id)) {
-    AirspaceClassColorProfile::SaveBorderWidth(ClassFromBorderWidthId(id),
-                                               value);
-    return;
-  }
-
-  if (IsClassFillMode(id)) {
-    AirspaceClassColorProfile::SaveFillMode(ClassFromFillModeId(id), value);
-    return;
-  }
-
   PageSettingProfile::Save(
     catalog[unsigned(id) - PageSettingAirspaceStart], value);
 }
@@ -661,11 +701,11 @@ using Dyn = PageSettingModuleImpl::DynamicModule<
 } // namespace
 
 PageSettingId
-FilterDialogRowId(unsigned row) noexcept
+ClassDialogRowId(unsigned row) noexcept
 {
-  assert(row < FilterDialogRowCount());
+  assert(row < ClassDialogRowCount());
   EnsureCatalog();
-  return filter_dialog_order[row];
+  return class_dialog_order[row];
 }
 
 PAGE_SETTING_DYNAMIC_MODULE_FORWARD_API(Dyn)

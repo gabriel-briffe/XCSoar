@@ -10,10 +10,14 @@
 #include "InfoBoxes/InfoBoxSettings.hpp"
 #include "util/NumberParser.hxx"
 #include "util/StaticString.hxx"
+#include "util/StringCompare.hxx"
 #include "util/StringFormat.hpp"
 
 #include <stdio.h>
 #include <string.h>
+
+#include <string>
+#include <vector>
 
 /**
  * Old enum moved from PageSettings.
@@ -125,28 +129,50 @@ Load(const ProfileMap &map, PageLayout &_pl, const unsigned page)
   _pl = pl;
 }
 
+static const PageSettingDescriptor *
+FindOverrideDescriptor(const char *override_key) noexcept
+{
+  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
+    const auto &desc = PageSettingRegistry::Get(i);
+    if (StringIsEqual(desc.override_key, override_key))
+      return &desc;
+  }
+
+  return nullptr;
+}
+
 static void
 LoadOverrides(const ProfileMap &map, PageSettingOverrides &overrides,
               const unsigned page)
 {
   overrides.Clear();
 
-  char profileKey[64];
-  int prefixLen = StringFormat(profileKey, sizeof(profileKey), "Page%u", page);
-  if (prefixLen <= 0 || (size_t)prefixLen >= sizeof(profileKey))
+  char prefix[32];
+  int prefixLen = StringFormat(prefix, sizeof(prefix), "Page%u", page);
+  if (prefixLen <= 0 || (size_t)prefixLen >= sizeof(prefix))
     return;
 
-  for (unsigned i = 0; i < PageSettingRegistry::Count(); ++i) {
-    const auto &desc = PageSettingRegistry::Get(i);
-    strcpy(profileKey + prefixLen, desc.override_key);
+  for (const auto &item : map) {
+    const char *key = item.first.c_str();
+    if (!StringStartsWith(key, prefix))
+      continue;
+
+    const char *suffix = key + prefixLen;
+    if (!StringStartsWith(suffix, "Override"))
+      continue;
+
+    const PageSettingDescriptor *desc = FindOverrideDescriptor(suffix);
+    if (desc == nullptr)
+      continue;
+
     int value;
-    if (!map.Get(profileKey, value))
+    if (!map.Get(key, value))
       continue;
 
-    if (!PageSettingRegistry::IsValidValue(desc, value))
+    if (!PageSettingRegistry::IsValidValue(*desc, value))
       continue;
 
-    overrides.Add(desc.id, value);
+    overrides.Add(desc->id, value);
   }
 }
 
@@ -228,13 +254,36 @@ SaveOverrides(ProfileMap &map, const PageSettingOverrides &overrides,
   if (prefixLen <= 0 || (size_t)prefixLen >= sizeof(profileKey))
     return;
 
-  for (unsigned r = 0; r < PageSettingRegistry::Count(); ++r) {
-    const auto &desc = PageSettingRegistry::Get(r);
+  std::vector<std::string> stale;
+  for (const auto &item : map) {
+    const char *key = item.first.c_str();
+    if (!StringStartsWith(key, std::string_view{profileKey, size_t(prefixLen)}))
+      continue;
+
+    const char *suffix = key + prefixLen;
+    if (!StringStartsWith(suffix, "Override"))
+      continue;
+
+    bool keep = false;
+    for (unsigned j = 0; j < overrides.n_items; ++j) {
+      const auto &desc = PageSettingRegistry::Get(overrides.items[j].id);
+      if (StringIsEqual(desc.override_key, suffix)) {
+        keep = true;
+        break;
+      }
+    }
+
+    if (!keep)
+      stale.emplace_back(key);
+  }
+
+  for (const std::string &key : stale)
+    map.Remove(key);
+
+  for (unsigned j = 0; j < overrides.n_items; ++j) {
+    const auto &desc = PageSettingRegistry::Get(overrides.items[j].id);
     strcpy(profileKey + prefixLen, desc.override_key);
-    if (const int *value = overrides.FindValue(desc.id); value != nullptr)
-      map.Set(profileKey, *value);
-    else
-      map.Remove(profileKey);
+    map.Set(profileKey, overrides.items[j].value);
   }
 }
 
