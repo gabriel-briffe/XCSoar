@@ -245,7 +245,7 @@ RemoveColorOverrides(PageSettingOverrides &overrides,
                      AirspaceClass cls) noexcept;
 
 /**
- * Number of rows shown in the Pages custom-settings list (class colour
+ * Number of rows shown in the Pages distinct-settings list (class colour
  * / style ids collapse to one row per class).
  */
 [[nodiscard]]

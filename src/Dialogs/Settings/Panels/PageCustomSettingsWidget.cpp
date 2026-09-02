@@ -654,7 +654,7 @@ ShowPageCustomSettingsDialog(PageSettingOverrides &overrides) noexcept
 {
   const DialogLook &look = UIGlobals::GetDialogLook();
   WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
-                      look, _("Custom settings"));
+                      look, _("Distinct settings"));
 
   auto list = std::make_unique<PageCustomSettingsWidget>(overrides);
   auto &widget = *list;

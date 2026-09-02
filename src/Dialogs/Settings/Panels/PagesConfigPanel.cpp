@@ -511,12 +511,12 @@ PageLayoutEditWidget::Prepare([[maybe_unused]] ContainerWindow &parent, [[maybe_
   FillOverlayDetailControl();
   UpdateOverlayControls();
 
-  AddButton(_("Custom settings"), [this](){
+  AddButton(_("Distinct settings"), [this](){
     OnCustomSettingsClicked();
   });
   UpdateCustomSettingsButton();
 
-  AddButton(_("Page-only commands"), [this](){
+  AddButton(_("Distinct commands"), [this](){
     OnPageOnlyCommandsClicked();
   });
   UpdatePageOnlyCommandsButton();
@@ -564,9 +564,9 @@ PageLayoutEditWidget::UpdateCustomSettingsButton() noexcept
     ? AirspaceDisplaySetting::CountVisibleCustomRows(*overrides)
     : 0;
   if (n == 0)
-    caption = _("Custom settings");
+    caption = _("Distinct settings");
   else
-    caption.Format("%s (%u)", _("Custom settings"), n);
+    caption.Format("%s (%u)", _("Distinct settings"), n);
 
   auto &button = (Button &)GetRow(CUSTOM_SETTINGS);
   button.SetCaption(caption);
@@ -590,9 +590,9 @@ PageLayoutEditWidget::UpdatePageOnlyCommandsButton() noexcept
     ? page_only_commands->n_items
     : 0;
   if (n == 0)
-    caption = _("Page-only commands");
+    caption = _("Distinct commands");
   else
-    caption.Format("%s (%u)", _("Page-only commands"), n);
+    caption.Format("%s (%u)", _("Distinct commands"), n);
 
   auto &button = (Button &)GetRow(PAGE_ONLY_COMMANDS);
   button.SetCaption(caption);

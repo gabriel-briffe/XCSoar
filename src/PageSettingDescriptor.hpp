@@ -188,7 +188,7 @@ struct PageSettingDescriptor {
   const char *int_format = nullptr;
 
   /**
-   * Optional section for the Pages → Custom settings Add picker (N_()).
+   * Optional section for the Pages → Distinct settings Add picker (N_()).
    * nullptr continues the previous section (no header).  When the section
    * string changes, the picker inserts a non-selectable header.
    */

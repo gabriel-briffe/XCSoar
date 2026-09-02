@@ -53,8 +53,8 @@ static constexpr PageSettingDescriptor base_catalog[] = {
     PageSettingId::AIRSPACE_ENABLE,
     N_("Show airspace"),
     N_("Draw airspace on the map.  This is a temporary map display "
-       "choice and is not stored in the global profile; use page-only "
-       "commands or custom settings to keep it per page."),
+       "choice and is not stored in the global profile; use distinct "
+       "commands or distinct settings to keep it per page."),
     "OverrideAirspaceEnable",
     {},
     {.airspace = AirspaceBundleField::ENABLE}),

@@ -167,7 +167,7 @@ ShowPageOnlyCommandsDialog(PageOnlyCommands &commands) noexcept
 {
   const DialogLook &look = UIGlobals::GetDialogLook();
   WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
-                      look, _("Page-only commands"));
+                      look, _("Distinct commands"));
 
   auto list = std::make_unique<PageOnlyCommandsWidget>(commands);
   auto &widget = *list;
