@@ -12,7 +12,7 @@
 /**
  * Airspace settings shared by the Airspace config panel and per-page
  * overrides (display, warnings, and per-class filters).  Class colours
- * remain outside this catalog.
+ * remain outside this catalog (Colours dialog only).
  */
 namespace AirspaceDisplaySetting {
 

@@ -3,7 +3,7 @@
 
 #include "WaypointDisplayConfigPanel.hpp"
 #include "Waypoints/WaypointsDisplaySetting.hpp"
-#include "DisplaySettingConfigPanel.hpp"
+#include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
 #include "ActionInterface.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Form/DataField/Listener.hpp"
@@ -78,25 +78,9 @@ private:
 void
 WaypointDisplayConfigPanel::SyncBundleFromForm() noexcept
 {
-  for (unsigned i = 0; i < PageSettingWaypointsCount; ++i) {
-    const auto id = PageSettingId(PageSettingWaypointsStart + i);
-    const auto &desc = WaypointsDisplaySetting::Get(id);
-
-    switch (desc.type) {
-    case PageSettingType::BOOL:
-      WaypointsDisplaySetting::SetValue(bundle, id,
-                                        GetValueBoolean(i) ? 1 : 0);
-      break;
-
-    case PageSettingType::ENUM:
-      WaypointsDisplaySetting::SetValue(bundle, id, int(GetValueEnum(i)));
-      break;
-
-    case PageSettingType::INTEGER:
-      WaypointsDisplaySetting::SetValue(bundle, id, GetValueInteger(i));
-      break;
-    }
-  }
+  DisplaySettingConfigPanel::SyncBundleFromForm(
+    *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsCount,
+    WaypointsDisplaySetting::Get, WaypointsDisplaySetting::SetValue);
 }
 
 void
@@ -137,18 +121,11 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
 
   WaypointsDisplaySetting::ReadLive(bundle);
 
-  for (unsigned i = 0; i < PageSettingWaypointsCount; ++i) {
-    const auto id = PageSettingId(PageSettingWaypointsStart + i);
-    const auto &desc = WaypointsDisplaySetting::Get(id);
-    DataFieldListener *listener =
-      i == unsigned(ControlIndex::DETAILED_LANDABLES) ? this : nullptr;
-
-    DisplaySettingConfigPanel::AddRow(
-      *this, desc, WaypointsDisplaySetting::GetValue(bundle, id), listener);
-
-    if (IsExpertRow(i))
-      SetExpertRow(i);
-  }
+  DisplaySettingConfigPanel::AddCatalogRows(
+    *this, bundle, PageSettingWaypointsStart, PageSettingWaypointsCount,
+    WaypointsDisplaySetting::Get, WaypointsDisplaySetting::GetValue,
+    IsExpertRow, this, nullptr,
+    unsigned(ControlIndex::DETAILED_LANDABLES));
 
   SyncBundleFromForm();
   initial_bundle = bundle;

@@ -3,7 +3,7 @@
 
 #include "ElementsConfigPanel.hpp"
 #include "Elements/ElementsDisplaySetting.hpp"
-#include "DisplaySettingConfigPanel.hpp"
+#include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
 #include "ActionInterface.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Form/DataField/Listener.hpp"
@@ -82,25 +82,9 @@ private:
 void
 ElementsConfigPanel::SyncBundleFromForm() noexcept
 {
-  for (unsigned i = 0; i < PageSettingElementsCount; ++i) {
-    const auto id = PageSettingId(PageSettingElementsStart + i);
-    const auto &desc = ElementsDisplaySetting::Get(id);
-
-    switch (desc.type) {
-    case PageSettingType::BOOL:
-      ElementsDisplaySetting::SetValue(bundle, id,
-                                       GetValueBoolean(i) ? 1 : 0);
-      break;
-
-    case PageSettingType::ENUM:
-      ElementsDisplaySetting::SetValue(bundle, id, int(GetValueEnum(i)));
-      break;
-
-    case PageSettingType::INTEGER:
-      ElementsDisplaySetting::SetValue(bundle, id, GetValueInteger(i));
-      break;
-    }
-  }
+  DisplaySettingConfigPanel::SyncBundleFromForm(
+    *this, bundle, PageSettingElementsStart, PageSettingElementsCount,
+    ElementsDisplaySetting::Get, ElementsDisplaySetting::SetValue);
 }
 
 void
@@ -135,18 +119,10 @@ ElementsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
 {
   ElementsDisplaySetting::ReadLive(bundle);
 
-  for (unsigned i = 0; i < PageSettingElementsCount; ++i) {
-    const auto id = PageSettingId(PageSettingElementsStart + i);
-    const auto &desc = ElementsDisplaySetting::Get(id);
-    DataFieldListener *listener =
-      i == unsigned(ControlIndex::TRAIL_LENGTH) ? this : nullptr;
-
-    DisplaySettingConfigPanel::AddRow(
-      *this, desc, ElementsDisplaySetting::GetValue(bundle, id), listener);
-
-    if (IsExpertRow(i))
-      SetExpertRow(i);
-  }
+  DisplaySettingConfigPanel::AddCatalogRows(
+    *this, bundle, PageSettingElementsStart, PageSettingElementsCount,
+    ElementsDisplaySetting::Get, ElementsDisplaySetting::GetValue,
+    IsExpertRow, this, nullptr, unsigned(ControlIndex::TRAIL_LENGTH));
 
   SyncBundleFromForm();
   initial_bundle = bundle;

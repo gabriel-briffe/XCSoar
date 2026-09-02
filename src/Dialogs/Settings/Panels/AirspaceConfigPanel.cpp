@@ -4,7 +4,7 @@
 #include "AirspaceConfigPanel.hpp"
 #include "Airspace/AirspaceDisplaySetting.hpp"
 #include "ConfigPanel.hpp"
-#include "DisplaySettingConfigPanel.hpp"
+#include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Form/DataField/Boolean.hpp"
 #include "Form/DataField/Listener.hpp"
@@ -42,11 +42,31 @@ static_assert(unsigned(ControlIndex::COUNT) == PageSettingAirspaceBaseCount,
               "Airspace config controls must match base catalog size");
 
 [[nodiscard]]
-PageSettingId
-CatalogIdForControl(unsigned control) noexcept
+bool
+IsExpertRow(unsigned control) noexcept
 {
-  assert(control < PageSettingAirspaceBaseCount);
-  return PageSettingId(PageSettingAirspaceStart + control);
+  switch (ControlIndex(control)) {
+  case ControlIndex::LABEL_VISIBILITY:
+  case ControlIndex::SHOW_NOTAM_LABELS:
+  case ControlIndex::WARNING_DIALOG:
+  case ControlIndex::WARNING_TIME:
+  case ControlIndex::REPETITIVE_SOUND:
+  case ControlIndex::ACKNOWLEDGE_TIME:
+  case ControlIndex::BLACK_OUTLINE:
+  case ControlIndex::FILL_MODE:
+  case ControlIndex::TRANSPARENCY:
+    return true;
+  default:
+    return false;
+  }
+}
+
+[[nodiscard]]
+bool
+NeedsListener(unsigned control) noexcept
+{
+  return control == unsigned(ControlIndex::DISPLAY) ||
+         control == unsigned(ControlIndex::WARNINGS);
 }
 
 } // namespace
@@ -79,27 +99,9 @@ private:
 void
 AirspaceConfigPanel::SyncCatalogFromForm() noexcept
 {
-  for (unsigned control = 0; control < PageSettingAirspaceBaseCount; ++control) {
-    const auto id = CatalogIdForControl(control);
-    const auto &desc = AirspaceDisplaySetting::Get(id);
-
-    switch (desc.type) {
-    case PageSettingType::BOOL:
-      AirspaceDisplaySetting::SetValue(bundle, id,
-                                       GetValueBoolean(control) ? 1 : 0);
-      break;
-
-    case PageSettingType::ENUM:
-      AirspaceDisplaySetting::SetValue(bundle, id,
-                                       int(GetValueEnum(control)));
-      break;
-
-    case PageSettingType::INTEGER:
-      AirspaceDisplaySetting::SetValue(bundle, id,
-                                       GetValueInteger(control));
-      break;
-    }
-  }
+  DisplaySettingConfigPanel::SyncBundleFromForm(
+    *this, bundle, PageSettingAirspaceStart, PageSettingAirspaceBaseCount,
+    AirspaceDisplaySetting::Get, AirspaceDisplaySetting::SetValue);
 }
 
 void
@@ -165,45 +167,10 @@ AirspaceConfigPanel::Prepare(ContainerWindow &parent,
 
   AirspaceDisplaySetting::ReadLive(bundle);
 
-  auto AddCatalogRow = [this](PageSettingId id,
-                              DataFieldListener *listener = nullptr) {
-    const auto &desc = AirspaceDisplaySetting::Get(id);
-    DisplaySettingConfigPanel::AddRow(
-      *this, desc, AirspaceDisplaySetting::GetValue(bundle, id), listener);
-  };
-
-  AddCatalogRow(PageSettingId::AIRSPACE_DISPLAY, this);
-  AddCatalogRow(PageSettingId::AIRSPACE_LABEL_VISIBILITY);
-  SetExpertRow(unsigned(ControlIndex::LABEL_VISIBILITY));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_SHOW_NOTAM_LABELS);
-  SetExpertRow(unsigned(ControlIndex::SHOW_NOTAM_LABELS));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_CLIP_ALTITUDE);
-  AddCatalogRow(PageSettingId::AIRSPACE_MARGIN);
-
-  AddCatalogRow(PageSettingId::AIRSPACE_WARNINGS, this);
-
-  AddCatalogRow(PageSettingId::AIRSPACE_WARNING_DIALOG);
-  SetExpertRow(unsigned(ControlIndex::WARNING_DIALOG));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_WARNING_TIME);
-  SetExpertRow(unsigned(ControlIndex::WARNING_TIME));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_REPETITIVE_SOUND);
-  SetExpertRow(unsigned(ControlIndex::REPETITIVE_SOUND));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_ACKNOWLEDGE_TIME);
-  SetExpertRow(unsigned(ControlIndex::ACKNOWLEDGE_TIME));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_BLACK_OUTLINE);
-  SetExpertRow(unsigned(ControlIndex::BLACK_OUTLINE));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_FILL_MODE);
-  SetExpertRow(unsigned(ControlIndex::FILL_MODE));
-
-  AddCatalogRow(PageSettingId::AIRSPACE_TRANSPARENCY);
-  SetExpertRow(unsigned(ControlIndex::TRANSPARENCY));
+  DisplaySettingConfigPanel::AddCatalogRows(
+    *this, bundle, PageSettingAirspaceStart, PageSettingAirspaceBaseCount,
+    AirspaceDisplaySetting::Get, AirspaceDisplaySetting::GetValue,
+    IsExpertRow, this, NeedsListener);
 
   SyncCatalogFromForm();
   initial_bundle = bundle;

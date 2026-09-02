@@ -3,7 +3,7 @@
 
 #include "OrientationConfigPanel.hpp"
 #include "Orientation/OrientationDisplaySetting.hpp"
-#include "DisplaySettingConfigPanel.hpp"
+#include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
 #include "Profile/Keys.hpp"
 #include "ActionInterface.hpp"
 #include "Form/DataField/Listener.hpp"
@@ -48,18 +48,10 @@ private:
 void
 OrientationConfigPanel::SyncBundleFromForm() noexcept
 {
-  using Id = PageSettingId;
-
-  OrientationDisplaySetting::SetValue(bundle, Id::CRUISE_ORIENTATION,
-                                      int(GetValueEnum(OrientationCruise)));
-  OrientationDisplaySetting::SetValue(bundle, Id::CIRCLING_ORIENTATION,
-                                      int(GetValueEnum(OrientationCircling)));
-  OrientationDisplaySetting::SetValue(bundle, Id::CIRCLING_ZOOM,
-                                      GetValueBoolean(CirclingZoom) ? 1 : 0);
-  OrientationDisplaySetting::SetValue(bundle, Id::MAP_SHIFT_BIAS,
-                                      int(GetValueEnum(MAP_SHIFT_BIAS)));
-  OrientationDisplaySetting::SetValue(bundle, Id::GLIDER_SCREEN_POSITION,
-                                      GetValueInteger(GliderScreenPosition));
+  DisplaySettingConfigPanel::SyncBundleFromForm(
+    *this, bundle, PageSettingOrientationStart,
+    PageSettingOrientationCount,
+    OrientationDisplaySetting::Get, OrientationDisplaySetting::SetValue);
 }
 
 void

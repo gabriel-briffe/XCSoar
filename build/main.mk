@@ -358,7 +358,7 @@ XCSOAR_SOURCES := \
 	$(SRC)/PageSettingCatalog.cpp \
 	$(SRC)/PageSettingModule.cpp \
 	$(SRC)/PageSettingProfile.cpp \
-	$(SRC)/DisplaySettingConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/DisplaySettingConfigPanel.cpp \
 	$(SRC)/Orientation/OrientationDisplaySetting.cpp \
 	$(SRC)/Elements/ElementsDisplaySetting.cpp \
 	$(SRC)/Waypoints/WaypointsDisplaySetting.cpp \

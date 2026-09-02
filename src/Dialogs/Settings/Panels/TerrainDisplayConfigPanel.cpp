@@ -2,7 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "TerrainDisplayConfigPanel.hpp"
-#include "DisplaySettingConfigPanel.hpp"
+#include "Dialogs/Settings/DisplaySettingConfigPanel.hpp"
 #include "Terrain/TerrainDisplaySetting.hpp"
 #include "Form/DataField/Listener.hpp"
 #include "Form/DataField/Enum.hpp"
@@ -104,22 +104,9 @@ private:
 void
 TerrainDisplayConfigPanel::SyncBundleFromForm() noexcept
 {
-  using Id = PageSettingId;
-
-  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_ENABLE,
-                                  GetValueBoolean(EnableTerrain) ? 1 : 0);
-  TerrainDisplaySetting::SetValue(bundle, Id::TOPOGRAPHY_ENABLE,
-                                  GetValueBoolean(EnableTopography) ? 1 : 0);
-  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_COLORS,
-                                  int(GetValueEnum(TerrainColors)));
-  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_SLOPE_SHADING,
-                                  int(GetValueEnum(TerrainSlopeShading)));
-  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_CONTRAST,
-                                  GetValueInteger(TerrainContrast));
-  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_BRIGHTNESS,
-                                  GetValueInteger(TerrainBrightness));
-  TerrainDisplaySetting::SetValue(bundle, Id::TERRAIN_CONTOURS,
-                                  int(GetValueEnum(TerrainContours)));
+  DisplaySettingConfigPanel::SyncBundleFromForm(
+    *this, bundle, 0, PageSettingTerrainCount,
+    TerrainDisplaySetting::Get, TerrainDisplaySetting::SetValue);
 }
 
 void

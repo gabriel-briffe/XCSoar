@@ -6,7 +6,6 @@
 #include "Form/DataField/Listener.hpp"
 #include "Language/Language.hpp"
 #include "PageSettingCatalog.hpp"
-#include "Widget/RowFormWidget.hpp"
 
 namespace DisplaySettingConfigPanel {
 
