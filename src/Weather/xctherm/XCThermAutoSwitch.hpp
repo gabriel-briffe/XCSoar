@@ -15,7 +15,7 @@
  * Altitude: switches layer when GPS/baro altitude crosses the midpoint
  * between two loaded layers, with a 20-second hysteresis.
  *
- * Time: switches forecast time at :45 of each hour.
+ * Time: switches forecast time at :30 of each hour.
  *
  * Manual override: stepping manually pauses auto for that axis.
  * Auto resumes when the next threshold is crossed, or immediately

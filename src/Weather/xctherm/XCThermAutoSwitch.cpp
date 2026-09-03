@@ -232,9 +232,9 @@ XCThermAutoSwitch::UpdateAltitude(double altitude, TimeStamp now) noexcept
 void
 XCThermAutoSwitch::UpdateTime(unsigned utc_hour, unsigned utc_minute) noexcept
 {
-  /* Switch at :45 — use the NEXT hour's forecast */
+  /* Switch at :30 — use the NEXT hour's forecast */
   unsigned target_hour = utc_hour;
-  if (utc_minute >= 45)
+  if (utc_minute >= 30)
     target_hour = (utc_hour + 1) % 24;
 
   /* If manual override, check if a new hour boundary was crossed */

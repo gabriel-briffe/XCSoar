@@ -25,7 +25,7 @@ struct UtcTimeParts {
 UtcTimeParts GetUtcTimeParts() noexcept;
 
 /**
- * Forecast UTC hour selected by auto-time mode (:45 switches to next hour).
+ * Forecast UTC hour selected by auto-time mode (:30 switches to next hour).
  */
 [[gnu::const]]
 unsigned PickAutoTargetUtcHour(unsigned utc_h, unsigned utc_min) noexcept;

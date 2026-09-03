@@ -27,7 +27,7 @@ GetUtcTimeParts() noexcept
 unsigned
 PickAutoTargetUtcHour(unsigned utc_h, unsigned utc_min) noexcept
 {
-  return (utc_min >= 45) ? (utc_h + 1) % 24 : utc_h;
+  return (utc_min >= 30) ? (utc_h + 1) % 24 : utc_h;
 }
 
 int

@@ -81,7 +81,7 @@ bool ApplyCachedLayerOverlay(unsigned layer_index,
                              unsigned utc_hour) noexcept;
 
 /**
- * Apply the best cached hour for @p layer_index (auto-time :45 rule).
+ * Apply the best cached hour for @p layer_index (auto-time :30 rule).
  */
 bool ApplyCachedLayerOverlayAuto(unsigned layer_index) noexcept;
 
