@@ -404,6 +404,13 @@ LookupMacro(std::string_view name, bool &invalid) noexcept
     return CommonInterface::main_window->GetFullScreen() ? _("Off") : _("On");
   } else if (name == "ZoomAutoToggleActionName") {
     return GetMapSettings().auto_zoom_enabled ? C_("Status", "Manual") : C_("Status", "Auto");
+  } else if (name == "OrientationToggleActionName") {
+    const auto orientation = GetUIState().display_mode == DisplayMode::CIRCLING
+      ? GetMapSettings().circling_orientation
+      : GetMapSettings().cruise_orientation;
+    return orientation == MapOrientation::NORTH_UP
+      ? _("Track up")
+      : _("North up");
   } else if (name == "TopologyToggleActionName" ||
              name == "TopographyToggleActionName") {
     return GetMapSettings().topography_enabled ? _("Hide") : _("Show");

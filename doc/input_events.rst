@@ -388,6 +388,10 @@ Event list
    - Sets the map orientation for cruise mode. Possible arguments:
      ``northup``, ``trackup``, ``headingup``, ``targetup``,
      ``windup``.
+ * - ``OrientationToggle``
+   - Toggles orientation between ``northup`` and ``trackup`` for
+     both cruise and circling modes. With argument ``show``, displays
+     the currently active orientation.
  * - ``Page``
    - Controls page navigation. Possible arguments: ``restore``
      (restore the previously active page).

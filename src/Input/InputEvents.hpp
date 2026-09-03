@@ -226,6 +226,7 @@ void eventExchangeFrequencies(const char *misc);
 void eventUploadIGCFile(const char *misc);
 void eventOrientationCruise(const char *misc);
 void eventOrientationCircling(const char *misc);
+void eventOrientationToggle(const char *misc);
 void eventDistanceRings(const char *misc);
 // -------
 

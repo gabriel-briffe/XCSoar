@@ -849,6 +849,14 @@ event=AirspaceLabels toggle
 label=Airspace Labels\n$(AirspaceLabelsToggleActionName)$(CheckAirspace)
 location=4
 
+mode=Display2
+type=key
+data=4
+event=OrientationToggle show
+event=OrientationToggle toggle
+label=Orientation\n$(OrientationToggleActionName)
+location=3
+
 # -------------
 # mode=Config1
 # -------------
@@ -1732,6 +1740,14 @@ event=WifiList
 event=Mode default
 label=WiFi List
 location=47
+
+mode=RemoteStick
+type=key
+data=0
+event=OrientationToggle show
+event=OrientationToggle toggle
+label=Orientation\n$(OrientationToggleActionName)
+location=49
 
 # -------------
 # Define gesture to open Quickmenu without keyboard or remote

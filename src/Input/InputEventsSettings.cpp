@@ -11,6 +11,7 @@
 #include "Profile/Keys.hpp"
 #include "Profile/Settings.hpp"
 #include "Profile/Current.hpp"
+#include "UIState.hpp"
 #include "util/Macros.hpp"
 #include "util/EnumCast.hpp"
 #include "Units/Units.hpp"
@@ -501,6 +502,34 @@ InputEvents::eventOrientationCircling(const char *misc)
   } else if (StringIsEqual(misc, "windup")) {
     settings_map.circling_orientation = MapOrientation::WIND_UP;
   }
+
+  ActionInterface::SendMapSettings(true);
+}
+
+void
+InputEvents::eventOrientationToggle(const char *misc)
+{
+  MapSettings &settings_map = CommonInterface::SetMapSettings();
+
+  auto orientation = CommonInterface::GetUIState().display_mode ==
+      DisplayMode::CIRCLING
+    ? settings_map.circling_orientation
+    : settings_map.cruise_orientation;
+
+  if (StringIsEqual(misc, "show")) {
+    Message::AddMessage(_("Orientation"),
+                        orientation == MapOrientation::NORTH_UP
+                        ? _("North up")
+                        : _("Track up"));
+    return;
+  }
+
+  const MapOrientation next_orientation = orientation == MapOrientation::NORTH_UP
+    ? MapOrientation::TRACK_UP
+    : MapOrientation::NORTH_UP;
+
+  settings_map.cruise_orientation = next_orientation;
+  settings_map.circling_orientation = next_orientation;
 
   ActionInterface::SendMapSettings(true);
 }
