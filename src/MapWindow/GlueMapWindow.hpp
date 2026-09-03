@@ -256,8 +256,8 @@ public:
 
   /**
    * Sets the width at the right edge of the map that is covered by the
-   * overlay buttons, so HUD elements in the top right corner can avoid
-   * them.
+   * top-right overlay buttons (menu, zoom), so HUD elements there can
+   * avoid them.
    */
   void SetTopRightMargin(unsigned margin) noexcept;
 

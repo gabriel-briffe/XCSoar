@@ -99,7 +99,8 @@ MainWindow::GetShowMenuButtonRect(const PixelRect rc) noexcept
 
 /**
  * The width of the overlay button column in the top right corner, or 0
- * if there is none.
+ * if there is none.  The QuickMenu button lives bottom-right and is
+ * not part of this column.
  */
 [[gnu::pure]]
 static unsigned
@@ -107,8 +108,7 @@ GetMapOverlayTopRightWidth(const PixelRect rc) noexcept
 {
   const UISettings &settings = CommonInterface::GetUISettings();
 
-  if (!settings.show_menu_button && !settings.show_quickmenu_button &&
-      !settings.show_zoom_button)
+  if (!settings.show_menu_button && !settings.show_zoom_button)
     return 0;
 
   const PixelRect button_rc = GetMapOverlayButtonRect(rc, rc.top);
@@ -119,12 +119,9 @@ GetMapOverlayTopRightWidth(const PixelRect rc) noexcept
 PixelRect
 MainWindow::GetShowQuickMenuButtonRect(const PixelRect rc) noexcept
 {
-  const UISettings &settings = CommonInterface::GetUISettings();
   const unsigned padding = Layout::GetTextPadding();
-
-  int top = rc.top + int(padding);
-  if (settings.show_menu_button)
-    top = GetShowMenuButtonRect(rc).bottom + int(padding);
+  const unsigned size = std::max(1u, Layout::GetMaximumControlHeight());
+  const int top = rc.bottom - int(padding) - int(size);
 
   return GetMapOverlayButtonRect(rc, top);
 }
@@ -138,9 +135,7 @@ MainWindow::GetShowZoomButtonRect(const PixelRect rc,
   const unsigned padding = Layout::GetTextPadding();
 
   int top = rc.top + int(padding);
-  if (settings.show_quickmenu_button)
-    top = GetShowQuickMenuButtonRect(rc).bottom + int(padding);
-  else if (settings.show_menu_button)
+  if (settings.show_menu_button)
     top = GetShowMenuButtonRect(rc).bottom + int(padding);
 
   if (sign == ShowZoomButton::Sign::ZOOM_OUT) {
@@ -166,19 +161,40 @@ MainWindow::GetPanNorthUpButtonRect(const PixelRect rc) noexcept
                    compass_y - half + int(size));
 }
 
+[[gnu::pure]]
+PixelRect
+MainWindow::GetShowAirspaceToggleButtonRect(const PixelRect rc) noexcept
+{
+  const unsigned padding = Layout::GetTextPadding();
+  const unsigned size = std::max(1u, Layout::GetMaximumControlHeight());
+  const int left = rc.left + int(padding);
+  const int right = left + int(size);
+  const int top = rc.top + int(padding);
+  const int bottom = top + int(size);
+
+  return PixelRect(left, top, right, bottom);
+}
+
+[[gnu::pure]]
+PixelRect
+MainWindow::GetShowPanToggleButtonRect(const PixelRect rc) noexcept
+{
+  const unsigned padding = Layout::GetTextPadding();
+  const unsigned size = std::max(1u, Layout::GetMaximumControlHeight());
+  const int left = rc.left + int(padding);
+  const int right = left + int(size);
+  const int bottom = rc.bottom - int(padding);
+  const int top = bottom - int(size);
+
+  return PixelRect(left, top, right, bottom);
+}
+
 #ifdef ANDROID
 [[gnu::pure]]
 PixelRect
 MainWindow::GetShowRotateButtonRect(const PixelRect rc) noexcept
 {
-  const unsigned padding = Layout::GetTextPadding();
-  const unsigned size = Layout::GetMaximumControlHeight();
-  const int left = rc.left + padding;
-  const int right = left + size;
-  const int top = rc.top + padding;
-  const int bottom = top + size;
-
-  return PixelRect(left, top, right, bottom);
+  return GetShowAirspaceToggleButtonRect(rc);
 }
 #endif
 
@@ -345,8 +361,10 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
   const bool overlay_buttons_active =
     widget == nullptr && map != nullptr &&
     PageActions::AllowMapOverlayButtons();
-  const bool pan_north_up_active =
-    widget == nullptr && map != nullptr && map->IsPanning();
+  /* Invisible hit target over the north arrow: always when the map is
+     the main view (orientation toggle), including pan (force north-up). */
+  const bool compass_button_active =
+    widget == nullptr && map != nullptr;
 
   if (show_menu_button != nullptr) {
     show_menu_button->SetVisible(overlay_buttons_active);
@@ -376,11 +394,27 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
   }
 
   if (show_pan_north_up_button != nullptr) {
-    show_pan_north_up_button->SetVisible(pan_north_up_active);
-    show_pan_north_up_button->SetEnabled(pan_north_up_active);
-    if (pan_north_up_active)
+    show_pan_north_up_button->SetVisible(compass_button_active);
+    show_pan_north_up_button->SetEnabled(compass_button_active);
+    if (compass_button_active)
       show_pan_north_up_button->Move(
         GetPanNorthUpButtonRect(map->GetPosition()));
+  }
+
+  if (show_airspace_toggle_button != nullptr) {
+    show_airspace_toggle_button->SetVisible(overlay_buttons_active);
+    show_airspace_toggle_button->SetEnabled(overlay_buttons_active);
+    if (overlay_buttons_active)
+      show_airspace_toggle_button->Move(
+        GetShowAirspaceToggleButtonRect(map->GetPosition()));
+  }
+
+  if (show_pan_toggle_button != nullptr) {
+    show_pan_toggle_button->SetVisible(compass_button_active);
+    show_pan_toggle_button->SetEnabled(compass_button_active);
+    if (compass_button_active)
+      show_pan_toggle_button->Move(
+        GetShowPanToggleButtonRect(map->GetPosition()));
   }
 
 #ifdef ANDROID
@@ -396,7 +430,7 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
 
   /* Newly created overlay buttons are added after the map; keep the map
      underneath them (same as ReinitialiseLayout()). */
-  if (overlay_buttons_active || pan_north_up_active)
+  if (overlay_buttons_active || compass_button_active)
     map->BringToBottom();
 }
 
@@ -459,6 +493,19 @@ MainWindow::ReinitialiseMapOverlayButtons() noexcept
                                      GetPanNorthUpButtonRect(map_area_rect));
   }
 
+  if (show_airspace_toggle_button == nullptr) {
+    show_airspace_toggle_button = new ShowAirspaceToggleButton();
+    show_airspace_toggle_button->Create(
+      *this, look->dialog.button,
+      GetShowAirspaceToggleButtonRect(map_area_rect));
+  }
+
+  if (show_pan_toggle_button == nullptr) {
+    show_pan_toggle_button = new ShowPanToggleButton();
+    show_pan_toggle_button->Create(*this, look->dialog.button,
+                                   GetShowPanToggleButtonRect(map_area_rect));
+  }
+
   UpdateMapOverlayButtonLayout();
 }
 
@@ -475,6 +522,10 @@ MainWindow::InvalidateMapOverlayButtons() noexcept
     show_zoom_in_button->Invalidate();
   if (show_pan_north_up_button != nullptr)
     show_pan_north_up_button->Invalidate();
+  if (show_airspace_toggle_button != nullptr)
+    show_airspace_toggle_button->Invalidate();
+  if (show_pan_toggle_button != nullptr)
+    show_pan_toggle_button->Invalidate();
 }
 
 MainWindow::MainWindow(UI::Display &display) noexcept
@@ -635,6 +686,10 @@ MainWindow::Deinitialise() noexcept
   show_zoom_in_button = nullptr;
   delete show_pan_north_up_button;
   show_pan_north_up_button = nullptr;
+  delete show_airspace_toggle_button;
+  show_airspace_toggle_button = nullptr;
+  delete show_pan_toggle_button;
+  show_pan_toggle_button = nullptr;
 
 #ifdef ANDROID
   rotate_button_timer.Cancel();

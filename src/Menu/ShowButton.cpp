@@ -137,7 +137,44 @@ ShowPanNorthUpButton::Create(ContainerWindow &parent,
 bool
 ShowPanNorthUpButton::OnClicked() noexcept
 {
-  SetPanNorthUp();
+  if (IsPanning())
+    SetPanNorthUp();
+  else
+    InputEvents::eventOrientationToggle("toggle");
+  return true;
+}
+
+void
+ShowAirspaceToggleButton::Create(ContainerWindow &parent,
+                                 [[maybe_unused]] const ButtonLook &look,
+                                 const PixelRect &rc,
+                                 WindowStyle style) noexcept
+{
+  Button::Create(parent, rc, style,
+                 std::make_unique<MapOverlayInvisibleButtonRenderer>());
+}
+
+bool
+ShowAirspaceToggleButton::OnClicked() noexcept
+{
+  InputEvents::eventAirSpace("toggle");
+  return true;
+}
+
+void
+ShowPanToggleButton::Create(ContainerWindow &parent,
+                            [[maybe_unused]] const ButtonLook &look,
+                            const PixelRect &rc,
+                            WindowStyle style) noexcept
+{
+  Button::Create(parent, rc, style,
+                 std::make_unique<MapOverlayInvisibleButtonRenderer>());
+}
+
+bool
+ShowPanToggleButton::OnClicked() noexcept
+{
+  InputEvents::eventPan("toggle");
   return true;
 }
 

@@ -353,7 +353,7 @@ GlueMapWindow::UpdateScreenAngle() noexcept
     pan_force_north_up = false;
     visible_projection.SetScreenAngle(Angle::Zero());
     OnProjectionModified();
-    compass_visible = false;
+    compass_visible = true;
     return;
   }
 
@@ -405,7 +405,7 @@ GlueMapWindow::UpdateScreenAngle() noexcept
 
   OnProjectionModified();
 
-  compass_visible = orientation != MapOrientation::NORTH_UP;
+  compass_visible = true;
 }
 
 void

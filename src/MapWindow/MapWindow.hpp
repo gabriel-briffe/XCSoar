@@ -165,9 +165,9 @@ protected:
   bool compass_visible = true;
 
   /**
-   * Width at the right edge of the map covered by the overlay buttons
-   * (menu, quick menu, zoom).  HUD items in the top right corner are
-   * moved left by this amount so the buttons do not hide them.
+   * Width at the right edge of the map covered by the top-right overlay
+   * buttons (menu, zoom).  HUD items in the top right corner are moved
+   * left by this amount so the buttons do not hide them.
    */
   unsigned top_right_margin = 0;
 

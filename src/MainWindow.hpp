@@ -51,6 +51,8 @@ class MainWindow : public UI::SingleWindow {
   ShowZoomButton *show_zoom_out_button = nullptr;
   ShowZoomButton *show_zoom_in_button = nullptr;
   ShowPanNorthUpButton *show_pan_north_up_button = nullptr;
+  ShowAirspaceToggleButton *show_airspace_toggle_button = nullptr;
+  ShowPanToggleButton *show_pan_toggle_button = nullptr;
 
 #ifdef ANDROID
   ShowRotateButton *show_rotate_button = nullptr;
@@ -550,6 +552,8 @@ protected:
   PixelRect GetShowZoomButtonRect(const PixelRect rc,
                                   ShowZoomButton::Sign sign) noexcept;
   static PixelRect GetPanNorthUpButtonRect(const PixelRect rc) noexcept;
+  static PixelRect GetShowAirspaceToggleButtonRect(const PixelRect rc) noexcept;
+  static PixelRect GetShowPanToggleButtonRect(const PixelRect rc) noexcept;
 
 #ifdef ANDROID
   static PixelRect GetShowRotateButtonRect(const PixelRect rc) noexcept;

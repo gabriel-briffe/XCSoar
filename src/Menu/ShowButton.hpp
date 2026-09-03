@@ -35,8 +35,33 @@ protected:
   bool OnClicked() noexcept override;
 };
 
-/* pan mode north-up button over the compass (test / placeholder) */
+/* transparent hit target over the north arrow: toggle north/track up,
+ * or force north-up while panning */
 class ShowPanNorthUpButton : public Button {
+public:
+  void Create(ContainerWindow &parent, const ButtonLook &look,
+              const PixelRect &rc,
+              WindowStyle style=WindowStyle()) noexcept;
+
+protected:
+  /* virtual methods from class ButtonWindow */
+  bool OnClicked() noexcept override;
+};
+
+/* transparent hit target top-left: toggle airspace show/hide */
+class ShowAirspaceToggleButton : public Button {
+public:
+  void Create(ContainerWindow &parent, const ButtonLook &look,
+              const PixelRect &rc,
+              WindowStyle style=WindowStyle()) noexcept;
+
+protected:
+  /* virtual methods from class ButtonWindow */
+  bool OnClicked() noexcept override;
+};
+
+/* transparent hit target bottom-left: toggle pan mode */
+class ShowPanToggleButton : public Button {
 public:
   void Create(ContainerWindow &parent, const ButtonLook &look,
               const PixelRect &rc,
