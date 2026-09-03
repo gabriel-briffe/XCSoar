@@ -7,10 +7,17 @@
 #include "Look/ButtonLook.hpp"
 #include "Input/InputEvents.hpp"
 #include "Interface.hpp"
+#include "UISettings.hpp"
 #include "Pan.hpp"
 #include "PageActions.hpp"
+#include "ui/canvas/Canvas.hpp"
+#include "ui/canvas/Color.hpp"
 
 #include <memory>
+
+#ifdef ENABLE_OPENGL
+#include "ui/canvas/opengl/Scope.hpp"
+#endif
 
 #ifdef ANDROID
 #include "Hardware/RotateDisplay.hpp"
@@ -54,18 +61,41 @@ MakeMapOverlaySymbolButton(const ButtonLook &look,
 }
 
 /**
- * Map overlay touch target with no visible drawing.
+ * Pink marker for an invisible map touch target.  Opacity comes from
+ * #UISettings::touch_areas_transparency (0 = solid, 100 = hidden).
+ */
+static void
+DrawTouchAreaMarker(Canvas &canvas, const PixelRect &rc) noexcept
+{
+  const unsigned transparency =
+    CommonInterface::GetUISettings().touch_areas_transparency;
+  if (transparency >= 100)
+    return;
+
+  const uint8_t alpha = uint8_t((100u - transparency) * 255u / 100u);
+  const Color fill = Color(0xff, 0x69, 0xb4).WithAlpha(alpha);
+
+#ifdef ENABLE_OPENGL
+  const ScopeAlphaBlend alpha_blend;
+#endif
+  canvas.DrawFilledRectangle(rc, fill);
+}
+
+/**
+ * Invisible map touch target; optionally draws a pink area marker.
  */
 class MapOverlayInvisibleButtonRenderer final : public ButtonRenderer {
 public:
-  void DrawButton(Canvas &, const PixelRect &,
+  void DrawButton(Canvas &canvas, const PixelRect &rc,
                   ButtonState) const noexcept override
   {
+    DrawTouchAreaMarker(canvas, rc);
   }
 };
 
 /**
- * Map overlay QuickMenu button; may be drawn invisibly per #UISettings.
+ * Map overlay QuickMenu button; draws the bolt, or a pink touch-area
+ * marker when configured as transparent.
  */
 class QuickMenuOverlayButtonRenderer final : public ButtonRenderer {
   SymbolButtonRenderer inner;
@@ -81,8 +111,10 @@ public:
   void DrawButton(Canvas &canvas, const PixelRect &rc,
                   ButtonState state) const noexcept override
   {
-    if (CommonInterface::GetUISettings().transparent_quickmenu_button)
+    if (CommonInterface::GetUISettings().transparent_quickmenu_button) {
+      DrawTouchAreaMarker(canvas, rc);
       return;
+    }
 
     inner.DrawButton(canvas, rc, state);
   }

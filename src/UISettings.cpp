@@ -31,6 +31,7 @@ UISettings::SetDefaults() noexcept
   show_quickmenu_button = HasTouchScreen();
 
   transparent_quickmenu_button = false;
+  touch_areas_transparency = 100;
 
   show_zoom_button = show_menu_button;
 

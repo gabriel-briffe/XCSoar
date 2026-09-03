@@ -140,6 +140,7 @@ constexpr std::string_view ShowMenuButton = "ShowMenuButton";
 constexpr std::string_view ShowZoomButton = "ShowZoomButton";
 constexpr std::string_view ShowQuickMenuButton = "ShowQuickMenuButton";
 constexpr std::string_view TransparentQuickMenuButton = "TransparentQuickMenuButton";
+constexpr std::string_view TouchAreasTransparency = "TouchAreasTransparency";
 constexpr std::string_view CustomQuickMenu = "CustomQuickMenu";
 constexpr std::string_view CustomQuickMenuCount = "CustomQuickMenuCount";
 constexpr std::string_view CursorSize = "CursorSize";

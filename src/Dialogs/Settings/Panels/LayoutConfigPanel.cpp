@@ -17,6 +17,9 @@
 #include "Menu/ShowButton.hpp"
 #include "ActionInterface.hpp"
 #include "util/Macros.hpp"
+#include "UISettings.hpp"
+
+#include <cstdint>
 
 #ifdef ANDROID
 #include "Android/Main.hpp"
@@ -45,12 +48,73 @@ enum ControlIndex {
   ShowMenuButton,
   ShowZoomButton,
   ShowQuickMenuButton,
-  TransparentQuickMenuButton,
+  TouchAreasTransparency,
 #ifdef DRAW_MOUSE_CURSOR
   CursorSize,
   CursorInverted,
 #endif
 };
+
+enum class QuickMenuButtonMode : uint8_t {
+  OFF,
+  ON,
+  TRANSPARENT,
+};
+
+static constexpr StaticEnumChoice quick_menu_button_mode_list[] = {
+  { QuickMenuButtonMode::OFF, N_("Off"),
+    N_("Do not show the QuickMenu button on the map.") },
+  { QuickMenuButtonMode::ON, N_("On"),
+    N_("Show the QuickMenu button on the map.") },
+  { QuickMenuButtonMode::TRANSPARENT, N_("Transparent"),
+    N_("Keep an invisible touch target for the QuickMenu.") },
+  nullptr
+};
+
+static constexpr StaticEnumChoice touch_areas_transparency_list[] = {
+  { 0, "0 %" },
+  { 10, "10 %" },
+  { 20, "20 %" },
+  { 30, "30 %" },
+  { 40, "40 %" },
+  { 50, "50 %" },
+  { 60, "60 %" },
+  { 70, "70 %" },
+  { 80, "80 %" },
+  { 90, "90 %" },
+  { 100, "100 %" },
+  nullptr
+};
+
+static constexpr QuickMenuButtonMode
+QuickMenuButtonModeFromSettings(const UISettings &settings) noexcept
+{
+  if (!settings.show_quickmenu_button)
+    return QuickMenuButtonMode::OFF;
+  if (settings.transparent_quickmenu_button)
+    return QuickMenuButtonMode::TRANSPARENT;
+  return QuickMenuButtonMode::ON;
+}
+
+static void
+ApplyQuickMenuButtonMode(UISettings &settings,
+                         QuickMenuButtonMode mode) noexcept
+{
+  switch (mode) {
+  case QuickMenuButtonMode::OFF:
+    settings.show_quickmenu_button = false;
+    settings.transparent_quickmenu_button = false;
+    break;
+  case QuickMenuButtonMode::ON:
+    settings.show_quickmenu_button = true;
+    settings.transparent_quickmenu_button = false;
+    break;
+  case QuickMenuButtonMode::TRANSPARENT:
+    settings.show_quickmenu_button = true;
+    settings.transparent_quickmenu_button = true;
+    break;
+  }
+}
 
 static constexpr StaticEnumChoice display_orientation_list[] = {
   { DisplayOrientation::DEFAULT,
@@ -268,15 +332,19 @@ LayoutConfigPanel::Prepare(ContainerWindow &parent,
   AddBoolean(_("Show Zoom button"), _("Show the Zoom button"),
              ui_settings.show_zoom_button);
   SetExpertRow(ShowZoomButton);
-  AddBoolean(C_("Setting", "Show QuickMenu button"),
-             _("Show the QuickMenu button"),
-             ui_settings.show_quickmenu_button);
+  AddEnum(C_("Setting", "Show QuickMenu button"),
+          _("Show the QuickMenu button on the map, hide it, or keep an "
+            "invisible touch target."),
+          quick_menu_button_mode_list,
+          (unsigned)QuickMenuButtonModeFromSettings(ui_settings));
   SetExpertRow(ShowQuickMenuButton);
-  AddBoolean(C_("Setting", "Transparent Quick Menu button"),
-             _("Do not draw the QuickMenu button on the map; it remains "
-               "an invisible touch target."),
-             ui_settings.transparent_quickmenu_button);
-  SetExpertRow(TransparentQuickMenuButton);
+  AddEnum(C_("Setting", "Touch areas transparency"),
+          _("Pink markers for invisible map touch targets (QuickMenu when "
+            "transparent, compass, airspace, pan, bottom area).  0 % is "
+            "solid pink; 100 % hides the markers."),
+          touch_areas_transparency_list,
+          ui_settings.touch_areas_transparency);
+  SetExpertRow(TouchAreasTransparency);
 
 #ifdef DRAW_MOUSE_CURSOR
   AddInteger(_("Cursor zoom"), _("Cursor zoom factor"), "%d x", "%d x", 1, 10, 1,
@@ -378,15 +446,30 @@ LayoutConfigPanel::Save(bool &_changed) noexcept
   if (SaveValue(ShowZoomButton, ProfileKeys::ShowZoomButton,
                 ui_settings.show_zoom_button))
     overlay_buttons_changed = changed = true;
-  if (SaveValue(ShowQuickMenuButton, ProfileKeys::ShowQuickMenuButton,
-                ui_settings.show_quickmenu_button))
-    overlay_buttons_changed = changed = true;
-  if (SaveValue(TransparentQuickMenuButton,
-                ProfileKeys::TransparentQuickMenuButton,
-                ui_settings.transparent_quickmenu_button)) {
+
+  {
+    const auto mode = (QuickMenuButtonMode)GetValueEnum(ShowQuickMenuButton);
+    const bool old_show = ui_settings.show_quickmenu_button;
+    const bool old_transparent = ui_settings.transparent_quickmenu_button;
+    ApplyQuickMenuButtonMode(ui_settings, mode);
+    if (ui_settings.show_quickmenu_button != old_show ||
+        ui_settings.transparent_quickmenu_button != old_transparent) {
+      Profile::Set(ProfileKeys::ShowQuickMenuButton,
+                   ui_settings.show_quickmenu_button);
+      Profile::Set(ProfileKeys::TransparentQuickMenuButton,
+                   ui_settings.transparent_quickmenu_button);
+      overlay_buttons_changed = changed = true;
+      CommonInterface::main_window->InvalidateMapOverlayButtons();
+    }
+  }
+
+  if (SaveValueEnum(TouchAreasTransparency,
+                    ProfileKeys::TouchAreasTransparency,
+                    ui_settings.touch_areas_transparency)) {
     changed = true;
     CommonInterface::main_window->InvalidateMapOverlayButtons();
   }
+
   if (overlay_buttons_changed)
     CommonInterface::main_window->ReinitialiseMapOverlayButtons();
 

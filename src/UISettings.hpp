@@ -53,8 +53,18 @@ struct UISettings {
   bool show_menu_button;
   bool show_zoom_button;
   bool show_quickmenu_button;
-  /** Do not draw the map QuickMenu button (invisible touch target). */
+  /**
+   * Do not draw the map QuickMenu button (invisible touch target).
+   * When true, #show_quickmenu_button must also be true.
+   */
   bool transparent_quickmenu_button;
+
+  /**
+   * How transparent the pink overlays for invisible map touch targets
+   * are.  0 = fully opaque pink markers; 100 = invisible (default).
+   * Steps of 10.
+   */
+  unsigned touch_areas_transparency;
 
   /**
    * When enabled, the Quick Menu shows only the selected commands

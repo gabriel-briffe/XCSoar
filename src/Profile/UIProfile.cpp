@@ -140,6 +140,15 @@ Profile::Load(const ProfileMap &map, UISettings &settings)
   map.Get(ProfileKeys::ShowQuickMenuButton, settings.show_quickmenu_button);
   map.Get(ProfileKeys::TransparentQuickMenuButton,
            settings.transparent_quickmenu_button);
+  if (!map.Get(ProfileKeys::TouchAreasTransparency,
+               settings.touch_areas_transparency))
+    /* Migrate the short-lived QuickMenuButtonTransparency key. */
+    map.Get("QuickMenuButtonTransparency",
+            settings.touch_areas_transparency);
+  if (settings.touch_areas_transparency > 100)
+    settings.touch_areas_transparency = 100;
+  settings.touch_areas_transparency =
+    (settings.touch_areas_transparency / 10) * 10;
 
   map.Get(ProfileKeys::CustomQuickMenu, settings.custom_quick_menu);
   map.Get(ProfileKeys::CustomQuickMenuCount, settings.custom_quick_menu_count);
