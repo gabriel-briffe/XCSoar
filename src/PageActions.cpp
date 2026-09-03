@@ -890,3 +890,46 @@ PageActions::SaveCurrentPageAirspaceEnable() noexcept
 
   Profile::Set(profile_key, enable);
 }
+
+void
+PageActions::ToggleBottomArea() noexcept
+{
+  auto *main_window = CommonInterface::main_window;
+  if (main_window == nullptr || main_window->GetMap() == nullptr)
+    return;
+
+  const PageLayout &configured = GetConfiguredLayout();
+  if (!configured.IsMapMain())
+    return;
+
+  if (configured.UsesWeatherOverlay()) {
+    PagesState &state = CommonInterface::SetUIState().pages;
+
+    if (main_window->GetBottomWidget() != nullptr) {
+      if (!state.special_page.IsDefined())
+        state.special_page = configured;
+      state.special_page.bottom = PageLayout::Bottom::NOTHING;
+      main_window->SetBottomWidget(nullptr);
+    } else {
+      RestoreBottom();
+    }
+    return;
+  }
+
+  PagesState &state = CommonInterface::SetUIState().pages;
+  if (state.special_page.IsDefined())
+    return;
+
+  PageSettings &page_settings = CommonInterface::SetUISettings().pages;
+  PageLayout &page = page_settings.pages[state.current_index];
+  page.bottom = page.bottom == PageLayout::Bottom::CROSS_SECTION
+    ? PageLayout::Bottom::NOTHING
+    : PageLayout::Bottom::CROSS_SECTION;
+
+  char profile_key[32];
+  if (StringFormat(profile_key, sizeof(profile_key),
+                   "Page%uBottom", state.current_index) > 0)
+    Profile::Set(profile_key, (unsigned)page.bottom);
+
+  Update();
+}

@@ -127,6 +127,14 @@ namespace PageActions
   void SaveCurrentPageAirspaceEnable() noexcept;
 
   /**
+   * Toggle the map bottom area: cross section on pages without a weather
+   * overlay; weather controls when an overlay is active (temporary hide
+   * without rewriting the page, because Normalise would force controls
+   * back on for weather overlays).
+   */
+  void ToggleBottomArea() noexcept;
+
+  /**
    * Clear temporary pan suspension flags for all weather overlays.
    */
   void ResumeWeatherOverlaysAfterPan() noexcept;

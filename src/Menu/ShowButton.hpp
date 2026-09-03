@@ -72,6 +72,18 @@ protected:
   bool OnClicked() noexcept override;
 };
 
+/* transparent hit target bottom-center: cross section / weather controls */
+class ShowBottomAreaToggleButton : public Button {
+public:
+  void Create(ContainerWindow &parent, const ButtonLook &look,
+              const PixelRect &rc,
+              WindowStyle style=WindowStyle()) noexcept;
+
+protected:
+  /* virtual methods from class ButtonWindow */
+  bool OnClicked() noexcept override;
+};
+
 /* map overlay zoom button (+ or -) */
 class ShowZoomButton : public Button {
 public:

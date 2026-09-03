@@ -53,6 +53,7 @@ class MainWindow : public UI::SingleWindow {
   ShowPanNorthUpButton *show_pan_north_up_button = nullptr;
   ShowAirspaceToggleButton *show_airspace_toggle_button = nullptr;
   ShowPanToggleButton *show_pan_toggle_button = nullptr;
+  ShowBottomAreaToggleButton *show_bottom_area_toggle_button = nullptr;
 
 #ifdef ANDROID
   ShowRotateButton *show_rotate_button = nullptr;
@@ -554,6 +555,7 @@ protected:
   static PixelRect GetPanNorthUpButtonRect(const PixelRect rc) noexcept;
   static PixelRect GetShowAirspaceToggleButtonRect(const PixelRect rc) noexcept;
   static PixelRect GetShowPanToggleButtonRect(const PixelRect rc) noexcept;
+  static PixelRect GetShowBottomAreaToggleButtonRect(const PixelRect rc) noexcept;
 
 #ifdef ANDROID
   static PixelRect GetShowRotateButtonRect(const PixelRect rc) noexcept;

@@ -189,6 +189,22 @@ MainWindow::GetShowPanToggleButtonRect(const PixelRect rc) noexcept
   return PixelRect(left, top, right, bottom);
 }
 
+[[gnu::pure]]
+PixelRect
+MainWindow::GetShowBottomAreaToggleButtonRect(const PixelRect rc) noexcept
+{
+  const unsigned padding = Layout::GetTextPadding();
+  const unsigned size = std::max(1u, Layout::GetMaximumControlHeight());
+  const int mid = (rc.left + rc.right) / 2;
+  const int half = int(size) / 2;
+  const int left = mid - half;
+  const int right = left + int(size);
+  const int bottom = rc.bottom - int(padding);
+  const int top = bottom - int(size);
+
+  return PixelRect(left, top, right, bottom);
+}
+
 #ifdef ANDROID
 [[gnu::pure]]
 PixelRect
@@ -417,6 +433,14 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
         GetShowPanToggleButtonRect(map->GetPosition()));
   }
 
+  if (show_bottom_area_toggle_button != nullptr) {
+    show_bottom_area_toggle_button->SetVisible(compass_button_active);
+    show_bottom_area_toggle_button->SetEnabled(compass_button_active);
+    if (compass_button_active)
+      show_bottom_area_toggle_button->Move(
+        GetShowBottomAreaToggleButtonRect(map->GetPosition()));
+  }
+
 #ifdef ANDROID
   if (show_rotate_button != nullptr && overlay_buttons_active)
     show_rotate_button->Move(GetShowRotateButtonRect(map->GetPosition()));
@@ -506,6 +530,13 @@ MainWindow::ReinitialiseMapOverlayButtons() noexcept
                                    GetShowPanToggleButtonRect(map_area_rect));
   }
 
+  if (show_bottom_area_toggle_button == nullptr) {
+    show_bottom_area_toggle_button = new ShowBottomAreaToggleButton();
+    show_bottom_area_toggle_button->Create(
+      *this, look->dialog.button,
+      GetShowBottomAreaToggleButtonRect(map_area_rect));
+  }
+
   UpdateMapOverlayButtonLayout();
 }
 
@@ -526,6 +557,8 @@ MainWindow::InvalidateMapOverlayButtons() noexcept
     show_airspace_toggle_button->Invalidate();
   if (show_pan_toggle_button != nullptr)
     show_pan_toggle_button->Invalidate();
+  if (show_bottom_area_toggle_button != nullptr)
+    show_bottom_area_toggle_button->Invalidate();
 }
 
 MainWindow::MainWindow(UI::Display &display) noexcept
@@ -690,6 +723,8 @@ MainWindow::Deinitialise() noexcept
   show_airspace_toggle_button = nullptr;
   delete show_pan_toggle_button;
   show_pan_toggle_button = nullptr;
+  delete show_bottom_area_toggle_button;
+  show_bottom_area_toggle_button = nullptr;
 
 #ifdef ANDROID
   rotate_button_timer.Cancel();

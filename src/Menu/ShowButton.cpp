@@ -179,6 +179,23 @@ ShowPanToggleButton::OnClicked() noexcept
 }
 
 void
+ShowBottomAreaToggleButton::Create(ContainerWindow &parent,
+                                   [[maybe_unused]] const ButtonLook &look,
+                                   const PixelRect &rc,
+                                   WindowStyle style) noexcept
+{
+  Button::Create(parent, rc, style,
+                 std::make_unique<MapOverlayInvisibleButtonRenderer>());
+}
+
+bool
+ShowBottomAreaToggleButton::OnClicked() noexcept
+{
+  PageActions::ToggleBottomArea();
+  return true;
+}
+
+void
 ShowZoomButton::Create(ContainerWindow &parent, const ButtonLook &look,
                        const PixelRect &rc, Sign _sign,
                        WindowStyle style) noexcept
