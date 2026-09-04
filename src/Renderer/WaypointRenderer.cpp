@@ -380,7 +380,11 @@ protected:
 
     TextInBoxMode text_mode;
     bool bold = false;
-    if (vwp.IsReachable() && way_point.IsLandable()) {
+    /* Label style applies to reachable landables.  With
+       PURPLE_CIRCLE_ONLY, reach is never computed, so still apply
+       landable_render_mode to every landable. */
+    if (way_point.IsLandable() &&
+        (vwp.IsReachable() || !settings.IsLandableReachDecorated())) {
       text_mode.shape = settings.landable_render_mode;
       bold = true;
       text_mode.move_in_view = true;
