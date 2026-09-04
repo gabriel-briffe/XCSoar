@@ -199,8 +199,10 @@ MainWindow::GetShowBottomAreaToggleButtonRect(const PixelRect rc) noexcept
   const int half = int(size) / 2;
   const int left = mid - half;
   const int right = left + int(size);
-  const int bottom = rc.bottom - int(padding);
-  const int top = bottom - int(size);
+  /* Extend to the map bottom so the locator triangle can sit flush;
+     the pink touch marker stays inset by #padding. */
+  const int bottom = rc.bottom;
+  const int top = bottom - int(padding) - int(size);
 
   return PixelRect(left, top, right, bottom);
 }

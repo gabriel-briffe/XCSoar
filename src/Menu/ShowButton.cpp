@@ -10,9 +10,14 @@
 #include "UISettings.hpp"
 #include "Pan.hpp"
 #include "PageActions.hpp"
+#include "Screen/Layout.hpp"
+#include "ui/canvas/Brush.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Color.hpp"
+#include "ui/dim/BulkPoint.hpp"
+#include "util/Macros.hpp"
 
+#include <algorithm>
 #include <memory>
 
 #ifdef ENABLE_OPENGL
@@ -90,6 +95,40 @@ public:
                   ButtonState) const noexcept override
   {
     DrawTouchAreaMarker(canvas, rc);
+  }
+};
+
+/**
+ * Bottom-center cross section / weather toggle: pink touch marker
+ * (inset), plus a tiny black up-triangle flush with the map bottom to
+ * locate the hit target.
+ */
+class BottomAreaToggleButtonRenderer final : public ButtonRenderer {
+public:
+  void DrawButton(Canvas &canvas, const PixelRect &rc,
+                  ButtonState) const noexcept override
+  {
+    const unsigned padding = Layout::GetTextPadding();
+    PixelRect marker = rc;
+    if (padding > 0 && marker.GetHeight() > padding)
+      marker.bottom -= int(padding);
+    DrawTouchAreaMarker(canvas, marker);
+
+    /* Base on the last map pixel row; tip points up. */
+    const int mid_x = (rc.left + rc.right) / 2;
+    const int base_y = rc.bottom - 1;
+    const int half_w = std::max(2, int(Layout::Scale(4)));
+    const int height = std::max(2, int(Layout::Scale(3)));
+    const BulkPixelPoint triangle[] = {
+      { mid_x, base_y - height },
+      { mid_x - half_w, base_y },
+      { mid_x + half_w, base_y },
+    };
+
+    const Brush brush(COLOR_BLACK);
+    canvas.SelectNullPen();
+    canvas.Select(brush);
+    canvas.DrawTriangleFan(triangle, ARRAY_SIZE(triangle));
   }
 };
 
@@ -217,7 +256,7 @@ ShowBottomAreaToggleButton::Create(ContainerWindow &parent,
                                    WindowStyle style) noexcept
 {
   Button::Create(parent, rc, style,
-                 std::make_unique<MapOverlayInvisibleButtonRenderer>());
+                 std::make_unique<BottomAreaToggleButtonRenderer>());
 }
 
 bool
