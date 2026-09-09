@@ -117,6 +117,9 @@ Version 7.46 - not yet released
   - show takeoff and flight time on the Analysis barograph caption
     (plus landing time after landing)
 * FLARM
+  - draw traffic as aircraft-type symbols (glider, powered aircraft,
+    helicopter, paraglider, balloon, ...) on the map, the radar and in
+    lists; new setting "Traffic symbol" restores the arrow heads #921
   - fix ADS-B traffic ground speed wrapping above 457 km/h #2887
   - fix no-position targets missing from the radar and map #2847
 * glide computer
