@@ -15,6 +15,7 @@ enum ControlIndex {
   GlideRatio,
   MaxAltitude,
   IterationCap,
+  Contours,
 };
 
 static constexpr StaticEnumChoice glide_cone_mode_list[] = {
@@ -63,6 +64,10 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
   AddInteger(_("Iteration cap"),
              _("Upper bound on the number of GPU propagation iterations."),
              "%d", "%d", 100, 20000, 100, int(glide_cone.iteration_cap));
+
+  AddBoolean(_("Contours"),
+             _("Draw 100 m altitude contour lines of the reachable area."),
+             glide_cone.contours);
 }
 
 bool
@@ -85,6 +90,9 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
     Profile::Set(ProfileKeys::GlideConeIterationCap, glide_cone.iteration_cap);
     changed = true;
   }
+
+  changed |= SaveValue(Contours, ProfileKeys::GlideConeContours,
+                       glide_cone.contours);
 
   _changed |= changed;
   return true;

@@ -471,6 +471,7 @@ GlideConeCompute::Run(const GlideConeGrid &grid, GlideConeResult &out) noexcept
   out.altitudes.resize(count);
   out.origin_x.resize(count);
   out.origin_y.resize(count);
+  out.ground.resize(count);
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_cur);
   const auto *mapped = static_cast<const GpuCell *>(
@@ -480,6 +481,7 @@ GlideConeCompute::Run(const GlideConeGrid &grid, GlideConeResult &out) noexcept
       out.altitudes[i] = mapped[i].alt;
       out.origin_x[i] = mapped[i].ox;
       out.origin_y[i] = mapped[i].oy;
+      out.ground[i] = std::uint8_t(mapped[i].flags & 1u); // FLAG_GROUND
     }
     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   } else {

@@ -10,4 +10,5 @@ GlideConeSettings::SetDefaults() noexcept
   glide_ratio = 40;
   max_altitude = 3000;
   iteration_cap = 2000;
+  contours = false;
 }

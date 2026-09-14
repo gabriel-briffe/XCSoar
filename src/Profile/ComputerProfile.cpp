@@ -129,6 +129,7 @@ Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
   map.Get(ProfileKeys::GlideConeGlideRatio, settings.glide_ratio);
   map.Get(ProfileKeys::GlideConeMaxAltitude, settings.max_altitude);
   map.Get(ProfileKeys::GlideConeIterationCap, settings.iteration_cap);
+  map.Get(ProfileKeys::GlideConeContours, settings.contours);
 }
 
 bool

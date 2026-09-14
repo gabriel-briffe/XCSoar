@@ -281,6 +281,7 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       BuildField(center, radius_m, seeds, settings, *terrain);
     computed_center = center;
     computed_signature = signature;
+    computed_contours = false;
   }
 
   if (!have_field) {
@@ -308,6 +309,25 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     } else {
       GlideConeStatus::SetInvalid();
     }
+  }
+
+  /* altitude contour lines of the reachable area */
+  if (gc.contours) {
+    if (!computed_contours) {
+      field.BuildContours();
+      computed_contours = true;
+    }
+
+    const auto &segs = field.contour_segments;
+    if (!segs.empty()) {
+      canvas.Select(look.glide_cone_contour_pen);
+      for (std::size_t k = 0; k + 1 < segs.size(); k += 2)
+        canvas.DrawLine(projection.GeoToScreen(segs[k]),
+                        projection.GeoToScreen(segs[k + 1]));
+    }
+  } else if (computed_contours) {
+    field.contour_segments.clear();
+    computed_contours = false;
   }
 
   const std::vector<GeoPoint> path = field.Trace(aircraft);

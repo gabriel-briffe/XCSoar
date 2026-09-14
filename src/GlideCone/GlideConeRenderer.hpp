@@ -42,6 +42,7 @@ class GlideConeRenderer {
   GeoPoint computed_center = GeoPoint::Invalid();
   std::size_t computed_signature = 0;
   bool have_field = false;
+  bool computed_contours = false;
 
   /* debounce for parameter (e.g. glide ratio) changes */
   std::size_t debounce_signature = ~std::size_t{0};

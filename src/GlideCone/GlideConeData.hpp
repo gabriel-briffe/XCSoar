@@ -64,6 +64,9 @@ struct GlideConeResult {
   std::vector<std::int32_t> origin_x;
   std::vector<std::int32_t> origin_y;
 
+  /** 1 where the cone reached terrain ("ground"), else 0. */
+  std::vector<std::uint8_t> ground;
+
   [[gnu::pure]]
   bool IsValid() const noexcept {
     const std::size_t n = std::size_t(width) * height;
@@ -76,5 +79,6 @@ struct GlideConeResult {
     altitudes.clear();
     origin_x.clear();
     origin_y.clear();
+    ground.clear();
   }
 };

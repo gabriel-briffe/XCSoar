@@ -53,6 +53,10 @@ MapLook::Initialise(const MapSettings &settings,
   glide_cone_pen.Create(Layout::ScalePenWidth(3),
                         HasColors() ? COLOR_GLIDE_CONE : COLOR_BLACK);
 
+  glide_cone_contour_pen.Create(Layout::ScalePenWidth(1),
+                                HasColors() ? COLOR_GLIDE_CONE_CONTOUR
+                                            : COLOR_BLACK);
+
   // Create green pen and brush for the Turn Back Marker (TBM)
   tbm_pen.Create(Layout::ScalePenWidth(2), HasColors() ? COLOR_GREEN : COLOR_BLACK);
   tbm_brush.Create(HasColors() ? COLOR_GREEN : COLOR_BLACK);

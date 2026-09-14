@@ -4,7 +4,6 @@
 #include "GlideCone.hpp"
 #include "InfoBoxes/Data.hpp"
 #include "InfoBoxes/Panel/Panel.hpp"
-#include "InfoBoxes/Panel/GlideConeMode.hpp"
 #include "InfoBoxes/Panel/GlideConeSetup.hpp"
 #include "Interface.hpp"
 #include "Computer/Settings.hpp"
@@ -25,7 +24,6 @@
  */
 
 static constexpr InfoBoxPanel panels[] = {
-  { N_("Mode"), LoadGlideConeModePanel },
   { NC_("Menu", "Setup"), LoadGlideConeSetupPanel },
   { nullptr, nullptr },
 };

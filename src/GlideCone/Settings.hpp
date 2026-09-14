@@ -47,6 +47,9 @@ struct GlideConeSettings {
   /** Upper bound on propagation iterations (0 = use internal default). */
   unsigned iteration_cap;
 
+  /** Draw 100 m altitude contour lines of the reachability field. */
+  bool contours;
+
   void SetDefaults() noexcept;
 
   [[gnu::pure]]

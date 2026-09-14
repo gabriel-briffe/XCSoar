@@ -89,3 +89,6 @@ static constexpr uint8_t ALPHA_OVERLAY = 0xA0;
 
 /** Glide cone relay path overlay. */
 static constexpr Color COLOR_GLIDE_CONE = Color(0x28, 0x78, 0xff);
+
+/** Glide cone altitude contour lines. */
+static constexpr Color COLOR_GLIDE_CONE_CONTOUR = Color(0x60, 0xa0, 0xd0);

@@ -28,6 +28,12 @@ struct GlideConeField {
   /** Seed (airport) cell. */
   int home_x = -1, home_y = -1;
 
+  /**
+   * Altitude contour line segments (pairs of points: [0,1], [2,3], …),
+   * built on demand by BuildContours().
+   */
+  std::vector<GeoPoint> contour_segments;
+
   [[gnu::pure]]
   bool IsValid() const noexcept {
     return result.IsValid() && bounds.IsValid();
@@ -37,7 +43,14 @@ struct GlideConeField {
     result.Clear();
     bounds.SetInvalid();
     home_x = home_y = -1;
+    contour_segments.clear();
   }
+
+  /**
+   * Build 100 m (or @p interval_m) altitude contour segments of the
+   * reachable area (marching squares).  Fills #contour_segments.
+   */
+  void BuildContours(double interval_m = 100) noexcept;
 
   /** Geographic position of the centre of grid cell (x,y). */
   [[gnu::pure]]
