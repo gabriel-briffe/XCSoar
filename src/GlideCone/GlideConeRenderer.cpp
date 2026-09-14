@@ -4,6 +4,7 @@
 #include "GlideConeRenderer.hpp"
 #include "GlideConeCompute.hpp"
 #include "GlideConeLog.hpp"
+#include "GlideConeStatus.hpp"
 #include "Computer/Settings.hpp"
 #include "Terrain/RasterTerrain.hpp"
 #include "Terrain/Height.hpp"
@@ -204,13 +205,16 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                       gc.glide_ratio, gc.max_altitude, gc.iteration_cap);
   }
 
-  if (!gc.enabled || terrain == nullptr || !GlideConeCompute::Available())
+  if (!gc.enabled || terrain == nullptr || !GlideConeCompute::Available()) {
+    GlideConeStatus::SetInvalid();
     return;
+  }
 
   if (!valid) {
     field.Clear();
     have_field = false;
     computed_seed = GeoPoint::Invalid();
+    GlideConeStatus::SetInvalid();
     return;
   }
 
@@ -223,15 +227,32 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
   }
 
   if (!have_field) {
+    GlideConeStatus::SetInvalid();
     if (diag)
       GlideConeLog::Add("no path: field invalid / compute failed");
     return;
   }
 
   if (!aircraft_valid) {
+    GlideConeStatus::SetInvalid();
     if (diag)
       GlideConeLog::Add("no path: aircraft position not available");
     return;
+  }
+
+  /* publish the required altitude at the aircraft for the InfoBox */
+  {
+    int ax, ay;
+    if (field.GeoToCell(aircraft, ax, ay)) {
+      const std::size_t index = std::size_t(ay) * field.result.width + ax;
+      const float required = field.result.altitudes[index];
+      if (required < field.max_alt)
+        GlideConeStatus::Set({true, required});
+      else
+        GlideConeStatus::SetInvalid();
+    } else {
+      GlideConeStatus::SetInvalid();
+    }
   }
 
   const std::vector<GeoPoint> path = field.Trace(aircraft);

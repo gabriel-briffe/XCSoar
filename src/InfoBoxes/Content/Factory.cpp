@@ -23,6 +23,7 @@
 #include "InfoBoxes/Content/Airspace.hpp"
 #include "InfoBoxes/Content/Radio.hpp"
 #include "InfoBoxes/Content/Engine.hpp"
+#include "InfoBoxes/Content/GlideCone.hpp"
 
 #include "util/Macros.hpp"
 #include "Language/Language.hpp"
@@ -1209,6 +1210,14 @@ static constexpr MetaData meta_data[] = {
     NC_("Abbreviation", "Prev WP"),
     N_("Previous waypoint: when an ordered task is loaded, automatically tracks the task waypoint before the active leg (the start waypoint when on the first leg). Displays the waypoint name, arrival altitude difference relative to the safety arrival height, and distance. Click to choose a different waypoint to display (task waypoints when a task is loaded, otherwise the full waypoint list); selection is informational only and never advances the task or sets a Goto. With a task loaded, choose \"Resume auto tracking\" at the top of the list to revert to automatic tracking."),
     IBFHelper<InfoBoxContentPreviousWaypoint>::Create,
+  },
+
+  // e_GlideCone
+  {
+    NC_("InfoBox", "Glide Cone"),
+    NC_("Abbreviation", "GlideCone"),
+    N_("Altitude margin to the Goto airport from the terrain-aware glide cone computation: the main value is the glider's current altitude minus the altitude required at the glider position (green when at or above, red when below); the bottom line is that required altitude. Requires the glide cone feature (GPU/OpenGL ES 3.1) and an active Goto."),
+    UpdateInfoBoxGlideCone,
   },
 
 };
