@@ -16,7 +16,10 @@
 #include "Renderer/TextInBox.hpp"
 #include "Renderer/LabelBlock.hpp"
 #include "Formatter/UserUnits.hpp"
+#include "Screen/Layout.hpp"
+#include "Math/Angle.hpp"
 #include "ui/canvas/Canvas.hpp"
+#include "ui/canvas/Color.hpp"
 #include "ui/dim/BulkPoint.hpp"
 
 #include <algorithm>
@@ -321,7 +324,10 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       computed_contours = true;
     }
 
-    if (!field.contour_lines.empty()) {
+    /* only show once zoomed in past the configured map scale */
+    const bool show = projection.GetMapScale() <= gc.contours_min_scale;
+
+    if (show && !field.contour_lines.empty()) {
       const PixelRect screen = projection.GetScreenRect();
 
       /* draw the stitched contour polylines */
@@ -336,26 +342,32 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
           canvas.DrawPolyline(pts.data(), unsigned(pts.size()));
       }
 
-      /* upright labels spaced along each line by on-screen distance;
-         overlapping labels are hidden (zoom in to reveal more) */
+      /* labels along each line, rotated parallel to it and flipped to
+         stay upright; spaced by on-screen distance; overlapping ones are
+         hidden (zoom in to reveal more) */
       if (look.overlay.overlay_font != nullptr) {
         canvas.Select(*look.overlay.overlay_font);
+        canvas.SetBackgroundTransparent();
         LabelBlock label_block;
         label_block.reset();
 
-        constexpr double LABEL_SPACING_PX = 140;
+        const double spacing =
+          std::max(20u, unsigned(Layout::Scale(gc.label_spacing)));
+
         for (const auto &line : field.contour_lines) {
           char buffer[32];
           FormatUserAltitude(double(line.level), buffer);
           const PixelSize ts = canvas.CalcTextSize(buffer);
+          const double hw = ts.width / 2.0, hh = ts.height / 2.0;
 
-          double acc = LABEL_SPACING_PX;
+          double acc = spacing;
           PixelPoint prev = projection.GeoToScreen(line.points[0]);
           for (std::size_t k = 1; k < line.points.size(); ++k) {
             const PixelPoint cur = projection.GeoToScreen(line.points[k]);
-            acc += std::hypot(double(cur.x - prev.x), double(cur.y - prev.y));
+            const double dx = cur.x - prev.x, dy = cur.y - prev.y;
+            acc += std::hypot(dx, dy);
             prev = cur;
-            if (acc < LABEL_SPACING_PX)
+            if (acc < spacing)
               continue;
             acc = 0;
 
@@ -363,12 +375,34 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                 cur.y < screen.top || cur.y > screen.bottom)
               continue;
 
-            const PixelRect rc{cur.x - int(ts.width) / 2,
-                               cur.y - int(ts.height) / 2,
-                               cur.x + int(ts.width) / 2,
-                               cur.y + int(ts.height) / 2};
-            if (label_block.check(rc))
-              RenderShadowedText(canvas, buffer, {rc.left, rc.top}, false);
+            /* text angle parallel to the line, flipped to read upright */
+            double a = std::atan2(dy, dx);
+            if (std::cos(a) < 0)
+              a += M_PI;
+            const double ca = std::cos(a), sa = std::sin(a);
+
+            /* axis-aligned bounds of the rotated label for overlap test */
+            const int aabb_w = int(std::abs(hw * ca) + std::abs(hh * sa));
+            const int aabb_h = int(std::abs(hw * sa) + std::abs(hh * ca));
+            const PixelRect rc{cur.x - aabb_w, cur.y - aabb_h,
+                               cur.x + aabb_w, cur.y + aabb_h};
+            if (!label_block.check(rc))
+              continue;
+
+#ifdef ENABLE_OPENGL
+            const Angle angle = Angle::Radians(a);
+            /* white halo for readability, then black text */
+            canvas.SetTextColor(COLOR_WHITE);
+            for (const auto off : {PixelPoint{-1, -1}, PixelPoint{1, -1},
+                                   PixelPoint{-1, 1}, PixelPoint{1, 1}})
+              canvas.DrawText({cur.x + off.x, cur.y + off.y}, buffer, angle);
+            canvas.SetTextColor(COLOR_BLACK);
+            canvas.DrawText(cur, buffer, angle);
+#else
+            RenderShadowedText(canvas, buffer,
+                               {cur.x - int(ts.width) / 2,
+                                cur.y - int(ts.height) / 2}, false);
+#endif
           }
         }
       }

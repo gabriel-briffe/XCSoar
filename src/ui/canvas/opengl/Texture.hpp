@@ -5,8 +5,10 @@
 
 #include "ui/opengl/System.hpp"
 #include "ui/dim/Rect.hpp"
+#include "ui/dim/BulkPoint.hpp"
 #include "FBO.hpp"
 
+#include <array>
 #include <cassert>
 
 /**
@@ -110,4 +112,11 @@ public:
   void Draw(PixelPoint dest) const noexcept {
     Draw(PixelRect(dest, GetSize()), GetRect());
   }
+
+  /**
+   * Draw the texture onto an arbitrary quad (vertex order: top-left,
+   * top-right, bottom-left, bottom-right), used for rotated text.
+   */
+  void Draw(const std::array<BulkPixelPoint, 4> &vertices,
+            PixelRect src) const noexcept;
 };

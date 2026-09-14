@@ -11,4 +11,6 @@ GlideConeSettings::SetDefaults() noexcept
   max_altitude = 3000;
   iteration_cap = 2000;
   contours = false;
+  contours_min_scale = 30000;
+  label_spacing = 80;
 }

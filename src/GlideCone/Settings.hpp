@@ -50,6 +50,16 @@ struct GlideConeSettings {
   /** Draw 100 m altitude contour lines of the reachability field. */
   bool contours;
 
+  /**
+   * Only show contours and labels when the map scale (see
+   * WindowProjection::GetMapScale(), metres) is at most this value, i.e.
+   * when zoomed in far enough.
+   */
+  double contours_min_scale;
+
+  /** On-screen distance between contour labels [base pixels, DPI-scaled]. */
+  unsigned label_spacing;
+
   void SetDefaults() noexcept;
 
   [[gnu::pure]]

@@ -366,4 +366,6 @@ constexpr std::string_view GlideConeGlideRatio = "GlideConeGlideRatio";
 constexpr std::string_view GlideConeMaxAltitude = "GlideConeMaxAltitude";
 constexpr std::string_view GlideConeIterationCap = "GlideConeIterationCap";
 constexpr std::string_view GlideConeContours = "GlideConeContours";
+constexpr std::string_view GlideConeContoursMinScale = "GlideConeContoursMinScale";
+constexpr std::string_view GlideConeLabelSpacing = "GlideConeLabelSpacing";
 }

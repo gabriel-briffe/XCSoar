@@ -130,6 +130,8 @@ Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
   map.Get(ProfileKeys::GlideConeMaxAltitude, settings.max_altitude);
   map.Get(ProfileKeys::GlideConeIterationCap, settings.iteration_cap);
   map.Get(ProfileKeys::GlideConeContours, settings.contours);
+  map.Get(ProfileKeys::GlideConeContoursMinScale, settings.contours_min_scale);
+  map.Get(ProfileKeys::GlideConeLabelSpacing, settings.label_spacing);
 }
 
 bool

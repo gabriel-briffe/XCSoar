@@ -16,6 +16,8 @@ enum ControlIndex {
   MaxAltitude,
   IterationCap,
   Contours,
+  ContoursMinScale,
+  LabelSpacing,
 };
 
 static constexpr StaticEnumChoice glide_cone_mode_list[] = {
@@ -68,6 +70,16 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
   AddBoolean(_("Contours"),
              _("Draw 100 m altitude contour lines of the reachable area."),
              glide_cone.contours);
+
+  AddFloat(_("Contours min scale"),
+           _("Only show contours and labels when the map scale [m] is at "
+             "most this value, i.e. when zoomed in far enough."),
+           "%.0f m", "%.0f", 1000, 500000, 1000, false,
+           glide_cone.contours_min_scale);
+
+  AddInteger(_("Label distance"),
+             _("On-screen distance between contour labels."),
+             "%d", "%d", 20, 400, 10, int(glide_cone.label_spacing));
 }
 
 bool
@@ -93,6 +105,14 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValue(Contours, ProfileKeys::GlideConeContours,
                        glide_cone.contours);
+
+  changed |= SaveValue(ContoursMinScale, ProfileKeys::GlideConeContoursMinScale,
+                       glide_cone.contours_min_scale);
+
+  if (SaveValueInteger(LabelSpacing, glide_cone.label_spacing)) {
+    Profile::Set(ProfileKeys::GlideConeLabelSpacing, glide_cone.label_spacing);
+    changed = true;
+  }
 
   _changed |= changed;
   return true;
