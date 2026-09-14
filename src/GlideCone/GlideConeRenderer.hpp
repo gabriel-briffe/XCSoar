@@ -41,6 +41,10 @@ class GlideConeRenderer {
   std::size_t computed_signature = 0;
   bool have_field = false;
 
+  /* used to emit one diagnostic log line per new request */
+  std::uint64_t last_diag_generation = ~std::uint64_t{0};
+  std::size_t last_diag_signature = ~std::size_t{0};
+
 public:
   /**
    * Set the airport for which the glide cone should be computed.  May be

@@ -5,10 +5,12 @@
 
 #ifdef HAVE_GLES_COMPUTE
 
+#include "GlideConeLog.hpp"
 #include "LogFile.hpp"
 
 #include <GLES3/gl31.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <utility>
@@ -375,16 +377,33 @@ CompileComputeProgram(const char *src) noexcept
 bool
 GlideConeCompute::Run(const GlideConeGrid &grid, GlideConeResult &out) noexcept
 {
-  if (!grid.IsValid() || !IsComputeContext())
+  if (!grid.IsValid())
     return false;
+
+  if (!IsComputeContext()) {
+    const char *ver = reinterpret_cast<const char *>(glGetString(GL_VERSION));
+    GlideConeLog::Add("compute unavailable: GL_VERSION='%s' (need OpenGL ES 3.1)",
+                      ver != nullptr ? ver : "?");
+    return false;
+  }
+
+  {
+    const char *ver = reinterpret_cast<const char *>(glGetString(GL_VERSION));
+    GlideConeLog::Add("compute: context ok GL_VERSION='%s'",
+                      ver != nullptr ? ver : "?");
+  }
+
+  const auto t_start = std::chrono::steady_clock::now();
 
   const unsigned width = grid.width;
   const unsigned height = grid.height;
   const std::size_t count = std::size_t(width) * height;
 
   const GLuint program = CompileComputeProgram(PROPAGATE_SHADER);
-  if (program == 0)
+  if (program == 0) {
+    GlideConeLog::Add("compute: shader compile/link failed");
     return false;
+  }
 
   glUseProgram(program);
   glUniform1i(glGetUniformLocation(program, "uWidth"), int(width));
@@ -438,6 +457,11 @@ GlideConeCompute::Run(const GlideConeGrid &grid, GlideConeResult &out) noexcept
 
   glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 
+  const GLenum gl_err = glGetError();
+  if (gl_err != GL_NO_ERROR)
+    GlideConeLog::Add("compute: GL error 0x%x after %u dispatches",
+                      unsigned(gl_err), iterations);
+
   bool ok = true;
   out.width = width;
   out.height = height;
@@ -458,7 +482,14 @@ GlideConeCompute::Run(const GlideConeGrid &grid, GlideConeResult &out) noexcept
   } else {
     ok = false;
     out.Clear();
+    GlideConeLog::Add("compute: buffer readback (glMapBufferRange) failed");
   }
+
+  const auto elapsed_ms =
+    std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - t_start).count();
+  GlideConeLog::Add("compute: done ok=%d iterations=%u grid=%ux%u elapsedMs=%lld",
+                    int(ok), iterations, width, height, (long long)elapsed_ms);
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);

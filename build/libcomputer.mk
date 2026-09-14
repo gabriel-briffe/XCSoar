@@ -47,7 +47,8 @@ LIBCOMPUTER_SOURCES = \
 	$(SRC)/Computer/GroundSpeedComputer.cpp \
 	$(SRC)/Computer/AutoQNH.cpp \
 	$(SRC)/Computer/Settings.cpp \
-	$(SRC)/GlideCone/Settings.cpp
+	$(SRC)/GlideCone/Settings.cpp \
+	$(SRC)/GlideCone/GlideConeLog.cpp
 
 LIBCOMPUTER_DEPENDS = AIRSPACE TASK GEO LIBNMEA FMT
 

@@ -3,6 +3,7 @@
 
 #include "GlideConeRenderer.hpp"
 #include "GlideConeCompute.hpp"
+#include "GlideConeLog.hpp"
 #include "Computer/Settings.hpp"
 #include "Terrain/RasterTerrain.hpp"
 #include "Terrain/Height.hpp"
@@ -31,6 +32,11 @@ GlideConeRenderer::SetTarget(GeoPoint seed, double elevation) noexcept
   pending_seed_alt = elevation;
   pending_valid = seed.IsValid();
   ++pending_generation;
+
+  GlideConeLog::Add("SetTarget: lat=%.5f lon=%.5f elev=%.0f valid=%d gen=%llu",
+                    seed.latitude.Degrees(), seed.longitude.Degrees(),
+                    elevation, int(seed.IsValid()),
+                    (unsigned long long)pending_generation);
 }
 
 void
@@ -39,6 +45,9 @@ GlideConeRenderer::ClearTarget() noexcept
   const std::lock_guard lock{mutex};
   pending_valid = false;
   ++pending_generation;
+
+  GlideConeLog::Add("ClearTarget gen=%llu",
+                    (unsigned long long)pending_generation);
 }
 
 [[gnu::pure]]
@@ -119,9 +128,24 @@ GlideConeRenderer::BuildField(GeoPoint seed, double elevation,
   grid.home_x = std::clamp(home_x, 0, int(dim) - 1);
   grid.home_y = std::clamp(home_y, 0, int(dim) - 1);
 
+  GlideConeLog::Add("BuildField: dim=%u cell=%.0fm radius=%.0fm home=(%d,%d) "
+                    "homeAlt=%.0f maxAlt=%.0f clearance=%.0f arrival=%.0f",
+                    dim, cell_size_m, radius_m, grid.home_x, grid.home_y,
+                    grid.home_alt, grid.max_alt, clearance, arrival);
+
   GlideConeResult result;
-  if (!GlideConeCompute::Run(grid, result))
+  if (!GlideConeCompute::Run(grid, result)) {
+    GlideConeLog::Add("compute FAILED (see earlier lines for reason)");
     return false;
+  }
+
+  unsigned reachable = 0;
+  const float max_alt_f = grid.max_alt;
+  for (const float a : result.altitudes)
+    if (a < max_alt_f)
+      ++reachable;
+  GlideConeLog::Add("compute ok: reachableCells=%u total=%u",
+                    reachable, unsigned(result.altitudes.size()));
 
   field.result = std::move(result);
   field.bounds = bounds;
@@ -139,10 +163,6 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                         const RasterTerrain *terrain,
                         const MapLook &look) noexcept
 {
-  if (!settings.glide_cone.enabled || terrain == nullptr ||
-      !GlideConeCompute::Available())
-    return;
-
   GeoPoint seed;
   double seed_alt;
   bool valid;
@@ -156,13 +176,32 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     generation = pending_generation;
   }
 
+  const GlideConeSettings &gc = settings.glide_cone;
+  const std::size_t signature = SettingsSignature(gc);
+
+  /* emit one diagnostic line per new request (goto or settings change) */
+  const bool diag = generation != last_diag_generation ||
+    signature != last_diag_signature;
+  if (diag) {
+    last_diag_generation = generation;
+    last_diag_signature = signature;
+    GlideConeLog::Add("Draw: enabled=%d avail=%d terrain=%d targetValid=%d "
+                      "aircraftValid=%d ratio=%.1f maxAlt=%.0f cap=%u gen=%llu",
+                      int(gc.enabled), int(GlideConeCompute::Available()),
+                      int(terrain != nullptr), int(valid), int(aircraft_valid),
+                      gc.glide_ratio, gc.max_altitude, gc.iteration_cap,
+                      (unsigned long long)generation);
+  }
+
+  if (!gc.enabled || terrain == nullptr || !GlideConeCompute::Available())
+    return;
+
   if (!valid) {
     field.Clear();
     have_field = false;
     return;
   }
 
-  const std::size_t signature = SettingsSignature(settings.glide_cone);
   if (!have_field || generation != computed_generation ||
       signature != computed_signature) {
     have_field = BuildField(seed, seed_alt, settings, *terrain);
@@ -170,10 +209,25 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     computed_signature = signature;
   }
 
-  if (!have_field || !aircraft_valid)
+  if (!have_field) {
+    if (diag)
+      GlideConeLog::Add("no path: field invalid / compute failed");
     return;
+  }
+
+  if (!aircraft_valid) {
+    if (diag)
+      GlideConeLog::Add("no path: aircraft position not available");
+    return;
+  }
 
   const std::vector<GeoPoint> path = field.Trace(aircraft);
+  if (diag) {
+    int ax = -1, ay = -1;
+    const bool in_grid = field.GeoToCell(aircraft, ax, ay);
+    GlideConeLog::Add("trace: aircraftInGrid=%d cell=(%d,%d) pathPoints=%u",
+                      int(in_grid), ax, ay, unsigned(path.size()));
+  }
   if (path.size() < 2)
     return;
 

@@ -27,6 +27,15 @@
 #include "util/StaticString.hxx"
 #include "Components.hpp"
 #include "BackendComponents.hpp"
+#include "GlideCone/GlideConeLog.hpp"
+
+#ifdef ANDROID
+#include "Android/NativeView.hpp"
+#include "Android/Main.hpp"
+#include "java/Global.hxx"
+#endif
+
+#include <string>
 
 #include <algorithm>
 
@@ -743,4 +752,20 @@ InputEvents::sub_TerrainTopography(int vswitch)
                settings_map.terrain.enable);
 
   XCSoarInterface::SendMapSettings(true);
+}
+
+void
+InputEvents::eventGlideConeCopyLog([[maybe_unused]] const char *misc)
+{
+  const std::string text = GlideConeLog::Copy();
+
+#ifdef ANDROID
+  if (native_view != nullptr)
+    native_view->CopyToClipboard(Java::GetEnv(), text.c_str());
+#endif
+
+  StaticString<96> msg;
+  msg.Format(_("Glide cone log copied (%u chars)"),
+             unsigned(text.length()));
+  Message::AddMessage(msg.c_str());
 }

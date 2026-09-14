@@ -33,6 +33,7 @@ class NativeView {
   static jmethodID loadFileBitmap_method;
   static jmethodID bitmapToTexture_method;
   static jmethodID shareText_method;
+  static jmethodID copyToClipboard_method;
   static jmethodID openURL_method;
   static jmethodID openWifiSettings_method;
   static jmethodID openWaypointFile_method;
@@ -165,6 +166,11 @@ public:
    * pick a recipient.
    */
   void ShareText(JNIEnv *env, const char *text) noexcept;
+
+  /**
+   * Copy the given text to the system clipboard.
+   */
+  void CopyToClipboard(JNIEnv *env, const char *text) noexcept;
 
   /**
    * Open a URL in the default browser.
