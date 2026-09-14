@@ -14,6 +14,7 @@
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
 #include "Renderer/TextInBox.hpp"
+#include "Renderer/LabelBlock.hpp"
 #include "Formatter/UserUnits.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/dim/BulkPoint.hpp"
@@ -320,30 +321,60 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       computed_contours = true;
     }
 
-    const auto &segs = field.contour_segments;
-    if (!segs.empty()) {
-      canvas.Select(look.glide_cone_contour_pen);
-      for (std::size_t k = 0; k + 1 < segs.size(); k += 2)
-        canvas.DrawLine(projection.GeoToScreen(segs[k]),
-                        projection.GeoToScreen(segs[k + 1]));
-    }
-
-    if (!field.contour_labels.empty() &&
-        look.overlay.overlay_font != nullptr) {
+    if (!field.contour_lines.empty()) {
       const PixelRect screen = projection.GetScreenRect();
-      canvas.Select(*look.overlay.overlay_font);
-      for (const auto &[location, level] : field.contour_labels) {
-        const PixelPoint p = projection.GeoToScreen(location);
-        if (p.x < screen.left || p.x > screen.right ||
-            p.y < screen.top || p.y > screen.bottom)
-          continue;
-        char buffer[32];
-        FormatUserAltitude(double(level), buffer);
-        RenderShadowedText(canvas, buffer, p, false);
+
+      /* draw the stitched contour polylines */
+      canvas.Select(look.glide_cone_contour_pen);
+      std::vector<BulkPixelPoint> pts;
+      for (const auto &line : field.contour_lines) {
+        pts.clear();
+        pts.reserve(line.points.size());
+        for (const GeoPoint &g : line.points)
+          pts.push_back(projection.GeoToScreen(g));
+        if (pts.size() >= 2)
+          canvas.DrawPolyline(pts.data(), unsigned(pts.size()));
+      }
+
+      /* upright labels spaced along each line by on-screen distance;
+         overlapping labels are hidden (zoom in to reveal more) */
+      if (look.overlay.overlay_font != nullptr) {
+        canvas.Select(*look.overlay.overlay_font);
+        LabelBlock label_block;
+        label_block.reset();
+
+        constexpr double LABEL_SPACING_PX = 140;
+        for (const auto &line : field.contour_lines) {
+          char buffer[32];
+          FormatUserAltitude(double(line.level), buffer);
+          const PixelSize ts = canvas.CalcTextSize(buffer);
+
+          double acc = LABEL_SPACING_PX;
+          PixelPoint prev = projection.GeoToScreen(line.points[0]);
+          for (std::size_t k = 1; k < line.points.size(); ++k) {
+            const PixelPoint cur = projection.GeoToScreen(line.points[k]);
+            acc += std::hypot(double(cur.x - prev.x), double(cur.y - prev.y));
+            prev = cur;
+            if (acc < LABEL_SPACING_PX)
+              continue;
+            acc = 0;
+
+            if (cur.x < screen.left || cur.x > screen.right ||
+                cur.y < screen.top || cur.y > screen.bottom)
+              continue;
+
+            const PixelRect rc{cur.x - int(ts.width) / 2,
+                               cur.y - int(ts.height) / 2,
+                               cur.x + int(ts.width) / 2,
+                               cur.y + int(ts.height) / 2};
+            if (label_block.check(rc))
+              RenderShadowedText(canvas, buffer, {rc.left, rc.top}, false);
+          }
+        }
       }
     }
   } else if (computed_contours) {
-    field.contour_segments.clear();
+    field.contour_lines.clear();
     computed_contours = false;
   }
 

@@ -29,14 +29,14 @@ struct GlideConeField {
   /** Seed (airport) cell. */
   int home_x = -1, home_y = -1;
 
-  /**
-   * Altitude contour line segments (pairs of points: [0,1], [2,3], …),
-   * built on demand by BuildContours().
-   */
-  std::vector<GeoPoint> contour_segments;
+  /** A stitched contour polyline at a given altitude level. */
+  struct ContourLine {
+    std::vector<GeoPoint> points;
+    int level;
+  };
 
-  /** Sparse contour labels: position and altitude level [m MSL]. */
-  std::vector<std::pair<GeoPoint, int>> contour_labels;
+  /** Altitude contour polylines, built on demand by BuildContours(). */
+  std::vector<ContourLine> contour_lines;
 
   [[gnu::pure]]
   bool IsValid() const noexcept {
@@ -47,8 +47,7 @@ struct GlideConeField {
     result.Clear();
     bounds.SetInvalid();
     home_x = home_y = -1;
-    contour_segments.clear();
-    contour_labels.clear();
+    contour_lines.clear();
   }
 
   /**

@@ -6,7 +6,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <optional>
+#include <unordered_map>
+#include <utility>
 
 GeoPoint
 GlideConeField::CellToGeo(int x, int y) const noexcept
@@ -120,19 +123,107 @@ GeoPoint Lerp(GeoPoint a, GeoPoint b, double t) noexcept
   return GeoPoint(a.longitude + (b.longitude - a.longitude) * t,
                   a.latitude + (b.latitude - a.latitude) * t);
 }
+
+using ContourSeg = std::array<GeoPoint, 2>;
+using EndpointKey = std::pair<std::int64_t, std::int64_t>;
+
+struct EndpointKeyHash {
+  std::size_t operator()(const EndpointKey &k) const noexcept {
+    return std::hash<std::int64_t>{}(k.first) * 1000003u ^
+      std::hash<std::int64_t>{}(k.second);
+  }
+};
+
+[[gnu::pure]]
+EndpointKey MakeKey(GeoPoint p) noexcept
+{
+  /* endpoints shared between adjacent cells are computed identically, so
+     quantising to ~1e-9 rad matches them robustly */
+  return {std::llround(p.longitude.Native() * 1e9),
+          std::llround(p.latitude.Native() * 1e9)};
+}
+
+/**
+ * Join loose marching-squares segments into continuous polylines by
+ * matching shared endpoints (port of gpu-MC stitchSegments()).
+ */
+std::vector<std::vector<GeoPoint>>
+StitchSegments(const std::vector<ContourSeg> &segments) noexcept
+{
+  std::vector<std::vector<GeoPoint>> lines;
+  if (segments.empty())
+    return lines;
+
+  std::unordered_map<EndpointKey, std::vector<std::pair<int, int>>,
+                     EndpointKeyHash> endpoints;
+  for (int i = 0; i < int(segments.size()); ++i) {
+    endpoints[MakeKey(segments[i][0])].push_back({i, 0});
+    endpoints[MakeKey(segments[i][1])].push_back({i, 1});
+  }
+
+  std::vector<char> used(segments.size(), 0);
+
+  const auto follow = [&](int start_seg, int start_end) {
+    std::vector<GeoPoint> coords;
+    int seg = start_seg, end = start_end;
+
+    while (seg >= 0 && !used[seg]) {
+      used[seg] = 1;
+      const GeoPoint a = segments[seg][0], b = segments[seg][1];
+      if (end == 0) {
+        coords.push_back(a);
+        coords.push_back(b);
+      } else {
+        coords.push_back(b);
+        coords.push_back(a);
+      }
+
+      const GeoPoint tip = end == 0 ? b : a;
+      int next = -1, next_end = 0;
+      const auto it = endpoints.find(MakeKey(tip));
+      if (it != endpoints.end()) {
+        for (const auto &cand : it->second) {
+          if (cand.first == seg || used[cand.first])
+            continue;
+          next = cand.first;
+          next_end = cand.second;
+          break;
+        }
+      }
+      seg = next;
+      end = next_end;
+    }
+
+    /* drop consecutive duplicates */
+    std::vector<GeoPoint> deduped;
+    for (const GeoPoint &p : coords)
+      if (deduped.empty() ||
+          deduped.back().longitude != p.longitude ||
+          deduped.back().latitude != p.latitude)
+        deduped.push_back(p);
+
+    if (deduped.size() >= 2)
+      lines.push_back(std::move(deduped));
+  };
+
+  for (int i = 0; i < int(segments.size()); ++i) {
+    if (used[i])
+      continue;
+    follow(i, 0);
+    if (!used[i])
+      follow(i, 1);
+  }
+
+  return lines;
+}
 } // anonymous namespace
 
 void
 GlideConeField::BuildContours(double interval_m) noexcept
 {
-  contour_segments.clear();
-  contour_labels.clear();
+  contour_lines.clear();
   if (!IsValid() || interval_m <= 0)
     return;
-
-  /* place a label roughly every LABEL_STRIDE segments of each level */
-  constexpr unsigned LABEL_STRIDE = 60;
-  constexpr std::size_t MAX_LABELS = 400;
 
   const unsigned w = result.width;
   const unsigned h = result.height;
@@ -165,7 +256,7 @@ GlideConeField::BuildContours(double interval_m) noexcept
   for (int level = int(interval_m); level <= max_level;
        level += int(interval_m)) {
     const float flevel = float(level);
-    unsigned level_seg = 0;
+    std::vector<ContourSeg> segs;
 
     for (unsigned j = 0; j + 1 < h; ++j) {
       for (unsigned i = 0; i + 1 < w; ++i) {
@@ -208,17 +299,14 @@ GlideConeField::BuildContours(double interval_m) noexcept
         for (unsigned s = 0; s < cs.count; ++s) {
           const auto p0 = edge_point(cs.seg[s].a);
           const auto p1 = edge_point(cs.seg[s].b);
-          if (p0 && p1) {
-            contour_segments.push_back(*p0);
-            contour_segments.push_back(*p1);
-
-            if (level_seg % LABEL_STRIDE == 0 &&
-                contour_labels.size() < MAX_LABELS)
-              contour_labels.emplace_back(Lerp(*p0, *p1, 0.5), level);
-            ++level_seg;
-          }
+          if (p0 && p1)
+            segs.push_back({*p0, *p1});
         }
       }
     }
+
+    for (auto &coords : StitchSegments(segs))
+      if (coords.size() >= 2)
+        contour_lines.push_back({std::move(coords), level});
   }
 }
