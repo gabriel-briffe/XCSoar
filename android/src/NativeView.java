@@ -436,6 +436,17 @@ class NativeView extends SurfaceView
   }
 
   /**
+   * Copy the given text to the system clipboard.  Called from native code.
+   */
+  private void copyToClipboard(String text) {
+    final Context ctx = getContext();
+    android.content.ClipboardManager cm =
+      (android.content.ClipboardManager)ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+    if (cm != null)
+      cm.setPrimaryClip(android.content.ClipData.newPlainText("XCSoar", text));
+  }
+
+  /**
    * Opens a URL in the default browser.
    */
   private boolean openURL(String url) {

@@ -304,6 +304,14 @@ public:
 
   void DrawText(PixelPoint p, std::string_view text) noexcept;
 
+  /**
+   * Draw text centred at @p center and rotated by @p angle (screen
+   * clockwise).  With the default angle of 0 the text is simply centred
+   * at @p center.  Used for labels that follow a line.
+   */
+  void DrawText(PixelPoint center, std::string_view text,
+                Angle angle) noexcept;
+
   void DrawTransparentText(PixelPoint p, std::string_view text) noexcept;
 
   void DrawOpaqueText(PixelPoint p, const PixelRect &rc,

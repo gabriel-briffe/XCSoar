@@ -19,6 +19,7 @@ jmethodID NativeView::loadResourceBitmap_method;
 jmethodID NativeView::loadFileBitmap_method;
 jmethodID NativeView::bitmapToTexture_method;
 jmethodID NativeView::shareText_method;
+jmethodID NativeView::copyToClipboard_method;
 jmethodID NativeView::openURL_method;
 jmethodID NativeView::openWifiSettings_method;
 jmethodID NativeView::openWaypointFile_method;
@@ -62,6 +63,9 @@ NativeView::Initialise(JNIEnv *env)
 
   shareText_method = env->GetMethodID(cls, "shareText",
                                           "(Ljava/lang/String;)V");
+
+  copyToClipboard_method = env->GetMethodID(cls, "copyToClipboard",
+                                            "(Ljava/lang/String;)V");
 
   openURL_method = env->GetMethodID(cls, "openURL",
                                     "(Ljava/lang/String;)Z");
@@ -172,6 +176,13 @@ void
 NativeView::ShareText(JNIEnv *env, const char *text) noexcept
 {
   env->CallVoidMethod(obj, shareText_method,
+                      Java::String{env, text}.Get());
+}
+
+void
+NativeView::CopyToClipboard(JNIEnv *env, const char *text) noexcept
+{
+  env->CallVoidMethod(obj, copyToClipboard_method,
                       Java::String{env, text}.Get());
 }
 

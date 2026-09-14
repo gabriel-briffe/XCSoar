@@ -17,6 +17,7 @@
 #include "Renderer/WaypointRenderer.hpp"
 #include "Renderer/TrailRenderer.hpp"
 #include "Renderer/TurnBackMarkerRenderer.hpp"
+#include "GlideCone/GlideConeRenderer.hpp"
 #include "OverlayLimits.hpp"
 #include "Weather/Features.hpp"
 #include "Tracking/SkyLines/Features.hpp"
@@ -146,6 +147,8 @@ protected:
   TrailRenderer trail_renderer;
   TurnBackMarkerRenderer turn_back_marker_renderer;
 
+  GlideConeRenderer glide_cone_renderer;
+
   ProtectedTaskManager *task = nullptr;
   const ProtectedRoutePlanner *route_planner = nullptr;
   GlideComputer *glide_computer = nullptr;
@@ -233,6 +236,18 @@ public:
 
   void SetTopography(TopographyStore *_topography) noexcept;
   void SetTerrain(RasterTerrain *_terrain) noexcept;
+
+  /**
+   * Set/clear the airport for which the glide cone overlay is computed.
+   * May be called from the UI thread.
+   */
+  void SetGlideConeTarget(GeoPoint seed, double elevation) noexcept {
+    glide_cone_renderer.SetTarget(seed, elevation);
+  }
+
+  void ClearGlideConeTarget() noexcept {
+    glide_cone_renderer.ClearTarget();
+  }
 
   const std::shared_ptr<RaspStore> &GetRasp() const noexcept {
     return rasp_store;

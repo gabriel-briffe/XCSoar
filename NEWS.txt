@@ -1,4 +1,9 @@
 Version 7.46 - not yet released
+* map
+  - add an experimental terrain-aware glide cone overlay: when enabled,
+    performing a "Goto" to an airport triggers a GPU (OpenGL ES 3.1)
+    computation of the reachable terrain and draws the glide path from
+    the aircraft back to the airport (Android only)
 * android
   - target Android 16 so Google Play still accepts updates #2874
   - fix crash when exiting the app #2873

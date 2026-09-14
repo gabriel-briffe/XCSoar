@@ -11,6 +11,9 @@ LIBMAPWINDOW_SOURCES = \
 	$(SRC)/MapWindow/Items/WeatherBuilder.cpp \
 	$(SRC)/MapWindow/MapWindow.cpp \
 	$(SRC)/MapWindow/MapWindowEvents.cpp \
+	$(SRC)/GlideCone/GlideConeField.cpp \
+	$(SRC)/GlideCone/GlideConeCompute.cpp \
+	$(SRC)/GlideCone/GlideConeRenderer.cpp \
 	$(SRC)/MapWindow/MapWindowGlideRange.cpp \
 	$(SRC)/Projection/MapWindowProjection.cpp \
 	$(SRC)/MapWindow/MapWindowRender.cpp \

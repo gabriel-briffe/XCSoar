@@ -21,6 +21,7 @@ namespace Profile {
   static void Load(const ProfileMap &map, CirclingSettings &settings);
   static void Load(const ProfileMap &map, WaveSettings &settings);
   static void Load(const ProfileMap &map, WeGlideSettings &settings);
+  static void Load(const ProfileMap &map, GlideConeSettings &settings);
 };
 
 void
@@ -121,6 +122,18 @@ Profile::Load(const ProfileMap &map, WaveSettings &settings)
   map.Get(ProfileKeys::WaveAssistant, settings.enabled);
 }
 
+void
+Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
+{
+  map.GetEnum(ProfileKeys::GlideConeMode, settings.mode);
+  map.Get(ProfileKeys::GlideConeGlideRatio, settings.glide_ratio);
+  map.Get(ProfileKeys::GlideConeMaxAltitude, settings.max_altitude);
+  map.Get(ProfileKeys::GlideConeIterationCap, settings.iteration_cap);
+  map.Get(ProfileKeys::GlideConeContours, settings.contours);
+  map.Get(ProfileKeys::GlideConeContoursMinScale, settings.contours_min_scale);
+  map.Get(ProfileKeys::GlideConeLabelSpacing, settings.label_spacing);
+}
+
 bool
 Profile::LoadUTCOffset(const ProfileMap &map, RoughTimeDelta &value_r) noexcept
 {
@@ -178,6 +191,7 @@ Profile::Load(const ProfileMap &map, ComputerSettings &settings)
   Load(map, settings.contest);
   Load(map, settings.logger);
   Load(map, settings.weglide);
+  Load(map, settings.glide_cone);
 
 #ifdef HAVE_TRACKING
   Load(map, settings.tracking);

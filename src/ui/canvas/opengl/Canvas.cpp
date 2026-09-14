@@ -16,6 +16,9 @@
 #include "ui/canvas/Util.hpp"
 #include "Screen/Layout.hpp"
 #include "Math/Angle.hpp"
+
+#include <array>
+#include <cmath>
 #include "util/AllocatedArray.hxx"
 #include "util/Macros.hpp"
 #include "util/UTF8.hpp"
@@ -678,6 +681,42 @@ Canvas::DrawText(PixelPoint p, std::string_view text) noexcept
 
   texture->Bind();
   texture->Draw(p);
+}
+
+void
+Canvas::DrawText(PixelPoint center, std::string_view text,
+                 Angle angle) noexcept
+{
+  assert(ValidateUTF8(text));
+
+  if (font == nullptr)
+    return;
+
+  GLTexture *texture = TextCache::Get(*font, text);
+  if (texture == nullptr)
+    return;
+
+  const PixelSize size = texture->GetSize();
+  const double rad = angle.Radians();
+  const double c = std::cos(rad), s = std::sin(rad);
+  const int hw = int(size.width) / 2;
+  const int hh = int(size.height) / 2;
+
+  const auto rot = [&](int dx, int dy) noexcept {
+    return BulkPixelPoint(center.x + int(std::lround(dx * c - dy * s)),
+                          center.y + int(std::lround(dx * s + dy * c)));
+  };
+
+  const std::array<BulkPixelPoint, 4> vertices = {
+    rot(-hw, -hh), rot(hw, -hh), rot(-hw, hh), rot(hw, hh),
+  };
+
+  PrepareColoredAlphaTexture(text_color);
+
+  const ScopeAlphaBlend alpha_blend;
+
+  texture->Bind();
+  texture->Draw(vertices, texture->GetRect());
 }
 
 void
