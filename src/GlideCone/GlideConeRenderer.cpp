@@ -159,38 +159,49 @@ GlideConeRenderer::BuildField(GeoPoint seed, double elevation,
 void
 GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                         GeoPoint aircraft, bool aircraft_valid,
+                        GeoPoint target, bool target_valid,
                         const ComputerSettings &settings,
                         const RasterTerrain *terrain,
                         const MapLook &look) noexcept
 {
+  const GlideConeSettings &gc = settings.glide_cone;
+
+  /* seed from the active navigation target; fall back to the last
+     explicit Goto target set via SetTarget() */
   GeoPoint seed;
   double seed_alt;
   bool valid;
-  std::uint64_t generation;
-
-  {
+  if (target_valid) {
+    seed = target;
+    seed_alt = 0;
+    valid = true;
+  } else {
     const std::lock_guard lock{mutex};
     seed = pending_seed;
     seed_alt = pending_seed_alt;
     valid = pending_valid;
-    generation = pending_generation;
   }
 
-  const GlideConeSettings &gc = settings.glide_cone;
+  /* recompute when the seed moves noticeably or a parameter changes */
+  constexpr double SEED_EPSILON_M = 50;
   const std::size_t signature = SettingsSignature(gc);
 
-  /* emit one diagnostic line per new request (goto or settings change) */
-  const bool diag = generation != last_diag_generation ||
-    signature != last_diag_signature;
+  const bool diag =
+    valid != last_diag_valid || signature != last_diag_signature ||
+    (valid && (!last_diag_seed.IsValid() ||
+               last_diag_seed.DistanceS(seed) > SEED_EPSILON_M));
   if (diag) {
-    last_diag_generation = generation;
+    last_diag_valid = valid;
     last_diag_signature = signature;
+    last_diag_seed = valid ? seed : GeoPoint::Invalid();
     GlideConeLog::Add("Draw: enabled=%d avail=%d terrain=%d targetValid=%d "
-                      "aircraftValid=%d ratio=%.1f maxAlt=%.0f cap=%u gen=%llu",
+                      "aircraftValid=%d seed=(%.5f,%.5f) ratio=%.1f "
+                      "maxAlt=%.0f cap=%u",
                       int(gc.enabled), int(GlideConeCompute::Available()),
                       int(terrain != nullptr), int(valid), int(aircraft_valid),
-                      gc.glide_ratio, gc.max_altitude, gc.iteration_cap,
-                      (unsigned long long)generation);
+                      valid ? seed.latitude.Degrees() : 0.0,
+                      valid ? seed.longitude.Degrees() : 0.0,
+                      gc.glide_ratio, gc.max_altitude, gc.iteration_cap);
   }
 
   if (!gc.enabled || terrain == nullptr || !GlideConeCompute::Available())
@@ -199,13 +210,15 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
   if (!valid) {
     field.Clear();
     have_field = false;
+    computed_seed = GeoPoint::Invalid();
     return;
   }
 
-  if (!have_field || generation != computed_generation ||
-      signature != computed_signature) {
+  if (!have_field || signature != computed_signature ||
+      !computed_seed.IsValid() ||
+      computed_seed.DistanceS(seed) > SEED_EPSILON_M) {
     have_field = BuildField(seed, seed_alt, settings, *terrain);
-    computed_generation = generation;
+    computed_seed = seed;
     computed_signature = signature;
   }
 

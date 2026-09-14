@@ -298,9 +298,15 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
 
   // Render the terrain-aware glide cone relay path (GPU/GLES3.1 only)
   draw_sw.Mark("RenderGlideCone");
-  glide_cone_renderer.Draw(canvas, render_projection,
-                           basic.location, basic.location_available.IsValid(),
-                           GetComputerSettings(), terrain, look);
+  {
+    const auto &task_stats = Calculated().task_stats;
+    const GeoPoint gc_target = task_stats.current_leg.location_remaining;
+    const bool gc_target_valid = task_stats.task_valid && gc_target.IsValid();
+    glide_cone_renderer.Draw(canvas, render_projection,
+                             basic.location, basic.location_available.IsValid(),
+                             gc_target, gc_target_valid,
+                             GetComputerSettings(), terrain, look);
+  }
 
   // Render track bearing (projected track ground/air relative)
   draw_sw.Mark("DrawTrackBearing");

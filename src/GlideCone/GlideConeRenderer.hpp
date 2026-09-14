@@ -37,13 +37,14 @@ class GlideConeRenderer {
 
   /* draw-thread-owned computed state */
   GlideConeField field;
-  std::uint64_t computed_generation = 0;
+  GeoPoint computed_seed = GeoPoint::Invalid();
   std::size_t computed_signature = 0;
   bool have_field = false;
 
   /* used to emit one diagnostic log line per new request */
-  std::uint64_t last_diag_generation = ~std::uint64_t{0};
+  GeoPoint last_diag_seed = GeoPoint::Invalid();
   std::size_t last_diag_signature = ~std::size_t{0};
+  bool last_diag_valid = false;
 
 public:
   /**
@@ -58,9 +59,14 @@ public:
   /**
    * Draw the glide cone path.  Must be called on the draw thread with the
    * OpenGL context current.
+   *
+   * @param target the active navigation target (Goto/task destination)
+   * used as the cone seed; falls back to the last explicit Goto target
+   * when invalid
    */
   void Draw(Canvas &canvas, const WindowProjection &projection,
             GeoPoint aircraft, bool aircraft_valid,
+            GeoPoint target, bool target_valid,
             const ComputerSettings &settings,
             const RasterTerrain *terrain, const MapLook &look) noexcept;
 
