@@ -118,6 +118,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/DisplayConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/VarioConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/GlideComputerConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/GlideConeConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/WindConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/InfoBoxesConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/InterfaceConfigPanel.cpp \

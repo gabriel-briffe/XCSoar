@@ -36,6 +36,12 @@ ifeq ($(OPENGL),y)
 # OpenGL is always OpenGL ES 2.0 (Mesa, ANGLE, or native ES).
 OPENGL_CPPFLAGS = -DENABLE_OPENGL
 
+# Android provides an OpenGL ES 3.1 context (see src/ui/display/egl), which
+# enables the glide cone GPU compute feature.
+ifeq ($(TARGET),ANDROID)
+OPENGL_CPPFLAGS += -DHAVE_GLES_COMPUTE
+endif
+
 ifeq ($(TARGET_IS_DARWIN),y)
 # Use ANGLE on macOS (not iOS)
 ifeq ($(TARGET_IS_IOS),y)
@@ -55,6 +61,9 @@ OPENGL_LDLIBS = $(ANGLE_LDLIBS)
 else
 OPENGL_LDLIBS = -lGLESv2
 endif
+else ifeq ($(TARGET),ANDROID)
+# link libGLESv3 for the ES 3.1 compute entry points (glide cone feature)
+OPENGL_LDLIBS = -lGLESv3 -ldl
 else
 OPENGL_LDLIBS = -lGLESv2 -ldl
 endif

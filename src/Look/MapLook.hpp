@@ -53,6 +53,9 @@ struct MapLook {
 
   Pen track_line_pen;
 
+  /** Pen for the glide cone relay path overlay */
+  Pen glide_cone_pen;
+
   /** Pen and brush for the Turn Back Marker (TBM) */
   Pen tbm_pen;
   Brush tbm_brush;

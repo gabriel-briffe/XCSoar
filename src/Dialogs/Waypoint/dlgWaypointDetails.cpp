@@ -7,6 +7,7 @@
 #include "Simulator.hpp"
 #include "Dialogs/WidgetDialog.hpp"
 #include "UIGlobals.hpp"
+#include "MapWindow/GlueMapWindow.hpp"
 #include "Look/DialogLook.hpp"
 #include "Form/Panel.hpp"
 #include "Form/Draw.hpp"
@@ -872,7 +873,14 @@ WaypointDetailsWidget::OnGotoClicked()
     }
   }
 
+  const GeoPoint goto_location = waypoint->location;
+  const double goto_elevation = waypoint->GetElevationOrZero();
+
   task_manager->DoGoto(waypoint);
+
+  if (auto *map = UIGlobals::GetMap())
+    map->SetGlideConeTarget(goto_location, goto_elevation);
+
   if (nesting.state_change_committed != nullptr)
     *nesting.state_change_committed = true;
   dialog.SetModalResult(mrOK);

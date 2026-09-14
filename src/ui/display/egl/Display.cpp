@@ -84,8 +84,28 @@ Display::CreateContext()
     EGL_NONE
   };
 
+#ifdef ANDROID
+  /* Try to create an OpenGL ES 3.1 context so the glide cone GPU compute
+     feature can use compute shaders; fall back to ES 2.0 when the device
+     does not support it.  All existing rendering uses ES2-style shaders,
+     which remain valid under an ES3.x context. */
+  static constexpr EGLint es31_context_attributes[] = {
+    EGL_CONTEXT_MAJOR_VERSION, 3,
+    EGL_CONTEXT_MINOR_VERSION, 1,
+    EGL_NONE
+  };
+
+  context = eglCreateContext(display, chosen_config,
+                             EGL_NO_CONTEXT, es31_context_attributes);
+  if (context == EGL_NO_CONTEXT) {
+    LogFormat("EGL: no OpenGL ES 3.1 context, falling back to ES 2.0");
+    context = eglCreateContext(display, chosen_config,
+                               EGL_NO_CONTEXT, context_attributes);
+  }
+#else
   context = eglCreateContext(display, chosen_config,
                              EGL_NO_CONTEXT, context_attributes);
+#endif
   if (!eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context)) {
     /* some old EGL implemenations do not support EGL_NO_SURFACE
        (error EGL_BAD_MATCH); this kludge uses a dummy 1x1 pbuffer
