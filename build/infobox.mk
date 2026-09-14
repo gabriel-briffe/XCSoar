@@ -1,6 +1,8 @@
 LIBINFOBOX_SOURCES = \
 	$(SRC)/InfoBoxes/Content/Factory.cpp \
 	$(SRC)/InfoBoxes/Content/GlideCone.cpp \
+	$(SRC)/InfoBoxes/Panel/GlideConeMode.cpp \
+	$(SRC)/InfoBoxes/Panel/GlideConeSetup.cpp \
 	$(SRC)/InfoBoxes/Content/Alternate.cpp \
 	$(SRC)/InfoBoxes/Content/Base.cpp \
 	$(SRC)/InfoBoxes/Content/Altitude.cpp \

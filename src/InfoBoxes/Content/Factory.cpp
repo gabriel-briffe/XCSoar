@@ -1216,8 +1216,8 @@ static constexpr MetaData meta_data[] = {
   {
     NC_("InfoBox", "Glide Cone"),
     NC_("Abbreviation", "GlideCone"),
-    N_("Altitude margin to the Goto airport from the terrain-aware glide cone computation: the main value is the glider's current altitude minus the altitude required at the glider position (green when at or above, red when below); the bottom line is that required altitude. Requires the glide cone feature (GPU/OpenGL ES 3.1) and an active Goto."),
-    UpdateInfoBoxGlideCone,
+    N_("Altitude margin to the Goto airport (or nearest landable, in combined mode) from the terrain-aware glide cone computation: the main value is the glider's current altitude minus the altitude required at the glider position (green when at or above, red when below); the bottom line is that required altitude. The title shows the current glide ratio (GC L/D). Tap to choose the mode (off/single/combined) and adjust the glide ratio. Requires the glide cone feature (GPU/OpenGL ES 3.1)."),
+    IBFHelper<InfoBoxContentGlideCone>::Create,
   },
 
 };

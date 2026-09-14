@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 /**
  * Settings for the terrain-aware glide cone overlay.
  *
@@ -13,8 +15,22 @@
  * (currently Android); on other targets these settings are inert.
  */
 struct GlideConeSettings {
-  /** Draw the glide cone path for the current "Goto" airport. */
-  bool enabled;
+  enum class Mode : uint8_t {
+    /** Feature disabled. */
+    OFF,
+
+    /** Single seed: the current "Goto" airport. */
+    SINGLE,
+
+    /**
+     * Combined multi-seed mode: all landables within a moving window
+     * around the aircraft, recomputed as the aircraft moves.
+     */
+    COMBINED,
+  };
+
+  /** Glide cone mode. */
+  Mode mode;
 
   /**
    * Fixed glide ratio (L/D) used for the cone propagation: horizontal
@@ -32,4 +48,9 @@ struct GlideConeSettings {
   unsigned iteration_cap;
 
   void SetDefaults() noexcept;
+
+  [[gnu::pure]]
+  constexpr bool IsEnabled() const noexcept {
+    return mode != Mode::OFF;
+  }
 };

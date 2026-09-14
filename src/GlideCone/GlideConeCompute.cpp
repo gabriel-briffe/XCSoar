@@ -418,9 +418,12 @@ GlideConeCompute::Run(const GlideConeGrid &grid, GlideConeResult &out) noexcept
   for (std::size_t i = 0; i < count; ++i)
     cells[i] = GpuCell{grid.max_alt, -1, -1, 0u};
 
-  const std::size_t seed = std::size_t(grid.home_y) * width + grid.home_x;
-  if (seed < count)
-    cells[seed] = GpuCell{grid.home_alt, grid.home_x, grid.home_y, FLAG_CHANGED};
+  for (const auto &s : grid.seeds) {
+    if (s.x < 0 || s.y < 0 || unsigned(s.x) >= width || unsigned(s.y) >= height)
+      continue;
+    const std::size_t seed = std::size_t(s.y) * width + s.x;
+    cells[seed] = GpuCell{s.alt, s.x, s.y, FLAG_CHANGED};
+  }
 
   GLuint bufs[3];
   glGenBuffers(3, bufs);

@@ -4,16 +4,27 @@
 #include "GlideConeConfigPanel.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
+#include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
 
 enum ControlIndex {
-  Enabled,
+  Mode,
   GlideRatio,
   MaxAltitude,
   IterationCap,
+};
+
+static constexpr StaticEnumChoice glide_cone_mode_list[] = {
+  { GlideConeSettings::Mode::OFF, N_("Off") },
+  { GlideConeSettings::Mode::SINGLE, N_("Single"),
+    N_("Compute the glide cone for the current Goto airport.") },
+  { GlideConeSettings::Mode::COMBINED, N_("Combined"),
+    N_("Compute a combined glide cone from all landables within a moving "
+       "window around the aircraft.") },
+  nullptr
 };
 
 class GlideConeConfigPanel final : public RowFormWidget {
@@ -35,11 +46,10 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
 
   RowFormWidget::Prepare(parent, rc);
 
-  AddBoolean(_("Glide cone"),
-             _("Compute and draw a terrain-aware glide path from the aircraft "
-               "to the last \"Goto\" airport.  This is a GPU (OpenGL ES 3.1) "
-               "feature and has no effect on devices without compute support."),
-             glide_cone.enabled);
+  AddEnum(_("Glide cone"),
+          _("Terrain-aware glide cone mode.  This is a GPU (OpenGL ES 3.1) "
+            "feature and has no effect on devices without compute support."),
+          glide_cone_mode_list, unsigned(glide_cone.mode));
 
   AddFloat(_("Glide ratio"),
            _("Fixed glide ratio (L/D) used for the glide cone computation."),
@@ -63,8 +73,7 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
   ComputerSettings &settings_computer = CommonInterface::SetComputerSettings();
   GlideConeSettings &glide_cone = settings_computer.glide_cone;
 
-  changed |= SaveValue(Enabled, ProfileKeys::GlideConeEnabled,
-                       glide_cone.enabled);
+  changed |= SaveValueEnum(Mode, ProfileKeys::GlideConeMode, glide_cone.mode);
 
   changed |= SaveValue(GlideRatio, ProfileKeys::GlideConeGlideRatio,
                        glide_cone.glide_ratio);

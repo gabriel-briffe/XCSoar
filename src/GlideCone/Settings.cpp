@@ -6,7 +6,7 @@
 void
 GlideConeSettings::SetDefaults() noexcept
 {
-  enabled = false;
+  mode = Mode::OFF;
   glide_ratio = 40;
   max_altitude = 3000;
   iteration_cap = 2000;

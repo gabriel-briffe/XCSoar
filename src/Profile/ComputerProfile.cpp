@@ -125,7 +125,7 @@ Profile::Load(const ProfileMap &map, WaveSettings &settings)
 void
 Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
 {
-  map.Get(ProfileKeys::GlideConeEnabled, settings.enabled);
+  map.GetEnum(ProfileKeys::GlideConeMode, settings.mode);
   map.Get(ProfileKeys::GlideConeGlideRatio, settings.glide_ratio);
   map.Get(ProfileKeys::GlideConeMaxAltitude, settings.max_altitude);
   map.Get(ProfileKeys::GlideConeIterationCap, settings.iteration_cap);

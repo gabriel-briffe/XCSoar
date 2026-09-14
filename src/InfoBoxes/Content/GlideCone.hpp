@@ -3,7 +3,13 @@
 
 #pragma once
 
-struct InfoBoxData;
+#include "InfoBoxes/Content/Base.hpp"
 
-void
-UpdateInfoBoxGlideCone(InfoBoxData &data) noexcept;
+struct InfoBoxData;
+struct InfoBoxPanel;
+
+class InfoBoxContentGlideCone : public InfoBoxContent {
+public:
+  void Update(InfoBoxData &data) noexcept override;
+  const InfoBoxPanel *GetDialogContent() noexcept override;
+};

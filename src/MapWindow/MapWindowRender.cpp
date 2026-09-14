@@ -305,7 +305,7 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
     glide_cone_renderer.Draw(canvas, render_projection,
                              basic.location, basic.location_available.IsValid(),
                              gc_target, gc_target_valid,
-                             GetComputerSettings(), terrain, look);
+                             GetComputerSettings(), terrain, waypoints, look);
   }
 
   // Render track bearing (projected track ground/air relative)
