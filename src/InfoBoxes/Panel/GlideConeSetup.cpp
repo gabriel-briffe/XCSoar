@@ -19,6 +19,10 @@
 #include <array>
 #include <memory>
 
+static constexpr const char *const GLIDE_CONE_MODE_LABELS[] = {
+  N_("Off"), N_("Single"), N_("Combined"),
+};
+
 /**
  * A single "Setup" panel for the glide cone: a "- <ratio> +" stepper row
  * on top and an Off/Single/Combined mode button row below (the active
@@ -74,8 +78,18 @@ private:
     if (modes == nullptr)
       return;
     const auto mode = CommonInterface::GetComputerSettings().glide_cone.mode;
-    for (unsigned i = 0; i < MODES.size(); ++i)
-      (*modes)[i].SetSelected(MODES[i] == mode);
+    for (unsigned i = 0; i < MODES.size(); ++i) {
+      const bool selected = MODES[i] == mode;
+      /* strong indicator: bracket the active mode, plus the selected
+         button highlight */
+      StaticString<24> caption;
+      if (selected)
+        caption.Format("[ %s ]", gettext(GLIDE_CONE_MODE_LABELS[i]));
+      else
+        caption = gettext(GLIDE_CONE_MODE_LABELS[i]);
+      (*modes)[i].SetCaption(caption.c_str());
+      (*modes)[i].SetSelected(selected);
+    }
   }
 
   void Adjust(int delta) noexcept {
@@ -120,13 +134,11 @@ public:
     plus = std::make_unique<Button>(parent, look.button, "+", cells.top[2],
                                     button_style, [this](){ Adjust(1); });
 
-    static constexpr const char *labels[] = {
-      N_("Off"), N_("Single"), N_("Combined"),
-    };
     modes = std::make_unique<std::array<Button, 3>>();
     for (unsigned i = 0; i < MODES.size(); ++i) {
       const auto mode = MODES[i];
-      (*modes)[i].Create(parent, look.button, gettext(labels[i]),
+      (*modes)[i].Create(parent, look.button,
+                         gettext(GLIDE_CONE_MODE_LABELS[i]),
                          cells.bottom[i], button_style,
                          [this, mode](){ SetMode(mode); });
     }

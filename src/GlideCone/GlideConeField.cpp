@@ -126,8 +126,13 @@ void
 GlideConeField::BuildContours(double interval_m) noexcept
 {
   contour_segments.clear();
+  contour_labels.clear();
   if (!IsValid() || interval_m <= 0)
     return;
+
+  /* place a label roughly every LABEL_STRIDE segments of each level */
+  constexpr unsigned LABEL_STRIDE = 60;
+  constexpr std::size_t MAX_LABELS = 400;
 
   const unsigned w = result.width;
   const unsigned h = result.height;
@@ -160,6 +165,7 @@ GlideConeField::BuildContours(double interval_m) noexcept
   for (int level = int(interval_m); level <= max_level;
        level += int(interval_m)) {
     const float flevel = float(level);
+    unsigned level_seg = 0;
 
     for (unsigned j = 0; j + 1 < h; ++j) {
       for (unsigned i = 0; i + 1 < w; ++i) {
@@ -205,6 +211,11 @@ GlideConeField::BuildContours(double interval_m) noexcept
           if (p0 && p1) {
             contour_segments.push_back(*p0);
             contour_segments.push_back(*p1);
+
+            if (level_seg % LABEL_STRIDE == 0 &&
+                contour_labels.size() < MAX_LABELS)
+              contour_labels.emplace_back(Lerp(*p0, *p1, 0.5), level);
+            ++level_seg;
           }
         }
       }

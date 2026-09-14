@@ -7,6 +7,7 @@
 #include "Geo/GeoBounds.hpp"
 #include "Geo/GeoPoint.hpp"
 
+#include <utility>
 #include <vector>
 
 /**
@@ -34,6 +35,9 @@ struct GlideConeField {
    */
   std::vector<GeoPoint> contour_segments;
 
+  /** Sparse contour labels: position and altitude level [m MSL]. */
+  std::vector<std::pair<GeoPoint, int>> contour_labels;
+
   [[gnu::pure]]
   bool IsValid() const noexcept {
     return result.IsValid() && bounds.IsValid();
@@ -44,6 +48,7 @@ struct GlideConeField {
     bounds.SetInvalid();
     home_x = home_y = -1;
     contour_segments.clear();
+    contour_labels.clear();
   }
 
   /**

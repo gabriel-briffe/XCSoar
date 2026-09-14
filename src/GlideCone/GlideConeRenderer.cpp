@@ -13,6 +13,8 @@
 #include "Geo/GeoVector.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
+#include "Renderer/TextInBox.hpp"
+#include "Formatter/UserUnits.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/dim/BulkPoint.hpp"
 
@@ -324,6 +326,21 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       for (std::size_t k = 0; k + 1 < segs.size(); k += 2)
         canvas.DrawLine(projection.GeoToScreen(segs[k]),
                         projection.GeoToScreen(segs[k + 1]));
+    }
+
+    if (!field.contour_labels.empty() &&
+        look.overlay.overlay_font != nullptr) {
+      const PixelRect screen = projection.GetScreenRect();
+      canvas.Select(*look.overlay.overlay_font);
+      for (const auto &[location, level] : field.contour_labels) {
+        const PixelPoint p = projection.GeoToScreen(location);
+        if (p.x < screen.left || p.x > screen.right ||
+            p.y < screen.top || p.y > screen.bottom)
+          continue;
+        char buffer[32];
+        FormatUserAltitude(double(level), buffer);
+        RenderShadowedText(canvas, buffer, p, false);
+      }
     }
   } else if (computed_contours) {
     field.contour_segments.clear();
