@@ -17,6 +17,8 @@ struct GlideConeGpuReady {
   std::unique_ptr<GlideConePreparedGrid> prepared;
   GlideConeResult result;
   bool ok = false;
+  /** True when Finish succeeded but the iteration cap was exhausted. */
+  bool hit_iteration_cap = false;
 };
 
 /**

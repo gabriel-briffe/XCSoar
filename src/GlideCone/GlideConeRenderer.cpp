@@ -21,6 +21,8 @@
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Color.hpp"
 #include "ui/dim/BulkPoint.hpp"
+#include "Message.hpp"
+#include "Language/Language.hpp"
 #include "LogFile.hpp"
 
 #include <algorithm>
@@ -596,6 +598,9 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
         gpu_ready->ok && gpu_ready->result.IsValid()) {
       LogFmt("glidecones: GPU Finish ok gen={}",
              gpu_ready->prepared->generation);
+      if (gpu_ready->hit_iteration_cap)
+        Message::AddMessage(
+          _("GlideCone compute stopped, raise iteration cap"));
       InstallField(std::move(*gpu_ready->prepared),
                    std::move(gpu_ready->result));
     } else {

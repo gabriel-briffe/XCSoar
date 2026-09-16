@@ -13,11 +13,11 @@ GlideConeSettings::SetDefaults() noexcept
   max_altitude = 3000;
   cell_size = DEFAULT_CELL_SIZE_M;
   iteration_cap = 2000;
-  contours = false;
+  contours = true;
   contour_polylines = true;
   /* ~30 km on the map scale bar at the usual 8× GetMapScale factor. */
   contours_min_scale = 3750;
-  label_spacing = 40;
+  label_spacing = 70;
 }
 
 double

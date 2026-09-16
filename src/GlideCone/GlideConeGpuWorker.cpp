@@ -165,6 +165,7 @@ private:
     out->prepared = std::move(job);
 
     bool ok = false;
+    bool hit_cap = false;
     {
       const ScopeUnlock unlock{mutex};
 
@@ -172,14 +173,17 @@ private:
         LogFmt("glidecones: GPU worker: MakeCurrent failed {:#x}",
                eglGetError());
       } else {
-        ok = session.Run(out->prepared->grid, should_abort, out->result);
+        ok = session.Run(out->prepared->grid, should_abort, out->result,
+                         &hit_cap);
         eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       }
     }
 
     out->ok = ok;
+    out->hit_iteration_cap = hit_cap;
     running_gen = 0;
-    LogFmt("glidecones: GPU worker.Tick done gen={} ok={}", gen, ok);
+    LogFmt("glidecones: GPU worker.Tick done gen={} ok={} hit_cap={}",
+           gen, ok, hit_cap);
 
     if (!ok)
       return;

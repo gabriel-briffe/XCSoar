@@ -63,11 +63,13 @@ public:
   /**
    * Run the full iteration cap on the current context.  @p should_abort
    * is polled between batches; on abort the session is cancelled and
-   * false is returned.
+   * false is returned.  When @p hit_iteration_cap is non-null, it is set
+   * true if Finish succeeded but the field never converged.
    */
   bool Run(const GlideConeGrid &grid,
            const std::function<bool()> &should_abort,
-           GlideConeResult &out) noexcept;
+           GlideConeResult &out,
+           bool *hit_iteration_cap = nullptr) noexcept;
 
   /** Drop buffers/program.  Context must be current. */
   void DestroyGL() noexcept;
@@ -84,7 +86,10 @@ private:
 #else
   bool Run(const GlideConeGrid &,
            const std::function<bool()> &,
-           GlideConeResult &) noexcept {
+           GlideConeResult &,
+           bool *hit_iteration_cap = nullptr) noexcept {
+    if (hit_iteration_cap != nullptr)
+      *hit_iteration_cap = false;
     return false;
   }
 

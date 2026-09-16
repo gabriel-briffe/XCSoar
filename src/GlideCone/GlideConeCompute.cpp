@@ -607,12 +607,17 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
 bool
 GlideConeGpuSession::Run(const GlideConeGrid &grid,
                          const std::function<bool()> &should_abort,
-                         GlideConeResult &out) noexcept
+                         GlideConeResult &out,
+                         bool *hit_iteration_cap) noexcept
 {
+  if (hit_iteration_cap != nullptr)
+    *hit_iteration_cap = false;
+
   if (!Begin(grid))
     return false;
 
   const unsigned cap = remaining;
+  bool converged = false;
   while (remaining > 0) {
     if (should_abort && should_abort()) {
       LogFmt("glidecones: GPU Run aborted after {}/{} iters",
@@ -621,20 +626,28 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
       return false;
     }
 
-    const bool converged = Dispatch(BATCH);
-    glFlush();
-
-    if (converged) {
+    if (Dispatch(BATCH)) {
+      converged = true;
+      glFlush();
       LogFmt("glidecones: GPU converged after {}/{} iters",
              iterations_done, cap);
       break;
     }
+    glFlush();
 
     if (iterations_done % 256 < BATCH || remaining == 0)
       LogFmt("glidecones: GPU Run {}/{} iters", iterations_done, cap);
   }
 
-  return Finish(out);
+  if (!Finish(out))
+    return false;
+
+  if (!converged) {
+    LogFmt("glidecones: GPU hit iteration cap {} (not converged)", cap);
+    if (hit_iteration_cap != nullptr)
+      *hit_iteration_cap = true;
+  }
+  return true;
 }
 
 #else // !HAVE_GLES_COMPUTE
