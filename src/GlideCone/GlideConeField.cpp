@@ -8,8 +8,8 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
-#include <unordered_map>
 #include <utility>
+#include <vector>
 
 GeoPoint
 GlideConeField::CellToGeo(int x, int y) const noexcept
@@ -104,12 +104,12 @@ constexpr CaseSegments MS_SEGMENTS[16] = {
   {1, {{0, 1}}},
   {1, {{3, 1}}},
   {1, {{1, 2}}},
-  {2, {{3, 0}, {1, 2}}},
+  {2, {{3, 0}, {1, 2}}}, /* saddle; pairing may flip via asymptotic decider */
   {1, {{0, 2}}},
   {1, {{3, 2}}},
   {1, {{2, 3}}},
   {1, {{2, 0}}},
-  {2, {{0, 1}, {2, 3}}},
+  {2, {{0, 1}, {2, 3}}}, /* saddle; pairing may flip via asymptotic decider */
   {1, {{2, 1}}},
   {1, {{1, 3}}},
   {1, {{1, 0}}},
@@ -124,97 +124,124 @@ GeoPoint Lerp(GeoPoint a, GeoPoint b, double t) noexcept
                   a.latitude + (b.latitude - a.latitude) * t);
 }
 
-using ContourSeg = std::array<GeoPoint, 2>;
-using EndpointKey = std::pair<std::int64_t, std::int64_t>;
+/**
+ * Exit edge for a cell given the entry edge.  Saddle cases (5, 10) use
+ * the asymptotic decider so adjacent cells share one continuous path.
+ */
+[[gnu::pure]]
+int ExitEdge(unsigned case_index, int entry,
+             const std::array<float, 4> &values, float level) noexcept
+{
+  EdgePair pairs[2];
+  unsigned n = 0;
 
-struct EndpointKeyHash {
-  std::size_t operator()(const EndpointKey &k) const noexcept {
-    return std::hash<std::int64_t>{}(k.first) * 1000003u ^
-      std::hash<std::int64_t>{}(k.second);
+  if (case_index == 5 || case_index == 10) {
+    const float center =
+      (values[0] + values[1] + values[2] + values[3]) * 0.25f;
+    const bool flip = center >= level;
+    if (case_index == 5) {
+      if (flip) {
+        pairs[0] = {0, 1};
+        pairs[1] = {2, 3};
+      } else {
+        pairs[0] = {3, 0};
+        pairs[1] = {1, 2};
+      }
+    } else if (flip) {
+      pairs[0] = {3, 0};
+      pairs[1] = {1, 2};
+    } else {
+      pairs[0] = {0, 1};
+      pairs[1] = {2, 3};
+    }
+    n = 2;
+  } else {
+    const CaseSegments &cs = MS_SEGMENTS[case_index];
+    n = cs.count;
+    for (unsigned s = 0; s < n; ++s)
+      pairs[s] = cs.seg[s];
   }
+
+  for (unsigned s = 0; s < n; ++s) {
+    if (pairs[s].a == entry)
+      return pairs[s].b;
+    if (pairs[s].b == entry)
+      return pairs[s].a;
+  }
+  return -1;
+}
+
+struct NeighborCell {
+  unsigned i, j;
+  int entry;
 };
 
+/**
+ * Step across @p exit_edge of cell (i,j) into the adjacent marching-squares
+ * cell; the shared edge becomes @c entry there.
+ */
 [[gnu::pure]]
-EndpointKey MakeKey(GeoPoint p) noexcept
+std::optional<NeighborCell>
+StepAcross(unsigned i, unsigned j, int exit_edge,
+           unsigned cells_w, unsigned cells_h) noexcept
 {
-  /* endpoints shared between adjacent cells are computed identically, so
-     quantising to ~1e-9 rad matches them robustly */
-  return {std::llround(p.longitude.Native() * 1e9),
-          std::llround(p.latitude.Native() * 1e9)};
+  switch (exit_edge) {
+  case 0: /* top → cell above, enter bottom */
+    if (j == 0)
+      return std::nullopt;
+    return NeighborCell{i, j - 1, 2};
+  case 1: /* right → cell right, enter left */
+    if (i + 1 >= cells_w)
+      return std::nullopt;
+    return NeighborCell{i + 1, j, 3};
+  case 2: /* bottom → cell below, enter top */
+    if (j + 1 >= cells_h)
+      return std::nullopt;
+    return NeighborCell{i, j + 1, 0};
+  case 3: /* left → cell left, enter right */
+    if (i == 0)
+      return std::nullopt;
+    return NeighborCell{i - 1, j, 1};
+  default:
+    return std::nullopt;
+  }
 }
 
 /**
- * Join loose marching-squares segments into continuous polylines by
- * matching shared endpoints (port of gpu-MC stitchSegments()).
+ * Pack unique edge indices:
+ *   H(ci, rj): horizontal between corners (ci,rj)-(ci+1,rj)
+ *              ci in [0,w-2], rj in [0,h-1]  →  index rj*(w-1)+ci
+ *   V(ci, rj): vertical between (ci,rj)-(ci,rj+1)
+ *              ci in [0,w-1], rj in [0,h-2]  →  after all H
  */
-std::vector<std::vector<GeoPoint>>
-StitchSegments(const std::vector<ContourSeg> &segments) noexcept
+[[gnu::const]]
+std::size_t
+UniqueEdgeId(unsigned cell_i, unsigned cell_j, int edge,
+             unsigned corner_w, unsigned corner_h) noexcept
 {
-  std::vector<std::vector<GeoPoint>> lines;
-  if (segments.empty())
-    return lines;
+  const std::size_t n_horiz =
+    std::size_t(corner_w - 1) * corner_h;
 
-  std::unordered_map<EndpointKey, std::vector<std::pair<int, int>>,
-                     EndpointKeyHash> endpoints;
-  for (int i = 0; i < int(segments.size()); ++i) {
-    endpoints[MakeKey(segments[i][0])].push_back({i, 0});
-    endpoints[MakeKey(segments[i][1])].push_back({i, 1});
+  switch (edge) {
+  case 0: /* top H(cell_i, cell_j) */
+    return std::size_t(cell_j) * (corner_w - 1) + cell_i;
+  case 2: /* bottom H(cell_i, cell_j+1) */
+    return std::size_t(cell_j + 1) * (corner_w - 1) + cell_i;
+  case 1: /* right V(cell_i+1, cell_j) */
+    return n_horiz + std::size_t(cell_j) * corner_w + (cell_i + 1);
+  case 3: /* left V(cell_i, cell_j) */
+    return n_horiz + std::size_t(cell_j) * corner_w + cell_i;
+  default:
+    return 0;
   }
+}
 
-  std::vector<char> used(segments.size(), 0);
-
-  const auto follow = [&](int start_seg, int start_end) {
-    std::vector<GeoPoint> coords;
-    int seg = start_seg, end = start_end;
-
-    while (seg >= 0 && !used[seg]) {
-      used[seg] = 1;
-      const GeoPoint a = segments[seg][0], b = segments[seg][1];
-      if (end == 0) {
-        coords.push_back(a);
-        coords.push_back(b);
-      } else {
-        coords.push_back(b);
-        coords.push_back(a);
-      }
-
-      const GeoPoint tip = end == 0 ? b : a;
-      int next = -1, next_end = 0;
-      const auto it = endpoints.find(MakeKey(tip));
-      if (it != endpoints.end()) {
-        for (const auto &cand : it->second) {
-          if (cand.first == seg || used[cand.first])
-            continue;
-          next = cand.first;
-          next_end = cand.second;
-          break;
-        }
-      }
-      seg = next;
-      end = next_end;
-    }
-
-    /* drop consecutive duplicates */
-    std::vector<GeoPoint> deduped;
-    for (const GeoPoint &p : coords)
-      if (deduped.empty() ||
-          deduped.back().longitude != p.longitude ||
-          deduped.back().latitude != p.latitude)
-        deduped.push_back(p);
-
-    if (deduped.size() >= 2)
-      lines.push_back(std::move(deduped));
-  };
-
-  for (int i = 0; i < int(segments.size()); ++i) {
-    if (used[i])
-      continue;
-    follow(i, 0);
-    if (!used[i])
-      follow(i, 1);
-  }
-
-  return lines;
+[[gnu::const]]
+std::size_t
+EdgeCount(unsigned corner_w, unsigned corner_h) noexcept
+{
+  return std::size_t(corner_w - 1) * corner_h +
+    std::size_t(corner_w) * (corner_h - 1);
 }
 } // anonymous namespace
 
@@ -227,6 +254,11 @@ GlideConeField::BuildContours(double interval_m) noexcept
 
   const unsigned w = result.width;
   const unsigned h = result.height;
+  if (w < 2 || h < 2)
+    return;
+
+  const unsigned cells_w = w - 1;
+  const unsigned cells_h = h - 1;
   const float max_alt_f = max_alt;
   const bool have_ground = !result.ground.empty();
 
@@ -252,20 +284,28 @@ GlideConeField::BuildContours(double interval_m) noexcept
   }
 
   const int max_level = int(std::floor(max_reachable / interval_m) * interval_m);
+  const std::size_t n_edges = EdgeCount(w, h);
 
   for (int level = int(interval_m); level <= max_level;
        level += int(interval_m)) {
     const float flevel = float(level);
-    std::vector<ContourSeg> segs;
 
-    for (unsigned j = 0; j + 1 < h; ++j) {
-      for (unsigned i = 0; i + 1 < w; ++i) {
+    /* per-cell corner values / case; nullopt cell = not marchable */
+    std::vector<std::optional<std::array<float, 4>>> cell_values(
+      std::size_t(cells_w) * cells_h);
+    std::vector<unsigned char> cell_case(std::size_t(cells_w) * cells_h, 0);
+
+    for (unsigned j = 0; j < cells_h; ++j) {
+      for (unsigned i = 0; i < cells_w; ++i) {
         std::array<float, 4> values;
         bool ok = true;
         for (unsigned c = 0; c < 4; ++c) {
           const auto v = valid_alt(i + CORNER_OFFSETS[c][0],
                                    j + CORNER_OFFSETS[c][1]);
-          if (!v) { ok = false; break; }
+          if (!v) {
+            ok = false;
+            break;
+          }
           values[c] = *v;
         }
         if (!ok)
@@ -278,35 +318,139 @@ GlideConeField::BuildContours(double interval_m) noexcept
         if (case_index == 0 || case_index == 15)
           continue;
 
-        std::array<GeoPoint, 4> corners;
-        for (unsigned c = 0; c < 4; ++c)
-          corners[c] = CellToGeo(i + CORNER_OFFSETS[c][0],
-                                 j + CORNER_OFFSETS[c][1]);
-
-        const auto edge_point = [&](int edge) -> std::optional<GeoPoint> {
-          const int a = EDGE_VERTICES[edge][0];
-          const int b = EDGE_VERTICES[edge][1];
-          const float z1 = values[a], z2 = values[b];
-          if (z1 == z2)
-            return std::nullopt;
-          const double t = (flevel - z1) / (z2 - z1);
-          if (t < 0 || t > 1)
-            return std::nullopt;
-          return Lerp(corners[a], corners[b], t);
-        };
-
-        const CaseSegments &cs = MS_SEGMENTS[case_index];
-        for (unsigned s = 0; s < cs.count; ++s) {
-          const auto p0 = edge_point(cs.seg[s].a);
-          const auto p1 = edge_point(cs.seg[s].b);
-          if (p0 && p1)
-            segs.push_back({*p0, *p1});
-        }
+        const std::size_t cidx = std::size_t(j) * cells_w + i;
+        cell_values[cidx] = values;
+        cell_case[cidx] = (unsigned char)case_index;
       }
     }
 
-    for (auto &coords : StitchSegments(segs))
-      if (coords.size() >= 2)
-        contour_lines.push_back({std::move(coords), level});
+    const auto edge_point = [&](unsigned i, unsigned j,
+                                int edge) -> std::optional<GeoPoint> {
+      const std::size_t cidx = std::size_t(j) * cells_w + i;
+      if (!cell_values[cidx])
+        return std::nullopt;
+      const auto &values = *cell_values[cidx];
+      const int a = EDGE_VERTICES[edge][0];
+      const int b = EDGE_VERTICES[edge][1];
+      const float z1 = values[a], z2 = values[b];
+      if (z1 == z2)
+        return std::nullopt;
+      const double t = (double(flevel) - z1) / (z2 - z1);
+      if (t < 0 || t > 1)
+        return std::nullopt;
+
+      std::array<GeoPoint, 4> corners;
+      for (unsigned c = 0; c < 4; ++c)
+        corners[c] = CellToGeo(int(i + CORNER_OFFSETS[c][0]),
+                               int(j + CORNER_OFFSETS[c][1]));
+      return Lerp(corners[a], corners[b], t);
+    };
+
+    std::vector<char> visited(n_edges, 0);
+
+    const auto follow = [&](unsigned i, unsigned j,
+                            int entry) -> std::vector<GeoPoint> {
+      std::vector<GeoPoint> pts;
+      for (;;) {
+        const std::size_t cidx = std::size_t(j) * cells_w + i;
+        if (!cell_values[cidx])
+          break;
+
+        const unsigned cas = cell_case[cidx];
+        const int exit_e = ExitEdge(cas, entry, *cell_values[cidx], flevel);
+        if (exit_e < 0)
+          break;
+
+        const std::size_t id_in = UniqueEdgeId(i, j, entry, w, h);
+        if (visited[id_in])
+          break;
+
+        const auto p_in = edge_point(i, j, entry);
+        const auto p_out = edge_point(i, j, exit_e);
+        if (!p_in || !p_out)
+          break;
+
+        if (pts.empty())
+          pts.push_back(*p_in);
+        visited[id_in] = 1;
+
+        pts.push_back(*p_out);
+        visited[UniqueEdgeId(i, j, exit_e, w, h)] = 1;
+
+        const auto next = StepAcross(i, j, exit_e, cells_w, cells_h);
+        if (!next)
+          break;
+        if (visited[UniqueEdgeId(next->i, next->j, next->entry, w, h)])
+          break; /* closed ring */
+
+        i = next->i;
+        j = next->j;
+        entry = next->entry;
+      }
+      return pts;
+    };
+
+    for (unsigned j = 0; j < cells_h; ++j) {
+      for (unsigned i = 0; i < cells_w; ++i) {
+        const std::size_t cidx = std::size_t(j) * cells_w + i;
+        if (!cell_values[cidx])
+          continue;
+
+        const unsigned cas = cell_case[cidx];
+        /* try each edge that participates in this case */
+        for (int edge = 0; edge < 4; ++edge) {
+          if (ExitEdge(cas, edge, *cell_values[cidx], flevel) < 0)
+            continue;
+
+          const std::size_t seed_id = UniqueEdgeId(i, j, edge, w, h);
+          if (visited[seed_id])
+            continue;
+
+          auto forward = follow(i, j, edge);
+
+          /* Closed ring: first and last meet on the seed edge. */
+          const bool closed =
+            forward.size() >= 3 &&
+            forward.front().longitude == forward.back().longitude &&
+            forward.front().latitude == forward.back().latitude;
+
+          std::vector<GeoPoint> line;
+          if (closed) {
+            line = std::move(forward);
+          } else {
+            /* Open contour: walk the other way from the seed. */
+            visited[seed_id] = 0;
+            std::vector<GeoPoint> backward;
+            if (const auto back =
+                  StepAcross(i, j, edge, cells_w, cells_h)) {
+              if (!visited[UniqueEdgeId(back->i, back->j,
+                                        back->entry, w, h)])
+                backward = follow(back->i, back->j, back->entry);
+            }
+            visited[seed_id] = 1;
+
+            line.reserve(backward.size() + forward.size());
+            for (auto it = backward.rbegin(); it != backward.rend(); ++it)
+              line.push_back(*it);
+            const std::size_t skip =
+              (!backward.empty() && !forward.empty()) ? 1 : 0;
+            for (std::size_t k = skip; k < forward.size(); ++k)
+              line.push_back(forward[k]);
+          }
+
+          /* drop consecutive duplicates */
+          std::vector<GeoPoint> deduped;
+          deduped.reserve(line.size());
+          for (const GeoPoint &p : line)
+            if (deduped.empty() ||
+                deduped.back().longitude != p.longitude ||
+                deduped.back().latitude != p.latitude)
+              deduped.push_back(p);
+
+          if (deduped.size() >= 2)
+            contour_lines.push_back({std::move(deduped), level});
+        }
+      }
+    }
   }
 }

@@ -84,8 +84,9 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
            glide_cone.contours_min_scale);
 
   AddInteger(_("Label distance"),
-             _("On-screen distance between contour labels."),
-             "%d", "%d", 20, 400, 10, int(glide_cone.label_spacing));
+             _("Minimum screen distance between labels of the same "
+               "altitude, as a percentage of the shorter map side."),
+             "%d %%", "%d", 20, 100, 5, int(glide_cone.label_spacing));
 }
 
 bool
@@ -119,6 +120,10 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
                        glide_cone.contours_min_scale);
 
   if (SaveValueInteger(LabelSpacing, glide_cone.label_spacing)) {
+    if (glide_cone.label_spacing < 20)
+      glide_cone.label_spacing = 20;
+    else if (glide_cone.label_spacing > 100)
+      glide_cone.label_spacing = 100;
     Profile::Set(ProfileKeys::GlideConeLabelSpacing, glide_cone.label_spacing);
     changed = true;
   }

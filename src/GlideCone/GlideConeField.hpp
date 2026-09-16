@@ -29,7 +29,7 @@ struct GlideConeField {
   /** Seed (airport) cell. */
   int home_x = -1, home_y = -1;
 
-  /** A stitched contour polyline at a given altitude level. */
+  /** A contour polyline at a given altitude level. */
   struct ContourLine {
     std::vector<GeoPoint> points;
     int level;
@@ -51,8 +51,9 @@ struct GlideConeField {
   }
 
   /**
-   * Build 100 m (or @p interval_m) altitude contour segments of the
-   * reachable area (marching squares).  Fills #contour_segments.
+   * Build 100 m (or @p interval_m) altitude contour polylines of the
+   * reachable area (marching squares, edge-walked into continuous
+   * lines).  Fills #contour_lines.
    */
   void BuildContours(double interval_m = 100) noexcept;
 

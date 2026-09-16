@@ -133,6 +133,11 @@ Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
   map.Get(ProfileKeys::GlideConeContours, settings.contours);
   map.Get(ProfileKeys::GlideConeContoursMinScale, settings.contours_min_scale);
   map.Get(ProfileKeys::GlideConeLabelSpacing, settings.label_spacing);
+  /* Was base pixels (20–400); now percent of min(screen side) (20–100). */
+  if (settings.label_spacing < 20)
+    settings.label_spacing = 20;
+  else if (settings.label_spacing > 100)
+    settings.label_spacing = 100;
 }
 
 static bool

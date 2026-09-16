@@ -65,7 +65,11 @@ struct GlideConeSettings {
    */
   double contours_min_scale;
 
-  /** On-screen distance between contour labels [base pixels, DPI-scaled]. */
+  /**
+   * Minimum screen distance between labels of the same altitude, as a
+   * percentage of min(screen width, screen height).  Valid range 20–100.
+   * Different altitudes only need non-overlapping text.
+   */
   unsigned label_spacing;
 
   /** Half-width factor for single-mode (around the seed). */

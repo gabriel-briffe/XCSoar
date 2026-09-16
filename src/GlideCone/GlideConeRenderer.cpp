@@ -18,14 +18,15 @@
 #include "Formatter/UserUnits.hpp"
 #include "Screen/Layout.hpp"
 #include "Geo/GeoBounds.hpp"
+#include "Geo/GeoClip.hpp"
 #include "Math/Angle.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Color.hpp"
-#include "ui/dim/BulkPoint.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <span>
 #include <vector>
 
 /** Combined-mode recompute threshold as a fraction of the window half-width
@@ -40,6 +41,32 @@ static constexpr std::chrono::milliseconds GLIDE_CONE_DEBOUNCE{400};
 
 /** Hard cap on GPU grid cells per side. */
 static constexpr unsigned GLIDE_CONE_MAX_DIM = 1024;
+
+/**
+ * Draw a geo polyline clipped to the visible map.  Unclipped
+ * GeoToScreen points can sit far off-screen when zoomed in; connecting
+ * them produces lines that slash across the viewport.
+ */
+static void
+DrawClippedGeoPolyline(Canvas &canvas, const WindowProjection &projection,
+                       const GeoClip &clip,
+                       std::span<const GeoPoint> points) noexcept
+{
+  if (points.size() < 2)
+    return;
+
+  for (std::size_t i = 1; i < points.size(); ++i) {
+    GeoPoint a = points[i - 1];
+    GeoPoint b = points[i];
+    if (!a.IsValid() || !b.IsValid())
+      continue;
+    if (!clip.ClipLine(a, b))
+      continue;
+
+    canvas.DrawLine(projection.GeoToScreen(a),
+                    projection.GeoToScreen(b));
+  }
+}
 
 void
 GlideConeRenderer::SetTarget(GeoPoint seed, double elevation) noexcept
@@ -350,47 +377,58 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
 
     if (show && !field.contour_lines.empty()) {
       const PixelRect screen = projection.GetScreenRect();
+      const GeoClip clip(projection.GetScreenBounds().Scale(1.1));
 
       /* draw the stitched contour polylines */
       canvas.Select(look.glide_cone_contour_pen);
-      std::vector<BulkPixelPoint> pts;
-      for (const auto &line : field.contour_lines) {
-        pts.clear();
-        pts.reserve(line.points.size());
-        for (const GeoPoint &g : line.points)
-          pts.push_back(projection.GeoToScreen(g));
-        if (pts.size() >= 2)
-          canvas.DrawPolyline(pts.data(), unsigned(pts.size()));
-      }
+      for (const auto &line : field.contour_lines)
+        DrawClippedGeoPolyline(canvas, projection, clip, line.points);
 
-      /* labels along each line, rotated parallel to it and flipped to
-         stay upright; spaced by on-screen distance; overlapping ones are
-         hidden (zoom in to reveal more) */
+      /* labels along each line, offset beside the stroke (MapLibre-style
+         line text-offset), rotated parallel and flipped upright.
+         All labels: no text overlap (LabelBlock).
+         Same altitude: also min screen distance (label_spacing %). */
       if (look.overlay.overlay_font != nullptr) {
         canvas.Select(*look.overlay.overlay_font);
         canvas.SetBackgroundTransparent();
         LabelBlock label_block;
         label_block.reset();
 
+        const unsigned short_side =
+          std::min(screen.GetWidth(), screen.GetHeight());
+        const unsigned pct = std::clamp(gc.label_spacing, 20u, 100u);
         const double spacing =
-          std::max(20u, unsigned(Layout::Scale(gc.label_spacing)));
+          std::max(20.0, double(short_side) * double(pct) / 100.0);
+        const double spacing2 = spacing * spacing;
+        /* sample candidates along the line (~1 em) */
+        const double sample_step =
+          std::max(8.0, double(look.overlay.overlay_font->GetHeight()));
+
+        /* placed label centres, for same-altitude distance checks */
+        std::vector<std::pair<int, PixelPoint>> placed;
 
         for (const auto &line : field.contour_lines) {
+          if (line.points.size() < 2)
+            continue;
+
           char buffer[32];
           FormatUserAltitude(double(line.level), buffer);
           const PixelSize ts = canvas.CalcTextSize(buffer);
           const double hw = ts.width / 2.0, hh = ts.height / 2.0;
+          /* Offset off the line (~0.6 em) so text is not on the stroke. */
+          const double offset_px = std::max(2.0, hh * 1.2);
 
-          double acc = spacing;
+          double since_sample = sample_step;
           PixelPoint prev = projection.GeoToScreen(line.points[0]);
           for (std::size_t k = 1; k < line.points.size(); ++k) {
             const PixelPoint cur = projection.GeoToScreen(line.points[k]);
             const double dx = cur.x - prev.x, dy = cur.y - prev.y;
-            acc += std::hypot(dx, dy);
+            const double seg = std::hypot(dx, dy);
+            since_sample += seg;
             prev = cur;
-            if (acc < spacing)
+            if (since_sample < sample_step || seg < 1e-3)
               continue;
-            acc = 0;
+            since_sample = 0;
 
             if (cur.x < screen.left || cur.x > screen.right ||
                 cur.y < screen.top || cur.y > screen.bottom)
@@ -402,13 +440,35 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
               a += M_PI;
             const double ca = std::cos(a), sa = std::sin(a);
 
-            /* axis-aligned bounds of the rotated label for overlap test */
-            const int aabb_w = int(std::abs(hw * ca) + std::abs(hh * sa));
-            const int aabb_h = int(std::abs(hw * sa) + std::abs(hh * ca));
-            const PixelRect rc{cur.x - aabb_w, cur.y - aabb_h,
-                               cur.x + aabb_w, cur.y + aabb_h};
+            /* Perpendicular offset "above" upright text (screen y down). */
+            const int lx = cur.x + int(std::lround(sa * offset_px));
+            const int ly = cur.y + int(std::lround(-ca * offset_px));
+
+            /* same altitude: enforce label distance in screen space */
+            bool too_close = false;
+            for (const auto &p : placed) {
+              if (p.first != line.level)
+                continue;
+              const double ddx = double(p.second.x - lx);
+              const double ddy = double(p.second.y - ly);
+              if (ddx * ddx + ddy * ddy < spacing2) {
+                too_close = true;
+                break;
+              }
+            }
+            if (too_close)
+              continue;
+
+            /* any label: no overlapping text */
+            const int aabb_w = int(std::abs(hw * ca) + std::abs(hh * sa)) + 1;
+            const int aabb_h = int(std::abs(hw * sa) + std::abs(hh * ca)) + 1;
+            const PixelRect rc{lx - aabb_w, ly - aabb_h,
+                               lx + aabb_w, ly + aabb_h};
             if (!label_block.check(rc))
               continue;
+
+            placed.emplace_back(line.level, PixelPoint{lx, ly});
+            const PixelPoint label_pos{lx, ly};
 
 #ifdef ENABLE_OPENGL
             const Angle angle = Angle::Radians(a);
@@ -416,13 +476,14 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
             canvas.SetTextColor(COLOR_WHITE);
             for (const auto off : {PixelPoint{-1, -1}, PixelPoint{1, -1},
                                    PixelPoint{-1, 1}, PixelPoint{1, 1}})
-              canvas.DrawText({cur.x + off.x, cur.y + off.y}, buffer, angle);
+              canvas.DrawText({label_pos.x + off.x, label_pos.y + off.y},
+                              buffer, angle);
             canvas.SetTextColor(COLOR_BLACK);
-            canvas.DrawText(cur, buffer, angle);
+            canvas.DrawText(label_pos, buffer, angle);
 #else
             RenderShadowedText(canvas, buffer,
-                               {cur.x - int(ts.width) / 2,
-                                cur.y - int(ts.height) / 2}, false);
+                               {label_pos.x - int(ts.width) / 2,
+                                label_pos.y - int(ts.height) / 2}, false);
 #endif
           }
         }
@@ -437,12 +498,8 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
   if (path.size() < 2)
     return;
 
-  std::vector<BulkPixelPoint> points(path.size());
-  std::transform(path.begin(), path.end(), points.begin(),
-                 [&projection](const GeoPoint &p) {
-                   return projection.GeoToScreen(p);
-                 });
-
   canvas.Select(look.glide_cone_pen);
-  canvas.DrawPolyline(points.data(), unsigned(points.size()));
+  DrawClippedGeoPolyline(canvas, projection,
+                         GeoClip(projection.GetScreenBounds().Scale(1.1)),
+                         path);
 }

@@ -15,7 +15,7 @@ GlideConeSettings::SetDefaults() noexcept
   iteration_cap = 2000;
   contours = false;
   contours_min_scale = 30000;
-  label_spacing = 80;
+  label_spacing = 40;
 }
 
 double
