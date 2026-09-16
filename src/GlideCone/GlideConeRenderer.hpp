@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 class Canvas;
@@ -98,6 +99,9 @@ public:
   /**
    * Kick compute and draw the last-good path.  Draw thread; UI EGL
    * context must be current (shared GPU context is created from it).
+   *
+   * When @p pan_probe is valid (map pan / crosshair), also draws the
+   * relay path from that location in the same style as the aircraft.
    */
   void Draw(Canvas &canvas, const WindowProjection &projection,
             GeoPoint aircraft, bool aircraft_valid,
@@ -105,7 +109,16 @@ public:
             const ComputerSettings &settings,
             const RasterTerrain *terrain, const Waypoints *waypoints,
             const WaypointRendererSettings &waypoint_settings,
-            const MapLook &look) noexcept;
+            const MapLook &look,
+            GeoPoint pan_probe = GeoPoint::Invalid()) noexcept;
+
+  /**
+   * Required arrival altitude [m MSL] at @p location when the field is
+   * valid and the cone is enabled; nullopt if unreachable / inactive.
+   */
+  [[gnu::pure]]
+  std::optional<double>
+  QueryRequiredAltitude(GeoPoint location) const noexcept;
 
   /**
    * True while CPU grid build or GPU propagate is in flight.  The map
@@ -144,8 +157,12 @@ private:
                          const WindowProjection &projection,
                          const MapLook &look) const noexcept;
 
+  void DrawTraceFrom(Canvas &canvas, const WindowProjection &projection,
+                     GeoPoint from, const MapLook &look) const noexcept;
+
   void DrawField(Canvas &canvas, const WindowProjection &projection,
                  GeoPoint aircraft, bool aircraft_valid,
+                 GeoPoint pan_probe,
                  const ComputerSettings &settings,
                  const MapLook &look) noexcept;
 };

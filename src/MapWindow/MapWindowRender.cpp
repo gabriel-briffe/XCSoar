@@ -304,11 +304,15 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
     const auto &task_stats = Calculated().task_stats;
     const GeoPoint gc_target = task_stats.current_leg.location_remaining;
     const bool gc_target_valid = task_stats.task_valid && gc_target.IsValid();
+    const GeoPoint pan_probe = IsPanning()
+      ? render_projection.GetGeoLocation()
+      : GeoPoint::Invalid();
     glide_cone_renderer.Draw(canvas, render_projection,
                              basic.location, basic.location_available.IsValid(),
                              gc_target, gc_target_valid,
                              GetComputerSettings(), terrain, waypoints,
-                             GetMapSettings().waypoint, look);
+                             GetMapSettings().waypoint, look,
+                             pan_probe);
     /* Keep redrawing while CPU/GPU work is outstanding so results
        are installed promptly (compute itself runs off the draw thread). */
     if (glide_cone_renderer.IsBusy())

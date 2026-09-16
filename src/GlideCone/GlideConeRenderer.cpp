@@ -399,7 +399,8 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                         const RasterTerrain *terrain,
                         const Waypoints *waypoints,
                         const WaypointRendererSettings &waypoint_settings,
-                        const MapLook &look) noexcept
+                        const MapLook &look,
+                        GeoPoint pan_probe) noexcept
 {
   const GlideConeSettings &gc = settings.glide_cone;
   const auto mode = gc.mode;
@@ -604,13 +605,81 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     awaiting_gpu = false;
   }
 
-  DrawField(canvas, projection, aircraft, aircraft_valid, settings, look);
+  DrawField(canvas, projection, aircraft, aircraft_valid, pan_probe,
+            settings, look);
+}
+
+std::optional<double>
+GlideConeRenderer::QueryRequiredAltitude(GeoPoint location) const noexcept
+{
+  if (!location.IsValid() || !field.IsValid())
+    return std::nullopt;
+  return field.RequiredAltitude(location);
+}
+
+void
+GlideConeRenderer::DrawTraceFrom(Canvas &canvas,
+                                 const WindowProjection &projection,
+                                 GeoPoint from,
+                                 const MapLook &look) const noexcept
+{
+  if (!from.IsValid() || !field.IsValid())
+    return;
+
+  const std::vector<GlideConeField::TraceCell> cells = field.Trace(from);
+  if (cells.size() < 2)
+    return;
+
+  std::vector<BulkPixelPoint> run;
+  bool run_ground = false;
+  const auto flush = [&]() {
+    if (run.size() < 2)
+      return;
+    if (run_ground) {
+      canvas.Select(look.glide_cone_ground_pen);
+      for (std::size_t i = 1; i < run.size(); ++i)
+        canvas.DrawLine(run[i - 1], run[i]);
+    } else {
+      canvas.Select(look.glide_cone_pen);
+      canvas.DrawPolyline(run.data(), unsigned(run.size()));
+    }
+  };
+
+  for (std::size_t i = 1; i < cells.size(); ++i) {
+    const auto &a = cells[i - 1];
+    const auto &b = cells[i];
+    const bool ground = field.IsDownhillGroundSegment(a.x, a.y, b.x, b.y);
+    const BulkPixelPoint from_pt = projection.GeoToScreen(
+      field.CellToGeo(a.x, a.y));
+    const BulkPixelPoint to_pt = projection.GeoToScreen(
+      field.CellToGeo(b.x, b.y));
+
+    if (run.empty()) {
+      run_ground = ground;
+      run.push_back(from_pt);
+      run.push_back(to_pt);
+      continue;
+    }
+
+    if (ground == run_ground) {
+      run.push_back(to_pt);
+      continue;
+    }
+
+    flush();
+    run.clear();
+    run_ground = ground;
+    run.push_back(from_pt);
+    run.push_back(to_pt);
+  }
+  flush();
 }
 
 void
 GlideConeRenderer::DrawField(Canvas &canvas,
                              const WindowProjection &projection,
                              GeoPoint aircraft, bool aircraft_valid,
+                             GeoPoint pan_probe,
                              const ComputerSettings &settings,
                              const MapLook &look) noexcept
 {
@@ -679,55 +748,11 @@ GlideConeRenderer::DrawField(Canvas &canvas,
     InvalidateContourLabels();
   }
 
-  if (!aircraft_valid)
-    return;
+  if (aircraft_valid)
+    DrawTraceFrom(canvas, projection, aircraft, look);
 
-  const std::vector<GlideConeField::TraceCell> cells = field.Trace(aircraft);
-  if (cells.size() < 2)
-    return;
-
-  std::vector<BulkPixelPoint> run;
-  bool run_ground = false;
-  const auto flush = [&]() {
-    if (run.size() < 2)
-      return;
-    if (run_ground) {
-      canvas.Select(look.glide_cone_ground_pen);
-      for (std::size_t i = 1; i < run.size(); ++i)
-        canvas.DrawLine(run[i - 1], run[i]);
-    } else {
-      canvas.Select(look.glide_cone_pen);
-      canvas.DrawPolyline(run.data(), unsigned(run.size()));
-    }
-  };
-
-  for (std::size_t i = 1; i < cells.size(); ++i) {
-    const auto &from = cells[i - 1];
-    const auto &to = cells[i];
-    const bool ground = field.IsDownhillGroundSegment(from.x, from.y,
-                                                      to.x, to.y);
-    const BulkPixelPoint from_pt = projection.GeoToScreen(
-      field.CellToGeo(from.x, from.y));
-    const BulkPixelPoint to_pt = projection.GeoToScreen(
-      field.CellToGeo(to.x, to.y));
-
-    if (run.empty()) {
-      run_ground = ground;
-      run.push_back(from_pt);
-      run.push_back(to_pt);
-      continue;
-    }
-
-    if (ground == run_ground) {
-      run.push_back(to_pt);
-      continue;
-    }
-
-    flush();
-    run.clear();
-    run_ground = ground;
-    run.push_back(from_pt);
-    run.push_back(to_pt);
-  }
-  flush();
+  if (pan_probe.IsValid() &&
+      (!aircraft_valid ||
+       pan_probe.DistanceS(aircraft) > GLIDE_CONE_SEED_EPSILON_M))
+    DrawTraceFrom(canvas, projection, pan_probe, look);
 }
