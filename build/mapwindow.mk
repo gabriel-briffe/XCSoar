@@ -12,6 +12,8 @@ LIBMAPWINDOW_SOURCES = \
 	$(SRC)/MapWindow/MapWindow.cpp \
 	$(SRC)/MapWindow/MapWindowEvents.cpp \
 	$(SRC)/GlideCone/GlideConeField.cpp \
+	$(SRC)/GlideCone/GlideConeGridBuilder.cpp \
+	$(SRC)/GlideCone/GlideConeWorker.cpp \
 	$(SRC)/GlideCone/GlideConeCompute.cpp \
 	$(SRC)/GlideCone/GlideConeRenderer.cpp \
 	$(SRC)/MapWindow/MapWindowGlideRange.cpp \
@@ -35,7 +37,7 @@ LIBMAPWINDOW_SOURCES = \
 	$(SRC)/MapWindow/TargetMapWindowEvents.cpp \
 	$(SRC)/MapWindow/TargetMapWindowDrag.cpp
 
-LIBMAPWINDOW_DEPENDS = SCREEN
+LIBMAPWINDOW_DEPENDS = SCREEN THREAD
 
 ifeq ($(OPENGL),y)
 LIBMAPWINDOW_SOURCES += \

@@ -63,6 +63,9 @@ struct MapLook {
   /** Pen for the glide cone relay path overlay */
   Pen glide_cone_pen;
 
+  /** Black dashed pen for downhill-ground path segments */
+  Pen glide_cone_ground_pen;
+
   /** Pen for the glide cone altitude contour lines */
   Pen glide_cone_contour_pen;
 

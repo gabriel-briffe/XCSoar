@@ -6,7 +6,13 @@ Version 7.46 - not yet released
     the aircraft back to the airport (Android only).  Terrain is
     max-pooled to a configurable cell size (default 400 m); the window
     is 1.1 × max altitude × L/D around the airport (single) or 1.25 ×
-    around the glider (combined); default glide ratio is 25
+    around the glider (combined); default glide ratio is 25.  Combined
+    mode seeds the landables shown by Map Display → Waypoints (type
+    and Non-ICAO filters; not zoom).  Downhill-ground path segments
+    are black dotted.  The map stays live while a cone is recomputed;
+    the last path and InfoBox value remain until the new field is
+    ready.  The Glide Cone InfoBox reconstructs required altitude on
+    ground cells from the first air cell plus distance / L/D
 * android
   - add Share to Export flights so selected IGC/NMEA files can be
     sent via the system share sheet (Nearby Share, Drive, mail, …)

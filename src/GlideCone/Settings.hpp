@@ -23,8 +23,9 @@ struct GlideConeSettings {
     SINGLE,
 
     /**
-     * Combined multi-seed mode: all landables within a moving window
-     * around the aircraft, recomputed as the aircraft moves.
+     * Combined multi-seed mode: landables within a moving window
+     * around the aircraft that pass the map waypoint display filters
+     * (type / Non-ICAO), recomputed as the aircraft moves.
      */
     COMBINED,
   };

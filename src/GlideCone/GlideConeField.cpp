@@ -11,6 +11,49 @@
 #include <utility>
 #include <vector>
 
+namespace {
+
+[[gnu::pure]]
+double
+CellDistanceM(const GlideConeField &field, int x0, int y0,
+              int x1, int y1) noexcept
+{
+  const double dx = double(x1 - x0) * field.cell_size_x_m;
+  const double dy = double(y1 - y0) * field.cell_size_y_m;
+  return std::hypot(dx, dy);
+}
+
+[[gnu::pure]]
+bool
+InGrid(const GlideConeResult &r, int x, int y) noexcept
+{
+  return x >= 0 && y >= 0 &&
+    unsigned(x) < r.width && unsigned(y) < r.height;
+}
+
+[[gnu::pure]]
+bool
+IsGroundCell(const GlideConeResult &r, std::size_t index) noexcept
+{
+  return !r.ground.empty() && r.ground[index] != 0;
+}
+
+[[gnu::pure]]
+float
+SeedArrivalAltitude(const GlideConeField &field, int x, int y) noexcept
+{
+  for (const auto &s : field.seeds)
+    if (s.x == x && s.y == y)
+      return s.alt;
+
+  const std::size_t index =
+    std::size_t(y) * field.result.width + std::size_t(x);
+  return field.result.altitudes[index];
+}
+
+} // anonymous namespace
+
+
 GeoPoint
 GlideConeField::CellToGeo(int x, int y) const noexcept
 {
@@ -39,10 +82,10 @@ GlideConeField::GeoToCell(GeoPoint p, int &x, int &y) const noexcept
   return true;
 }
 
-std::vector<GeoPoint>
+std::vector<GlideConeField::TraceCell>
 GlideConeField::Trace(GeoPoint from) const noexcept
 {
-  std::vector<GeoPoint> path;
+  std::vector<TraceCell> path;
   if (!IsValid())
     return path;
 
@@ -67,7 +110,7 @@ GlideConeField::Trace(GeoPoint from) const noexcept
       break;
     visited[index] = true;
 
-    path.push_back(CellToGeo(x, y));
+    path.push_back({x, y});
 
     if (x == home_x && y == home_y)
       break;
@@ -85,6 +128,77 @@ GlideConeField::Trace(GeoPoint from) const noexcept
     path.clear();
 
   return path;
+}
+
+bool
+GlideConeField::IsDownhillGroundSegment(int from_x, int from_y,
+                                        int to_x, int to_y) const noexcept
+{
+  if (!IsValid() || elevation.size() != result.altitudes.size())
+    return false;
+  if (!InGrid(result, from_x, from_y) || !InGrid(result, to_x, to_y))
+    return false;
+
+  const std::size_t from_i =
+    std::size_t(from_y) * result.width + std::size_t(from_x);
+  if (!IsGroundCell(result, from_i))
+    return false;
+
+  const std::size_t to_i =
+    std::size_t(to_y) * result.width + std::size_t(to_x);
+  return elevation[to_i] < elevation[from_i];
+}
+
+std::optional<double>
+GlideConeField::RequiredAltitude(GeoPoint from) const noexcept
+{
+  if (!IsValid() || glide_ratio <= 0)
+    return std::nullopt;
+
+  int x, y;
+  if (!GeoToCell(from, x, y))
+    return std::nullopt;
+
+  const unsigned width = result.width;
+  const unsigned height = result.height;
+  const std::size_t start_index = std::size_t(y) * width + x;
+  if (result.altitudes[start_index] >= max_alt)
+    return std::nullopt;
+
+  /* air cell: stored altitude is the true required arrival height */
+  if (!IsGroundCell(result, start_index))
+    return double(result.altitudes[start_index]);
+
+  /* ground cell: walk back to the first air cell (or the seed) */
+  double distance_m = 0;
+  int cx = x, cy = y;
+  std::vector<bool> visited(std::size_t(width) * height, false);
+  const unsigned max_steps = (width + height) * 2;
+
+  for (unsigned step = 0; step < max_steps; ++step) {
+    const std::size_t index = std::size_t(cy) * width + cx;
+    if (visited[index])
+      return std::nullopt;
+    visited[index] = true;
+
+    if (!IsGroundCell(result, index))
+      return double(result.altitudes[index]) + distance_m / glide_ratio;
+
+    const std::int32_t nx = result.origin_x[index];
+    const std::int32_t ny = result.origin_y[index];
+    if (nx < 0 || ny < 0 || !InGrid(result, nx, ny) ||
+        (nx == cx && ny == cy)) {
+      /* ground all the way to the seed */
+      return double(SeedArrivalAltitude(*this, cx, cy)) +
+        distance_m / glide_ratio;
+    }
+
+    distance_m += CellDistanceM(*this, cx, cy, nx, ny);
+    cx = nx;
+    cy = ny;
+  }
+
+  return std::nullopt;
 }
 
 /* marching squares tables (see gpu-MC contours.js) */

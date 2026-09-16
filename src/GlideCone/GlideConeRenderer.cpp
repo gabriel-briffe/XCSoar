@@ -2,17 +2,14 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeRenderer.hpp"
-#include "GlideConeCompute.hpp"
 #include "GlideConeStatus.hpp"
 #include "Computer/Settings.hpp"
-#include "Terrain/RasterTerrain.hpp"
-#include "Terrain/RasterMap.hpp"
-#include "Terrain/Height.hpp"
 #include "Look/MapLook.hpp"
 #include "Projection/WindowProjection.hpp"
-#include "Terrain/RasterProjection.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
+#include "Terrain/RasterTerrain.hpp"
+#include "Renderer/WaypointRendererSettings.hpp"
 #include "Renderer/TextInBox.hpp"
 #include "Renderer/LabelBlock.hpp"
 #include "Formatter/UserUnits.hpp"
@@ -22,6 +19,7 @@
 #include "Math/Angle.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Color.hpp"
+#include "ui/dim/BulkPoint.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -38,9 +36,6 @@ static constexpr double GLIDE_CONE_SEED_EPSILON_M = 50;
 
 /** Debounce for parameter / terrain-tile changes. */
 static constexpr std::chrono::milliseconds GLIDE_CONE_DEBOUNCE{400};
-
-/** Hard cap on GPU grid cells per side. */
-static constexpr unsigned GLIDE_CONE_MAX_DIM = 1024;
 
 /**
  * Draw a geo polyline clipped to the visible map.  Unclipped
@@ -88,13 +83,26 @@ GlideConeRenderer::ClearTarget() noexcept
 
 [[gnu::pure]]
 static std::size_t
-SettingsSignature(const GlideConeSettings &s) noexcept
+SettingsSignature(const GlideConeSettings &s,
+                  double clearance, double arrival) noexcept
 {
   std::size_t h = std::hash<int>{}(int(s.mode));
   h = h * 31 + std::hash<double>{}(s.glide_ratio);
   h = h * 31 + std::hash<double>{}(s.max_altitude);
   h = h * 31 + std::hash<double>{}(s.cell_size);
   h = h * 31 + std::hash<unsigned>{}(s.iteration_cap);
+  h = h * 31 + std::hash<double>{}(clearance);
+  h = h * 31 + std::hash<double>{}(arrival);
+  return h;
+}
+
+[[gnu::pure]]
+static std::size_t
+WaypointDisplaySignature(const WaypointRendererSettings &s) noexcept
+{
+  std::size_t h = std::hash<bool>{}(s.display_non_icao_airports);
+  for (unsigned i = 0; i < unsigned(Waypoint::Type::COUNT); ++i)
+    h = h * 31 + std::hash<bool>{}(s.display_types[i]);
   return h;
 }
 
@@ -118,124 +126,35 @@ GlideConeRenderer::AdjustTerrainCoverage(const ComputerSettings &settings,
     location = target;
 }
 
-bool
-GlideConeRenderer::BuildField(GeoPoint center, double radius_m,
-                              const std::vector<GeoPoint> &seeds,
-                              const ComputerSettings &settings,
-                              const RasterTerrain &terrain) noexcept
+void
+GlideConeRenderer::AbortJobs() noexcept
 {
-  const GlideConeSettings &gc = settings.glide_cone;
+  const bool busy = awaiting_grid || gpu.IsActive() || gpu_input != nullptr;
+  gpu.Cancel();
+  gpu_input.reset();
+  awaiting_grid = false;
+  if (busy)
+    ++job_generation;
+  (void)worker.TakeReady();
+}
 
-  const double ratio = std::clamp(gc.glide_ratio, 1.0, 200.0);
-  const double max_alt = std::clamp(gc.max_altitude, 100.0, 10000.0);
-  const double desired_cell =
-    std::clamp(gc.cell_size, 50.0, 5000.0);
-
-  const RasterTerrain::Lease lease{terrain};
-  const RasterMap &map = lease;
-  if (!map.IsDefined())
-    return false;
-
-  const RasterProjection &proj = map.GetProjection();
-
-  /* DEM lon/lat pixels are not square metres: measure axes separately. */
-  double dem_x = map.PixelDistanceX(center, 1);
-  double dem_y = map.PixelDistanceY(center, 1);
-  if (dem_x < 1)
-    dem_x = 1;
-  if (dem_y < 1)
-    dem_y = 1;
-
-  const double dem_ref = std::sqrt(dem_x * dem_y);
-  unsigned pool = std::max(1u, (unsigned)std::lround(desired_cell / dem_ref));
-
-  double cell_x = pool * dem_x;
-  double cell_y = pool * dem_y;
-
-  unsigned half_x = std::max(1u, (unsigned)std::lround(radius_m / cell_x));
-  unsigned half_y = std::max(1u, (unsigned)std::lround(radius_m / cell_y));
-
-  /* Fit a metric-radius window into the GPU dim cap by coarsening the
-     shared DEM pool factor (keeps N×N max-pool alignment). */
-  if (half_x > GLIDE_CONE_MAX_DIM / 2 || half_y > GLIDE_CONE_MAX_DIM / 2) {
-    const unsigned need_pool_x = std::max(1u, (unsigned)std::lround(
-      (radius_m / double(GLIDE_CONE_MAX_DIM / 2)) / dem_x));
-    const unsigned need_pool_y = std::max(1u, (unsigned)std::lround(
-      (radius_m / double(GLIDE_CONE_MAX_DIM / 2)) / dem_y));
-    pool = std::max(pool, std::max(need_pool_x, need_pool_y));
-    cell_x = pool * dem_x;
-    cell_y = pool * dem_y;
-    half_x = std::min(GLIDE_CONE_MAX_DIM / 2,
-                      std::max(1u, (unsigned)std::lround(radius_m / cell_x)));
-    half_y = std::min(GLIDE_CONE_MAX_DIM / 2,
-                      std::max(1u, (unsigned)std::lround(radius_m / cell_y)));
-  }
-
-  const unsigned dim_x = 2 * half_x;
-  const unsigned dim_y = 2 * half_y;
-
-  const auto c = proj.ProjectCoarse(center);
-  const SignedRasterLocation origin{
-    c.x - int(half_x * pool),
-    c.y - int(half_y * pool),
-  };
-
-  const auto nw = proj.UnprojectCoarse(origin);
-  const auto se = proj.UnprojectCoarse(SignedRasterLocation{
-    origin.x + int(dim_x * pool),
-    origin.y + int(dim_y * pool),
-  });
-  const GeoBounds bounds{nw, se};
-  if (!bounds.IsValid())
-    return false;
-
-  const double clearance = settings.task.route_planner.safety_height_terrain;
-  const double arrival = settings.task.safety_height_arrival;
-  const float invalid_elevation = float(max_alt + 10000);
-
-  GlideConeGrid grid;
-  grid.width = dim_x;
-  grid.height = dim_y;
-  grid.cell_size_x_m = cell_x;
-  grid.cell_size_y_m = cell_y;
-  grid.glide_ratio = ratio;
-  grid.max_alt = float(max_alt);
-  grid.iteration_cap = gc.iteration_cap;
-  grid.elevation.resize(std::size_t(dim_x) * dim_y);
-
-  map.MaxPoolElevation(origin, pool, dim_x, dim_y,
-                       grid.elevation.data(), invalid_elevation);
-  for (float &e : grid.elevation)
-    if (e < invalid_elevation)
-      e += float(clearance);
-
-  for (const GeoPoint &seed : seeds) {
-    const auto sp = proj.ProjectCoarse(seed);
-    const int sx = (sp.x - origin.x) / int(pool);
-    const int sy = (sp.y - origin.y) / int(pool);
-    if (sx < 0 || sy < 0 ||
-        unsigned(sx) >= dim_x || unsigned(sy) >= dim_y)
-      continue;
-
-    const double seed_terrain =
-      map.GetHeight(seed).ToDouble(0.0, 0.0);
-    grid.seeds.push_back({sx, sy, float(seed_terrain + arrival)});
-  }
-
-  if (grid.seeds.empty())
-    return false;
-
-  GlideConeResult result;
-  if (!GlideConeCompute::Run(grid, result))
-    return false;
-
+void
+GlideConeRenderer::InstallField(GlideConePreparedGrid &&prepared,
+                                GlideConeResult &&result) noexcept
+{
   field.result = std::move(result);
-  field.bounds = bounds;
-  field.cell_size_m = std::sqrt(cell_x * cell_y);
-  field.max_alt = grid.max_alt;
-  field.home_x = grid.seeds.front().x;
-  field.home_y = grid.seeds.front().y;
-  return field.IsValid();
+  field.bounds = prepared.bounds;
+  field.cell_size_m = std::sqrt(prepared.grid.cell_size_x_m *
+                                prepared.grid.cell_size_y_m);
+  field.cell_size_x_m = prepared.grid.cell_size_x_m;
+  field.cell_size_y_m = prepared.grid.cell_size_y_m;
+  field.glide_ratio = prepared.grid.glide_ratio;
+  field.max_alt = prepared.grid.max_alt;
+  field.home_x = prepared.grid.seeds.front().x;
+  field.home_y = prepared.grid.seeds.front().y;
+  field.seeds = std::move(prepared.grid.seeds);
+  field.elevation = std::move(prepared.grid.elevation);
+  computed_contours = false;
 }
 
 void
@@ -245,24 +164,33 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                         const ComputerSettings &settings,
                         const RasterTerrain *terrain,
                         const Waypoints *waypoints,
+                        const WaypointRendererSettings &waypoint_settings,
                         const MapLook &look) noexcept
 {
   const GlideConeSettings &gc = settings.glide_cone;
   const auto mode = gc.mode;
+  const double clearance =
+    settings.task.route_planner.safety_height_terrain;
+  const double arrival = settings.task.safety_height_arrival;
 
-  const std::size_t signature = SettingsSignature(gc);
+  std::size_t signature = SettingsSignature(gc, clearance, arrival);
+  if (mode == GlideConeSettings::Mode::COMBINED)
+    signature = signature * 31 + WaypointDisplaySignature(waypoint_settings);
 
   if (mode == GlideConeSettings::Mode::OFF || terrain == nullptr ||
-      !GlideConeCompute::Available()) {
+      !GlideConeGpuSession::Available()) {
+    AbortJobs();
+    field.Clear();
+    computed_center = GeoPoint::Invalid();
     GlideConeStatus::SetInvalid();
     return;
   }
 
-  /* determine the window centre and seeds for the selected mode */
   GeoPoint center = GeoPoint::Invalid();
-  double radius_m = gc.WindowRadiusM();
-  std::vector<GeoPoint> seeds;
+  const double radius_m = gc.WindowRadiusM();
   double recompute_threshold_m = GLIDE_CONE_SEED_EPSILON_M;
+  std::vector<GeoPoint> single_seeds;
+  bool have_center = false;
 
   if (mode == GlideConeSettings::Mode::SINGLE) {
     GeoPoint seed;
@@ -277,27 +205,23 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     }
 
     if (!valid) {
+      AbortJobs();
       field.Clear();
-      have_field = false;
       computed_center = GeoPoint::Invalid();
       GlideConeStatus::SetInvalid();
       return;
     }
 
     center = seed;
-    seeds.push_back(seed);
+    single_seeds.push_back(seed);
+    have_center = true;
     recompute_threshold_m = GLIDE_CONE_SEED_EPSILON_M;
-  } else { // COMBINED
-    if (!aircraft_valid || waypoints == nullptr) {
-      GlideConeStatus::SetInvalid();
-      return;
-    }
-
+  } else if (aircraft_valid && waypoints != nullptr) {
     center = aircraft;
+    have_center = true;
     recompute_threshold_m = GLIDE_CONE_MAX_OFFSET_FROM_CENTER * radius_m;
   }
 
-  /* debounce parameter (glide ratio, etc.) and terrain-tile changes */
   const auto now = std::chrono::steady_clock::now();
   const bool sig_changed = signature != computed_signature;
   if (sig_changed && signature != debounce_signature) {
@@ -313,73 +237,124 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     debounce_terrain_serial = terrain_serial;
     terrain_debounce_since = now;
   }
-  const bool terrain_ready = have_field &&
+  const bool terrain_ready = field.IsValid() &&
     terrain_serial != computed_terrain_serial &&
     now - terrain_debounce_since >= GLIDE_CONE_DEBOUNCE;
 
-  const bool center_moved = !computed_center.IsValid() ||
-    computed_center.DistanceS(center) > recompute_threshold_m;
-
-  if (!have_field || center_moved || sig_ready || terrain_ready) {
-    /* single mode gathers its single seed above; combined gathered its
-       seeds only when a recompute was due, so re-gather if needed */
-    if (mode == GlideConeSettings::Mode::COMBINED && seeds.empty() &&
-        waypoints != nullptr) {
-      waypoints->VisitWithinRange(center, radius_m,
-                                  [&seeds](const WaypointPtr &wp){
-        if (wp->IsLandable())
-          seeds.push_back(wp->location);
-      });
+  bool waypoints_ready = false;
+  Serial waypoint_serial{};
+  if (mode == GlideConeSettings::Mode::COMBINED && waypoints != nullptr) {
+    waypoint_serial = waypoints->GetSerial();
+    if (waypoint_serial != computed_waypoint_serial &&
+        waypoint_serial != debounce_waypoint_serial) {
+      debounce_waypoint_serial = waypoint_serial;
+      waypoint_debounce_since = now;
     }
-
-    have_field = !seeds.empty() &&
-      BuildField(center, radius_m, seeds, settings, *terrain);
-    computed_center = center;
-    computed_signature = signature;
-    computed_terrain_serial = terrain_serial;
-    computed_contours = false;
+    waypoints_ready = field.IsValid() &&
+      waypoint_serial != computed_waypoint_serial &&
+      now - waypoint_debounce_since >= GLIDE_CONE_DEBOUNCE;
   }
 
-  if (!have_field) {
-    GlideConeStatus::SetInvalid();
-    return;
-  }
+  const bool center_moved = have_center &&
+    (!computed_center.IsValid() ||
+     computed_center.DistanceS(center) > recompute_threshold_m);
 
-  if (!aircraft_valid) {
-    GlideConeStatus::SetInvalid();
-    return;
-  }
+  const bool need_job = have_center &&
+    (center_moved || sig_ready || terrain_ready || waypoints_ready);
 
-  /* publish the required altitude at the aircraft for the InfoBox */
-  {
-    int ax, ay;
-    if (field.GeoToCell(aircraft, ax, ay)) {
-      const std::size_t index = std::size_t(ay) * field.result.width + ax;
-      const float required = field.result.altitudes[index];
-      if (required < field.max_alt)
-        GlideConeStatus::Set({true, required});
-      else
-        GlideConeStatus::SetInvalid();
+  if (need_job) {
+    ++job_generation;
+    gpu.Cancel();
+    gpu_input.reset();
+
+    GlideConeGridRequest request;
+    request.generation = job_generation;
+    request.center = center;
+    request.radius_m = radius_m;
+    request.glide_ratio = gc.glide_ratio;
+    request.max_altitude = gc.max_altitude;
+    request.cell_size = gc.cell_size;
+    request.iteration_cap = gc.iteration_cap;
+    request.clearance = clearance;
+    request.arrival = arrival;
+    request.combined = mode == GlideConeSettings::Mode::COMBINED;
+    request.seeds = std::move(single_seeds);
+    request.waypoint_settings = waypoint_settings;
+    if (worker.Request(std::move(request), terrain, waypoints)) {
+      awaiting_grid = true;
+      computed_center = center;
+      computed_signature = signature;
+      computed_terrain_serial = terrain_serial;
+      if (mode == GlideConeSettings::Mode::COMBINED)
+        computed_waypoint_serial = waypoint_serial;
     } else {
-      GlideConeStatus::SetInvalid();
+      awaiting_grid = false;
     }
   }
 
-  /* altitude contour lines of the reachable area */
+  if (auto prepared = worker.TakeReady()) {
+    if (prepared->generation == job_generation) {
+      awaiting_grid = false;
+      if (prepared->grid.IsValid()) {
+        gpu.Cancel();
+        if (gpu.Begin(prepared->grid))
+          gpu_input = std::move(prepared);
+      }
+    }
+  }
+
+  if (gpu.IsActive()) {
+    if (gpu.PollFence()) {
+      if (gpu.Remaining() == 0) {
+        GlideConeResult result;
+        if (gpu_input != nullptr && gpu.Finish(result) && result.IsValid())
+          InstallField(std::move(*gpu_input), std::move(result));
+        gpu_input.reset();
+      } else {
+        gpu.Step(GlideConeGpuSession::BATCH);
+      }
+    }
+  } else {
+    gpu_input.reset();
+  }
+
+  DrawField(canvas, projection, aircraft, aircraft_valid, settings, look);
+}
+
+void
+GlideConeRenderer::DrawField(Canvas &canvas,
+                             const WindowProjection &projection,
+                             GeoPoint aircraft, bool aircraft_valid,
+                             const ComputerSettings &settings,
+                             const MapLook &look) noexcept
+{
+  const GlideConeSettings &gc = settings.glide_cone;
+
+  if (!field.IsValid()) {
+    GlideConeStatus::SetInvalid();
+    return;
+  }
+
+  if (aircraft_valid) {
+    const auto required = field.RequiredAltitude(aircraft);
+    if (required)
+      GlideConeStatus::Set({true, *required});
+  } else {
+    GlideConeStatus::SetInvalid();
+  }
+
   if (gc.contours) {
     if (!computed_contours) {
       field.BuildContours();
       computed_contours = true;
     }
 
-    /* only show once zoomed in past the configured map scale */
     const bool show = projection.GetMapScale() <= gc.contours_min_scale;
 
     if (show && !field.contour_lines.empty()) {
       const PixelRect screen = projection.GetScreenRect();
       const GeoClip clip(projection.GetScreenBounds().Scale(1.1));
 
-      /* draw the stitched contour polylines */
       canvas.Select(look.glide_cone_contour_pen);
       for (const auto &line : field.contour_lines)
         DrawClippedGeoPolyline(canvas, projection, clip, line.points);
@@ -434,7 +409,6 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                 cur.y < screen.top || cur.y > screen.bottom)
               continue;
 
-            /* text angle parallel to the line, flipped to read upright */
             double a = std::atan2(dy, dx);
             if (std::cos(a) < 0)
               a += M_PI;
@@ -472,7 +446,6 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
 
 #ifdef ENABLE_OPENGL
             const Angle angle = Angle::Radians(a);
-            /* white halo for readability, then black text */
             canvas.SetTextColor(COLOR_WHITE);
             for (const auto off : {PixelPoint{-1, -1}, PixelPoint{1, -1},
                                    PixelPoint{-1, 1}, PixelPoint{1, 1}})
@@ -494,12 +467,55 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     computed_contours = false;
   }
 
-  const std::vector<GeoPoint> path = field.Trace(aircraft);
-  if (path.size() < 2)
+  if (!aircraft_valid)
     return;
 
-  canvas.Select(look.glide_cone_pen);
-  DrawClippedGeoPolyline(canvas, projection,
-                         GeoClip(projection.GetScreenBounds().Scale(1.1)),
-                         path);
+  const std::vector<GlideConeField::TraceCell> cells = field.Trace(aircraft);
+  if (cells.size() < 2)
+    return;
+
+  std::vector<BulkPixelPoint> run;
+  bool run_ground = false;
+  const auto flush = [&]() {
+    if (run.size() < 2)
+      return;
+    if (run_ground) {
+      canvas.Select(look.glide_cone_ground_pen);
+      for (std::size_t i = 1; i < run.size(); ++i)
+        canvas.DrawLine(run[i - 1], run[i]);
+    } else {
+      canvas.Select(look.glide_cone_pen);
+      canvas.DrawPolyline(run.data(), unsigned(run.size()));
+    }
+  };
+
+  for (std::size_t i = 1; i < cells.size(); ++i) {
+    const auto &from = cells[i - 1];
+    const auto &to = cells[i];
+    const bool ground = field.IsDownhillGroundSegment(from.x, from.y,
+                                                      to.x, to.y);
+    const BulkPixelPoint from_pt = projection.GeoToScreen(
+      field.CellToGeo(from.x, from.y));
+    const BulkPixelPoint to_pt = projection.GeoToScreen(
+      field.CellToGeo(to.x, to.y));
+
+    if (run.empty()) {
+      run_ground = ground;
+      run.push_back(from_pt);
+      run.push_back(to_pt);
+      continue;
+    }
+
+    if (ground == run_ground) {
+      run.push_back(to_pt);
+      continue;
+    }
+
+    flush();
+    run.clear();
+    run_ground = ground;
+    run.push_back(from_pt);
+    run.push_back(to_pt);
+  }
+  flush();
 }
