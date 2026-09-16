@@ -188,6 +188,207 @@ GlideConeRenderer::InstallField(GlideConePreparedGrid &&prepared,
   field.seeds = std::move(prepared.grid.seeds);
   field.elevation = std::move(prepared.grid.elevation);
   computed_contours = false;
+  /* Terrain/settings refreshes keep the same grid origin; dropping the
+     geo cache would re-place labels from the current screen and make
+     them jump while flying.  Only rebase after a real center move. */
+  if (drop_labels_on_install)
+    InvalidateContourLabels();
+  drop_labels_on_install = true;
+}
+
+void
+GlideConeRenderer::InvalidateContourLabels() noexcept
+{
+  contour_labels.clear();
+  label_cache_map_scale = -1;
+  label_cache_spacing = 0;
+  label_cache_font_h = 0;
+  label_cache_screen_size = {};
+}
+
+void
+GlideConeRenderer::RebuildContourLabels(Canvas &canvas,
+                                        const WindowProjection &projection,
+                                        const GlideConeSettings &gc,
+                                        const MapLook &look) noexcept
+{
+  contour_labels.clear();
+  if (look.overlay.overlay_font == nullptr || field.contour_lines.empty())
+    return;
+
+  canvas.Select(*look.overlay.overlay_font);
+  LabelBlock label_block;
+  label_block.reset();
+
+  /* Place over a padded viewport so modest pans still find labels. */
+  const PixelRect screen = projection.GetScreenRect();
+  const int pad = int(std::min(screen.GetWidth(), screen.GetHeight()) / 4);
+  const PixelRect place_rect{
+    screen.left - pad, screen.top - pad,
+    screen.right + pad, screen.bottom + pad,
+  };
+
+  const unsigned short_side =
+    std::min(screen.GetWidth(), screen.GetHeight());
+  const unsigned pct = std::clamp(gc.label_spacing, 20u, 100u);
+  const double spacing =
+    std::max(20.0, double(short_side) * double(pct) / 100.0);
+  const double spacing2 = spacing * spacing;
+  const double sample_step =
+    std::max(8.0, double(look.overlay.overlay_font->GetHeight()));
+
+  std::vector<std::pair<int, PixelPoint>> placed;
+
+  for (const auto &line : field.contour_lines) {
+    if (line.points.size() < 2)
+      continue;
+
+    ContourLabel proto{};
+    proto.level = line.level;
+    FormatUserAltitude(double(line.level), proto.text);
+    const PixelSize ts = canvas.CalcTextSize(proto.text);
+    proto.text_size = ts;
+    const double hw = ts.width / 2.0, hh = ts.height / 2.0;
+    const double offset_px = std::max(2.0, hh * 1.2);
+
+    double since_sample = sample_step;
+    GeoPoint prev_geo = line.points[0];
+    PixelPoint prev = projection.GeoToScreen(prev_geo);
+    for (std::size_t k = 1; k < line.points.size(); ++k) {
+      const GeoPoint cur_geo = line.points[k];
+      const PixelPoint cur = projection.GeoToScreen(cur_geo);
+      const double dx = cur.x - prev.x, dy = cur.y - prev.y;
+      const double seg = std::hypot(dx, dy);
+      since_sample += seg;
+      if (since_sample < sample_step || seg < 1e-3) {
+        prev_geo = cur_geo;
+        prev = cur;
+        continue;
+      }
+      since_sample = 0;
+
+      if (cur.x < place_rect.left || cur.x > place_rect.right ||
+          cur.y < place_rect.top || cur.y > place_rect.bottom) {
+        prev_geo = cur_geo;
+        prev = cur;
+        continue;
+      }
+
+      double a = std::atan2(dy, dx);
+      if (std::cos(a) < 0)
+        a += M_PI;
+      const double ca = std::cos(a), sa = std::sin(a);
+
+      const int lx = cur.x + int(std::lround(sa * offset_px));
+      const int ly = cur.y + int(std::lround(-ca * offset_px));
+
+      bool too_close = false;
+      for (const auto &p : placed) {
+        if (p.first != line.level)
+          continue;
+        const double ddx = double(p.second.x - lx);
+        const double ddy = double(p.second.y - ly);
+        if (ddx * ddx + ddy * ddy < spacing2) {
+          too_close = true;
+          break;
+        }
+      }
+      if (too_close) {
+        prev_geo = cur_geo;
+        prev = cur;
+        continue;
+      }
+
+      const int aabb_w = int(std::abs(hw * ca) + std::abs(hh * sa)) + 1;
+      const int aabb_h = int(std::abs(hw * sa) + std::abs(hh * ca)) + 1;
+      const PixelRect rc{lx - aabb_w, ly - aabb_h, lx + aabb_w, ly + aabb_h};
+      if (!label_block.check(rc)) {
+        prev_geo = cur_geo;
+        prev = cur;
+        continue;
+      }
+
+      placed.emplace_back(line.level, PixelPoint{lx, ly});
+
+      ContourLabel label = proto;
+      label.location = cur_geo;
+      /* Tip one segment past the anchor so screen tangent stays long. */
+      label.along = prev_geo.Interpolate(cur_geo, 2.0);
+      contour_labels.push_back(label);
+
+      prev_geo = cur_geo;
+      prev = cur;
+    }
+  }
+
+  label_cache_map_scale = projection.GetMapScale();
+  label_cache_spacing = pct;
+  label_cache_font_h = look.overlay.overlay_font->GetHeight();
+  label_cache_screen_size = projection.GetScreenSize();
+  LogFmt("glidecones: label geo-cache rebuild n={} scale={:.0f}",
+         contour_labels.size(), label_cache_map_scale);
+}
+
+void
+GlideConeRenderer::DrawContourLabels(Canvas &canvas,
+                                     const WindowProjection &projection,
+                                     const MapLook &look) const noexcept
+{
+  if (look.overlay.overlay_font == nullptr || contour_labels.empty())
+    return;
+
+  canvas.Select(*look.overlay.overlay_font);
+  canvas.SetBackgroundTransparent();
+  const PixelRect screen = projection.GetScreenRect();
+
+  for (const auto &label : contour_labels) {
+    if (!label.location.IsValid())
+      continue;
+
+    /* Sub-pixel projection: integer GeoToScreen on a short along-tip
+       makes atan2/offset shimmer while panning or rotating. */
+    const FloatPoint2D pf = projection.GeoToScreenF(label.location);
+    if (pf.x < screen.left || pf.x > screen.right ||
+        pf.y < screen.top || pf.y > screen.bottom)
+      continue;
+
+    const FloatPoint2D qf = label.along.IsValid()
+      ? projection.GeoToScreenF(label.along)
+      : FloatPoint2D{pf.x + 1.f, pf.y};
+    double dx = double(qf.x) - double(pf.x);
+    double dy = double(qf.y) - double(pf.y);
+    if (std::hypot(dx, dy) < 1e-3) {
+      dx = 1;
+      dy = 0;
+    }
+
+    double a = std::atan2(dy, dx);
+    if (std::cos(a) < 0)
+      a += M_PI;
+    const double ca = std::cos(a), sa = std::sin(a);
+    const double offset_px =
+      std::max(2.0, label.text_size.height / 2.0 * 1.2);
+    const PixelPoint label_pos{
+      int(std::lround(double(pf.x) + sa * offset_px)),
+      int(std::lround(double(pf.y) - ca * offset_px)),
+    };
+
+#ifdef ENABLE_OPENGL
+    const Angle angle = Angle::Radians(a);
+    canvas.SetTextColor(COLOR_WHITE);
+    for (const auto off : {PixelPoint{-1, -1}, PixelPoint{1, -1},
+                           PixelPoint{-1, 1}, PixelPoint{1, 1}})
+      canvas.DrawText({label_pos.x + off.x, label_pos.y + off.y},
+                      label.text, angle);
+    canvas.SetTextColor(COLOR_BLACK);
+    canvas.DrawText(label_pos, label.text, angle);
+#else
+    RenderShadowedText(canvas, label.text,
+                       {label_pos.x - int(label.text_size.width) / 2,
+                        label_pos.y - int(label.text_size.height) / 2},
+                       false);
+#endif
+  }
 }
 
 void
@@ -313,7 +514,16 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     (center_moved || sig_ready || terrain_ready || waypoints_ready);
 
   if (need_job) {
+    /* Keep the grid origin until the aircraft/seed actually crosses the
+       recompute threshold.  Terrain/settings refreshes used to re-center
+       on the live aircraft, which rebuilt contours/labels every tile load
+       while flying. */
+    const GeoPoint job_center =
+      (!center_moved && computed_center.IsValid()) ? computed_center
+                                                   : center;
+
     ++job_generation;
+    drop_labels_on_install = center_moved || !computed_center.IsValid();
     gpu_worker.Cancel();
     awaiting_gpu = false;
     (void)gpu_worker.TakeReady();
@@ -322,14 +532,14 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
            "radius={:.0f}m L/D={:.0f} max_alt={:.0f} cell={:.0f} "
            "why: center={} sig={} terrain={} wpts={} seeds={}",
            ModeName(mode), job_generation, seed_source,
-           center.latitude.Degrees(), center.longitude.Degrees(),
+           job_center.latitude.Degrees(), job_center.longitude.Degrees(),
            radius_m, gc.glide_ratio, gc.max_altitude, gc.cell_size,
            center_moved, sig_ready, terrain_ready, waypoints_ready,
            single_seeds.size());
 
     GlideConeGridRequest request;
     request.generation = job_generation;
-    request.center = center;
+    request.center = job_center;
     request.radius_m = radius_m;
     request.glide_ratio = gc.glide_ratio;
     request.max_altitude = gc.max_altitude;
@@ -342,7 +552,7 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     request.waypoint_settings = waypoint_settings;
     if (worker.Request(std::move(request), terrain, waypoints)) {
       awaiting_grid = true;
-      computed_center = center;
+      computed_center = job_center;
       computed_signature = signature;
       computed_terrain_serial = terrain_serial;
       if (mode == GlideConeSettings::Mode::COMBINED)
@@ -430,119 +640,40 @@ GlideConeRenderer::DrawField(Canvas &canvas,
     const bool show = projection.GetMapScale() <= gc.contours_min_scale;
 
     if (show && !field.contour_lines.empty()) {
-      const PixelRect screen = projection.GetScreenRect();
       const GeoClip clip(projection.GetScreenBounds().Scale(1.1));
 
       canvas.Select(look.glide_cone_contour_pen);
       for (const auto &line : field.contour_lines)
         DrawClippedGeoPolyline(canvas, projection, clip, line.points);
 
-      /* labels along each line, offset beside the stroke (MapLibre-style
-         line text-offset), rotated parallel and flipped upright.
-         All labels: no text overlap (LabelBlock).
-         Same altitude: also min screen distance (label_spacing %). */
       if (look.overlay.overlay_font != nullptr) {
-        canvas.Select(*look.overlay.overlay_font);
-        canvas.SetBackgroundTransparent();
-        LabelBlock label_block;
-        label_block.reset();
-
-        const unsigned short_side =
-          std::min(screen.GetWidth(), screen.GetHeight());
         const unsigned pct = std::clamp(gc.label_spacing, 20u, 100u);
-        const double spacing =
-          std::max(20.0, double(short_side) * double(pct) / 100.0);
-        const double spacing2 = spacing * spacing;
-        /* sample candidates along the line (~1 em) */
-        const double sample_step =
-          std::max(8.0, double(look.overlay.overlay_font->GetHeight()));
+        const unsigned font_h = look.overlay.overlay_font->GetHeight();
+        const PixelSize screen_size = projection.GetScreenSize();
+        const double map_scale = projection.GetMapScale();
 
-        /* placed label centres, for same-altitude distance checks */
-        std::vector<std::pair<int, PixelPoint>> placed;
+        /* Geo anchors: ignore pan/follow.  Rebuild on zoom / settings. */
+        const bool scale_ok = label_cache_map_scale > 0 &&
+          std::abs(label_cache_map_scale - map_scale) <=
+            label_cache_map_scale * 0.02;
+        const bool cache_ok =
+          label_cache_map_scale > 0 &&
+          scale_ok &&
+          label_cache_spacing == pct &&
+          label_cache_font_h == font_h &&
+          label_cache_screen_size.width == screen_size.width &&
+          label_cache_screen_size.height == screen_size.height;
 
-        for (const auto &line : field.contour_lines) {
-          if (line.points.size() < 2)
-            continue;
+        if (!cache_ok)
+          RebuildContourLabels(canvas, projection, gc, look);
 
-          char buffer[32];
-          FormatUserAltitude(double(line.level), buffer);
-          const PixelSize ts = canvas.CalcTextSize(buffer);
-          const double hw = ts.width / 2.0, hh = ts.height / 2.0;
-          /* Offset off the line (~0.6 em) so text is not on the stroke. */
-          const double offset_px = std::max(2.0, hh * 1.2);
-
-          double since_sample = sample_step;
-          PixelPoint prev = projection.GeoToScreen(line.points[0]);
-          for (std::size_t k = 1; k < line.points.size(); ++k) {
-            const PixelPoint cur = projection.GeoToScreen(line.points[k]);
-            const double dx = cur.x - prev.x, dy = cur.y - prev.y;
-            const double seg = std::hypot(dx, dy);
-            since_sample += seg;
-            prev = cur;
-            if (since_sample < sample_step || seg < 1e-3)
-              continue;
-            since_sample = 0;
-
-            if (cur.x < screen.left || cur.x > screen.right ||
-                cur.y < screen.top || cur.y > screen.bottom)
-              continue;
-
-            double a = std::atan2(dy, dx);
-            if (std::cos(a) < 0)
-              a += M_PI;
-            const double ca = std::cos(a), sa = std::sin(a);
-
-            /* Perpendicular offset "above" upright text (screen y down). */
-            const int lx = cur.x + int(std::lround(sa * offset_px));
-            const int ly = cur.y + int(std::lround(-ca * offset_px));
-
-            /* same altitude: enforce label distance in screen space */
-            bool too_close = false;
-            for (const auto &p : placed) {
-              if (p.first != line.level)
-                continue;
-              const double ddx = double(p.second.x - lx);
-              const double ddy = double(p.second.y - ly);
-              if (ddx * ddx + ddy * ddy < spacing2) {
-                too_close = true;
-                break;
-              }
-            }
-            if (too_close)
-              continue;
-
-            /* any label: no overlapping text */
-            const int aabb_w = int(std::abs(hw * ca) + std::abs(hh * sa)) + 1;
-            const int aabb_h = int(std::abs(hw * sa) + std::abs(hh * ca)) + 1;
-            const PixelRect rc{lx - aabb_w, ly - aabb_h,
-                               lx + aabb_w, ly + aabb_h};
-            if (!label_block.check(rc))
-              continue;
-
-            placed.emplace_back(line.level, PixelPoint{lx, ly});
-            const PixelPoint label_pos{lx, ly};
-
-#ifdef ENABLE_OPENGL
-            const Angle angle = Angle::Radians(a);
-            canvas.SetTextColor(COLOR_WHITE);
-            for (const auto off : {PixelPoint{-1, -1}, PixelPoint{1, -1},
-                                   PixelPoint{-1, 1}, PixelPoint{1, 1}})
-              canvas.DrawText({label_pos.x + off.x, label_pos.y + off.y},
-                              buffer, angle);
-            canvas.SetTextColor(COLOR_BLACK);
-            canvas.DrawText(label_pos, buffer, angle);
-#else
-            RenderShadowedText(canvas, buffer,
-                               {label_pos.x - int(ts.width) / 2,
-                                label_pos.y - int(ts.height) / 2}, false);
-#endif
-          }
-        }
+        DrawContourLabels(canvas, projection, look);
       }
     }
   } else if (computed_contours) {
     field.contour_lines.clear();
     computed_contours = false;
+    InvalidateContourLabels();
   }
 
   if (!aircraft_valid)

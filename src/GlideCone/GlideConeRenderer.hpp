@@ -7,6 +7,7 @@
 #include "GlideConeWorker.hpp"
 #include "GlideConeGpuWorker.hpp"
 #include "Geo/GeoPoint.hpp"
+#include "ui/dim/Size.hpp"
 #include "thread/Mutex.hxx"
 #include "util/Serial.hpp"
 
@@ -23,6 +24,7 @@ class Waypoints;
 struct MapLook;
 struct ComputerSettings;
 struct WaypointRendererSettings;
+struct GlideConeSettings;
 
 /**
  * Owns glide-cone CPU grid building (worker thread), GLES compute on a
@@ -51,6 +53,28 @@ class GlideConeRenderer {
   Serial computed_terrain_serial{};
   Serial computed_waypoint_serial{};
   bool computed_contours = false;
+
+  /**
+   * Contour labels anchored in geographic space.  Placement
+   * (collision / spacing) is redone only when the field, map scale,
+   * screen size, font, or label-distance setting changes — not on
+   * pan / follow.  Each redraw only reprojects and draws.
+   */
+  struct ContourLabel {
+    GeoPoint location;
+    /** Point ahead along the contour for screen-tangent orientation. */
+    GeoPoint along;
+    int level;
+    PixelSize text_size;
+    char text[32];
+  };
+  std::vector<ContourLabel> contour_labels;
+  double label_cache_map_scale = -1;
+  unsigned label_cache_spacing = 0;
+  unsigned label_cache_font_h = 0;
+  PixelSize label_cache_screen_size{};
+  /** When true, next InstallField drops the geo label cache (grid rebased). */
+  bool drop_labels_on_install = true;
 
   std::size_t debounce_signature = ~std::size_t{0};
   std::chrono::steady_clock::time_point debounce_since{};
@@ -107,6 +131,17 @@ private:
 
   void InstallField(GlideConePreparedGrid &&prepared,
                     GlideConeResult &&result) noexcept;
+
+  void InvalidateContourLabels() noexcept;
+
+  void RebuildContourLabels(Canvas &canvas,
+                            const WindowProjection &projection,
+                            const GlideConeSettings &gc,
+                            const MapLook &look) noexcept;
+
+  void DrawContourLabels(Canvas &canvas,
+                         const WindowProjection &projection,
+                         const MapLook &look) const noexcept;
 
   void DrawField(Canvas &canvas, const WindowProjection &projection,
                  GeoPoint aircraft, bool aircraft_valid,
