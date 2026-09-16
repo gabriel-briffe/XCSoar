@@ -4,8 +4,8 @@
 #pragma once
 
 #include "GlideConeField.hpp"
-#include "GlideConeCompute.hpp"
 #include "GlideConeWorker.hpp"
+#include "GlideConeGpuWorker.hpp"
 #include "Geo/GeoPoint.hpp"
 #include "thread/Mutex.hxx"
 #include "util/Serial.hpp"
@@ -25,11 +25,9 @@ struct ComputerSettings;
 struct WaypointRendererSettings;
 
 /**
- * Owns glide-cone CPU grid building (worker thread), time-sliced GPU
- * propagate (draw thread), and drawing of the last-good relay path.
- *
- * Draw() never max-pools DEM, never walks waypoints, and never waits
- * for the full GPU iteration cap.
+ * Owns glide-cone CPU grid building (worker thread), GLES compute on a
+ * dedicated shared-context thread, and drawing of the last-good relay
+ * path.  Draw() never max-pools DEM and never runs GPU propagate.
  */
 class GlideConeRenderer {
   Mutex mutex;
@@ -41,10 +39,10 @@ class GlideConeRenderer {
   std::uint64_t pending_generation = 0;
 
   GlideConeWorker worker;
-  GlideConeGpuSession gpu;
-  std::unique_ptr<GlideConePreparedGrid> gpu_input;
+  GlideConeGpuWorker gpu_worker;
   std::uint64_t job_generation = 0;
   bool awaiting_grid = false;
+  bool awaiting_gpu = false;
 
   /* last-good field, painted while a new job runs */
   GlideConeField field;
@@ -73,8 +71,8 @@ public:
   void ClearTarget() noexcept;
 
   /**
-   * Kick or step compute and draw the last-good path.  Draw thread,
-   * OpenGL context current.
+   * Kick compute and draw the last-good path.  Draw thread; UI EGL
+   * context must be current (shared GPU context is created from it).
    */
   void Draw(Canvas &canvas, const WindowProjection &projection,
             GeoPoint aircraft, bool aircraft_valid,
@@ -83,6 +81,15 @@ public:
             const RasterTerrain *terrain, const Waypoints *waypoints,
             const WaypointRendererSettings &waypoint_settings,
             const MapLook &look) noexcept;
+
+  /**
+   * True while CPU grid build or GPU propagate is in flight.  The map
+   * keeps redrawing so completed results are picked up promptly.
+   */
+  [[gnu::pure]]
+  bool IsBusy() const noexcept {
+    return awaiting_grid || awaiting_gpu || gpu_worker.IsBusy();
+  }
 
   /**
    * Expand a map-view terrain request so it also covers the glide-cone
@@ -95,7 +102,7 @@ public:
                                     double &radius) noexcept;
 
 private:
-  /** Drop in-flight CPU/GPU work.  GL context must be current. */
+  /** Drop in-flight CPU/GPU work. */
   void AbortJobs() noexcept;
 
   void InstallField(GlideConePreparedGrid &&prepared,

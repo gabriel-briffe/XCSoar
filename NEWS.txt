@@ -9,7 +9,8 @@ Version 7.46 - not yet released
     around the glider (combined); default glide ratio is 25.  Combined
     mode seeds the landables shown by Map Display → Waypoints (type
     and Non-ICAO filters; not zoom).  Downhill-ground path segments
-    are black dotted.  The map stays live while a cone is recomputed;
+    are black dotted.  DEM pooling and GPU propagate run on background
+    threads (shared GLES 3.1 context) so the map stays interactive;
     the last path and InfoBox value remain until the new field is
     ready.  The Glide Cone InfoBox reconstructs required altitude on
     ground cells from the first air cell plus distance / L/D

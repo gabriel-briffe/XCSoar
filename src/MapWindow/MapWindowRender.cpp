@@ -309,6 +309,10 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
                              gc_target, gc_target_valid,
                              GetComputerSettings(), terrain, waypoints,
                              GetMapSettings().waypoint, look);
+    /* Keep redrawing while CPU/GPU work is outstanding so results
+       are installed promptly (compute itself runs off the draw thread). */
+    if (glide_cone_renderer.IsBusy())
+      Invalidate();
   }
 
   // Render track bearing (projected track ground/air relative)

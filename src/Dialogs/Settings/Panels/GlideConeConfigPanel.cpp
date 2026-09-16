@@ -9,6 +9,7 @@
 #include "Language/Language.hpp"
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
+#include "LogFile.hpp"
 
 enum ControlIndex {
   Mode,
@@ -127,6 +128,12 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
     Profile::Set(ProfileKeys::GlideConeLabelSpacing, glide_cone.label_spacing);
     changed = true;
   }
+
+  if (changed)
+    LogFmt("glidecones: config saved mode={} L/D={:.0f} max_alt={:.0f} "
+           "cell={:.0f}",
+           int(glide_cone.mode), glide_cone.glide_ratio,
+           glide_cone.max_altitude, glide_cone.cell_size);
 
   _changed |= changed;
   return true;

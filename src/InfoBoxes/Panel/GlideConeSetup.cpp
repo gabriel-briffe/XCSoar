@@ -14,6 +14,7 @@
 #include "Language/Language.hpp"
 #include "UIGlobals.hpp"
 #include "util/StaticString.hxx"
+#include "LogFile.hpp"
 
 #include <algorithm>
 #include <array>
@@ -103,6 +104,13 @@ private:
   void SetMode(GlideConeSettings::Mode mode) noexcept {
     CommonInterface::SetComputerSettings().glide_cone.mode = mode;
     Profile::Set(ProfileKeys::GlideConeMode, int(mode));
+    const char *name = "?";
+    switch (mode) {
+    case GlideConeSettings::Mode::OFF: name = "off"; break;
+    case GlideConeSettings::Mode::SINGLE: name = "single"; break;
+    case GlideConeSettings::Mode::COMBINED: name = "combined"; break;
+    }
+    LogFmt("glidecones: mode selected → {}", name);
     UpdateModes();
   }
 

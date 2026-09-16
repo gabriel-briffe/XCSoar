@@ -7,6 +7,7 @@
 #include "Terrain/RasterProjection.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
+#include "LogFile.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,8 +18,10 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
                    const Waypoints *waypoints,
                    GlideConePreparedGrid &out) noexcept
 {
-  if (!request.center.IsValid() || request.radius_m <= 0)
+  if (!request.center.IsValid() || request.radius_m <= 0) {
+    LogFmt("glidecones: build: bad center/radius gen={}", request.generation);
     return false;
+  }
 
   const double ratio = std::clamp(request.glide_ratio, 1.0, 200.0);
   const double max_alt = std::clamp(request.max_altitude, 100.0, 10000.0);
@@ -27,8 +30,10 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
 
   const RasterTerrain::Lease lease{terrain};
   const RasterMap &map = lease;
-  if (!map.IsDefined())
+  if (!map.IsDefined()) {
+    LogFmt("glidecones: build: DEM undefined gen={}", request.generation);
     return false;
+  }
 
   const RasterProjection &proj = map.GetProjection();
 
@@ -78,8 +83,10 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
     origin.y + int(dim_y * pool),
   });
   const GeoBounds bounds{nw, se};
-  if (!bounds.IsValid())
+  if (!bounds.IsValid()) {
+    LogFmt("glidecones: build: invalid bounds gen={}", request.generation);
     return false;
+  }
 
   const float invalid_elevation = float(max_alt + 10000);
 
@@ -103,9 +110,15 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
               request.waypoint_settings.IsWaypointDisplayed(*wp))
             seeds.push_back(wp->location);
         });
-    if (seeds.empty())
+    LogFmt("glidecones: build: combined landables in range={} gen={}",
+           seeds.size(), request.generation);
+    if (seeds.empty()) {
+      LogFmt("glidecones: build: no landables gen={}", request.generation);
       return false;
+    }
   } else if (seeds.empty()) {
+    LogFmt("glidecones: build: single with empty seeds gen={}",
+           request.generation);
     return false;
   }
 
@@ -127,8 +140,16 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
     grid.seeds.push_back({sx, sy, float(seed_terrain + request.arrival)});
   }
 
-  if (grid.seeds.empty())
+  if (grid.seeds.empty()) {
+    LogFmt("glidecones: build: no seeds in grid gen={} candidates={}",
+           request.generation, seeds.size());
     return false;
+  }
+
+  LogFmt("glidecones: build: ok gen={} {}x{} pool={} cell={:.0f}x{:.0f}m "
+         "seeds={}/{} dem={:.0f}x{:.0f}m",
+         request.generation, dim_x, dim_y, pool, cell_x, cell_y,
+         grid.seeds.size(), seeds.size(), dem_x, dem_y);
 
   out.generation = request.generation;
   out.center = request.center;
