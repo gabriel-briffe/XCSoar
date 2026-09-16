@@ -29,6 +29,7 @@
 
 static constexpr InfoBoxPanel panels[] = {
   { NC_("Menu", "Setup"), LoadGlideConeSetupPanel },
+  { NC_("Menu", "Contours"), LoadGlideConeContoursPanel },
   { nullptr, nullptr },
 };
 

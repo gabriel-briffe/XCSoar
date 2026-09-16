@@ -9,3 +9,6 @@ class Widget;
 
 std::unique_ptr<Widget>
 LoadGlideConeSetupPanel(unsigned id);
+
+std::unique_ptr<Widget>
+LoadGlideConeContoursPanel(unsigned id);
