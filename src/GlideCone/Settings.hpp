@@ -60,6 +60,13 @@ struct GlideConeSettings {
   bool contours;
 
   /**
+   * When true (default), stitch marching-squares edges into continuous
+   * polylines and draw altitude labels.  When false, draw only the raw
+   * per-cell segments (debug).
+   */
+  bool contour_polylines;
+
+  /**
    * Only show contours and labels when the map scale (see
    * WindowProjection::GetMapScale(), metres) is at most this value, i.e.
    * when zoomed in far enough.

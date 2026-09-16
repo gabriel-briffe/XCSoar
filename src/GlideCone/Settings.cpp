@@ -14,6 +14,7 @@ GlideConeSettings::SetDefaults() noexcept
   cell_size = DEFAULT_CELL_SIZE_M;
   iteration_cap = 2000;
   contours = false;
+  contour_polylines = true;
   contours_min_scale = 30000;
   label_spacing = 40;
 }

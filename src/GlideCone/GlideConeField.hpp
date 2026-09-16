@@ -73,11 +73,13 @@ struct GlideConeField {
   }
 
   /**
-   * Build 100 m (or @p interval_m) altitude contour polylines of the
-   * reachable area (marching squares, edge-walked into continuous
-   * lines).  Fills #contour_lines.
+   * Build 100 m (or @p interval_m) altitude contours of the reachable
+   * area (marching squares).  Always extracts the full raw segment set;
+   * when @p polylines is true, stitches segments that share grid-edge
+   * endpoints into continuous lines.  Fills #contour_lines.
    */
-  void BuildContours(double interval_m = 100) noexcept;
+  void BuildContours(double interval_m = 100,
+                     bool polylines = true) noexcept;
 
   /** Geographic position of the centre of grid cell (x,y). */
   [[gnu::pure]]

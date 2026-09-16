@@ -632,9 +632,12 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   }
 
   if (gc.contours) {
-    if (!computed_contours) {
-      field.BuildContours();
+    if (!computed_contours ||
+        computed_contour_polylines != gc.contour_polylines) {
+      field.BuildContours(100, gc.contour_polylines);
       computed_contours = true;
+      computed_contour_polylines = gc.contour_polylines;
+      InvalidateContourLabels();
     }
 
     const bool show = projection.GetMapScale() <= gc.contours_min_scale;
@@ -646,7 +649,7 @@ GlideConeRenderer::DrawField(Canvas &canvas,
       for (const auto &line : field.contour_lines)
         DrawClippedGeoPolyline(canvas, projection, clip, line.points);
 
-      if (look.overlay.overlay_font != nullptr) {
+      if (gc.contour_polylines && look.overlay.overlay_font != nullptr) {
         const unsigned pct = std::clamp(gc.label_spacing, 20u, 100u);
         const unsigned font_h = look.overlay.overlay_font->GetHeight();
         const PixelSize screen_size = projection.GetScreenSize();

@@ -18,6 +18,7 @@ enum ControlIndex {
   CellSize,
   IterationCap,
   Contours,
+  ContourPolylines,
   ContoursMinScale,
   LabelSpacing,
 };
@@ -78,6 +79,12 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
              _("Draw 100 m altitude contour lines of the reachable area."),
              glide_cone.contours);
 
+  AddBoolean(_("Polylines"),
+             _("On: stitch contour edges into continuous polylines and "
+               "draw labels.  Off: draw raw marching-squares segments "
+               "(debug)."),
+             glide_cone.contour_polylines);
+
   AddFloat(_("Contours min scale"),
            _("Only show contours and labels when the map scale [m] is at "
              "most this value, i.e. when zoomed in far enough."),
@@ -116,6 +123,10 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValue(Contours, ProfileKeys::GlideConeContours,
                        glide_cone.contours);
+
+  changed |= SaveValue(ContourPolylines,
+                       ProfileKeys::GlideConeContourPolylines,
+                       glide_cone.contour_polylines);
 
   changed |= SaveValue(ContoursMinScale, ProfileKeys::GlideConeContoursMinScale,
                        glide_cone.contours_min_scale);

@@ -53,6 +53,7 @@ class GlideConeRenderer {
   Serial computed_terrain_serial{};
   Serial computed_waypoint_serial{};
   bool computed_contours = false;
+  bool computed_contour_polylines = true;
 
   /**
    * Contour labels anchored in geographic space.  Placement

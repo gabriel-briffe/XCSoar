@@ -242,13 +242,11 @@ GeoPoint Lerp(GeoPoint a, GeoPoint b, double t) noexcept
  * Exit edge for a cell given the entry edge.  Saddle cases (5, 10) use
  * the asymptotic decider so adjacent cells share one continuous path.
  */
-[[gnu::pure]]
-int ExitEdge(unsigned case_index, int entry,
-             const std::array<float, 4> &values, float level) noexcept
+void
+CasePairs(unsigned case_index, const std::array<float, 4> &values,
+          float level, EdgePair pairs[2], unsigned &n) noexcept
 {
-  EdgePair pairs[2];
-  unsigned n = 0;
-
+  n = 0;
   if (case_index == 5 || case_index == 10) {
     const float center =
       (values[0] + values[1] + values[2] + values[3]) * 0.25f;
@@ -274,50 +272,6 @@ int ExitEdge(unsigned case_index, int entry,
     n = cs.count;
     for (unsigned s = 0; s < n; ++s)
       pairs[s] = cs.seg[s];
-  }
-
-  for (unsigned s = 0; s < n; ++s) {
-    if (pairs[s].a == entry)
-      return pairs[s].b;
-    if (pairs[s].b == entry)
-      return pairs[s].a;
-  }
-  return -1;
-}
-
-struct NeighborCell {
-  unsigned i, j;
-  int entry;
-};
-
-/**
- * Step across @p exit_edge of cell (i,j) into the adjacent marching-squares
- * cell; the shared edge becomes @c entry there.
- */
-[[gnu::pure]]
-std::optional<NeighborCell>
-StepAcross(unsigned i, unsigned j, int exit_edge,
-           unsigned cells_w, unsigned cells_h) noexcept
-{
-  switch (exit_edge) {
-  case 0: /* top → cell above, enter bottom */
-    if (j == 0)
-      return std::nullopt;
-    return NeighborCell{i, j - 1, 2};
-  case 1: /* right → cell right, enter left */
-    if (i + 1 >= cells_w)
-      return std::nullopt;
-    return NeighborCell{i + 1, j, 3};
-  case 2: /* bottom → cell below, enter top */
-    if (j + 1 >= cells_h)
-      return std::nullopt;
-    return NeighborCell{i, j + 1, 0};
-  case 3: /* left → cell left, enter right */
-    if (i == 0)
-      return std::nullopt;
-    return NeighborCell{i - 1, j, 1};
-  default:
-    return std::nullopt;
   }
 }
 
@@ -357,10 +311,100 @@ EdgeCount(unsigned corner_w, unsigned corner_h) noexcept
   return std::size_t(corner_w - 1) * corner_h +
     std::size_t(corner_w) * (corner_h - 1);
 }
+
+/** One marching-squares segment with UniqueEdgeId endpoints for stitching. */
+struct RawSeg {
+  std::size_t e0, e1;
+  GeoPoint p0, p1;
+};
+
+/**
+ * Chain raw segments that share UniqueEdgeId endpoints into polylines.
+ * Every input segment appears in exactly one output line.
+ */
+void
+StitchRawSegments(const std::vector<RawSeg> &segs, std::size_t n_edges,
+                  int level,
+                  std::vector<GlideConeField::ContourLine> &out) noexcept
+{
+  if (segs.empty())
+    return;
+
+  std::vector<std::vector<std::pair<unsigned, uint8_t>>> adj(n_edges);
+  for (unsigned i = 0; i < segs.size(); ++i) {
+    adj[segs[i].e0].emplace_back(i, 0);
+    adj[segs[i].e1].emplace_back(i, 1);
+  }
+
+  const auto edge_of = [&](unsigned si, uint8_t end) noexcept {
+    return end == 0 ? segs[si].e0 : segs[si].e1;
+  };
+  const auto point_of = [&](unsigned si, uint8_t end) noexcept {
+    return end == 0 ? segs[si].p0 : segs[si].p1;
+  };
+
+  std::vector<char> used(segs.size(), 0);
+
+  for (unsigned seed = 0; seed < segs.size(); ++seed) {
+    if (used[seed])
+      continue;
+    used[seed] = 1;
+
+    std::vector<GeoPoint> forward;
+    forward.push_back(segs[seed].p0);
+    forward.push_back(segs[seed].p1);
+
+    const auto grow = [&](unsigned cur, uint8_t at,
+                          std::vector<GeoPoint> &pts) noexcept {
+      for (;;) {
+        const std::size_t e = edge_of(cur, at);
+        unsigned next = ~0u;
+        uint8_t next_at = 0;
+        for (const auto &[sj, ej] : adj[e]) {
+          if (sj == cur || used[sj])
+            continue;
+          next = sj;
+          next_at = ej;
+          break;
+        }
+        if (next == ~0u)
+          break;
+        used[next] = 1;
+        const uint8_t far = uint8_t(next_at ^ 1);
+        pts.push_back(point_of(next, far));
+        cur = next;
+        at = far;
+      }
+    };
+
+    grow(seed, 1, forward);
+
+    std::vector<GeoPoint> backward;
+    grow(seed, 0, backward);
+
+    std::vector<GeoPoint> line;
+    line.reserve(backward.size() + forward.size());
+    for (auto it = backward.rbegin(); it != backward.rend(); ++it)
+      line.push_back(*it);
+    for (const GeoPoint &p : forward)
+      line.push_back(p);
+
+    std::vector<GeoPoint> deduped;
+    deduped.reserve(line.size());
+    for (const GeoPoint &p : line)
+      if (deduped.empty() ||
+          deduped.back().longitude != p.longitude ||
+          deduped.back().latitude != p.latitude)
+        deduped.push_back(p);
+
+    if (deduped.size() >= 2)
+      out.push_back({std::move(deduped), level});
+  }
+}
 } // anonymous namespace
 
 void
-GlideConeField::BuildContours(double interval_m) noexcept
+GlideConeField::BuildContours(double interval_m, bool polylines) noexcept
 {
   contour_lines.clear();
   if (!IsValid() || interval_m <= 0)
@@ -404,7 +448,6 @@ GlideConeField::BuildContours(double interval_m) noexcept
        level += int(interval_m)) {
     const float flevel = float(level);
 
-    /* per-cell corner values / case; nullopt cell = not marchable */
     std::vector<std::optional<std::array<float, 4>>> cell_values(
       std::size_t(cells_w) * cells_h);
     std::vector<unsigned char> cell_case(std::size_t(cells_w) * cells_h, 0);
@@ -460,111 +503,36 @@ GlideConeField::BuildContours(double interval_m) noexcept
       return Lerp(corners[a], corners[b], t);
     };
 
-    std::vector<char> visited(n_edges, 0);
-
-    const auto follow = [&](unsigned i, unsigned j,
-                            int entry) -> std::vector<GeoPoint> {
-      std::vector<GeoPoint> pts;
-      for (;;) {
-        const std::size_t cidx = std::size_t(j) * cells_w + i;
-        if (!cell_values[cidx])
-          break;
-
-        const unsigned cas = cell_case[cidx];
-        const int exit_e = ExitEdge(cas, entry, *cell_values[cidx], flevel);
-        if (exit_e < 0)
-          break;
-
-        const std::size_t id_in = UniqueEdgeId(i, j, entry, w, h);
-        if (visited[id_in])
-          break;
-
-        const auto p_in = edge_point(i, j, entry);
-        const auto p_out = edge_point(i, j, exit_e);
-        if (!p_in || !p_out)
-          break;
-
-        if (pts.empty())
-          pts.push_back(*p_in);
-        visited[id_in] = 1;
-
-        pts.push_back(*p_out);
-        visited[UniqueEdgeId(i, j, exit_e, w, h)] = 1;
-
-        const auto next = StepAcross(i, j, exit_e, cells_w, cells_h);
-        if (!next)
-          break;
-        if (visited[UniqueEdgeId(next->i, next->j, next->entry, w, h)])
-          break; /* closed ring */
-
-        i = next->i;
-        j = next->j;
-        entry = next->entry;
-      }
-      return pts;
-    };
-
+    std::vector<RawSeg> segs;
     for (unsigned j = 0; j < cells_h; ++j) {
       for (unsigned i = 0; i < cells_w; ++i) {
         const std::size_t cidx = std::size_t(j) * cells_w + i;
         if (!cell_values[cidx])
           continue;
 
-        const unsigned cas = cell_case[cidx];
-        /* try each edge that participates in this case */
-        for (int edge = 0; edge < 4; ++edge) {
-          if (ExitEdge(cas, edge, *cell_values[cidx], flevel) < 0)
+        EdgePair pairs[2];
+        unsigned n = 0;
+        CasePairs(cell_case[cidx], *cell_values[cidx], flevel, pairs, n);
+        for (unsigned s = 0; s < n; ++s) {
+          const auto p0 = edge_point(i, j, pairs[s].a);
+          const auto p1 = edge_point(i, j, pairs[s].b);
+          if (!p0 || !p1)
             continue;
-
-          const std::size_t seed_id = UniqueEdgeId(i, j, edge, w, h);
-          if (visited[seed_id])
-            continue;
-
-          auto forward = follow(i, j, edge);
-
-          /* Closed ring: first and last meet on the seed edge. */
-          const bool closed =
-            forward.size() >= 3 &&
-            forward.front().longitude == forward.back().longitude &&
-            forward.front().latitude == forward.back().latitude;
-
-          std::vector<GeoPoint> line;
-          if (closed) {
-            line = std::move(forward);
-          } else {
-            /* Open contour: walk the other way from the seed. */
-            visited[seed_id] = 0;
-            std::vector<GeoPoint> backward;
-            if (const auto back =
-                  StepAcross(i, j, edge, cells_w, cells_h)) {
-              if (!visited[UniqueEdgeId(back->i, back->j,
-                                        back->entry, w, h)])
-                backward = follow(back->i, back->j, back->entry);
-            }
-            visited[seed_id] = 1;
-
-            line.reserve(backward.size() + forward.size());
-            for (auto it = backward.rbegin(); it != backward.rend(); ++it)
-              line.push_back(*it);
-            const std::size_t skip =
-              (!backward.empty() && !forward.empty()) ? 1 : 0;
-            for (std::size_t k = skip; k < forward.size(); ++k)
-              line.push_back(forward[k]);
-          }
-
-          /* drop consecutive duplicates */
-          std::vector<GeoPoint> deduped;
-          deduped.reserve(line.size());
-          for (const GeoPoint &p : line)
-            if (deduped.empty() ||
-                deduped.back().longitude != p.longitude ||
-                deduped.back().latitude != p.latitude)
-              deduped.push_back(p);
-
-          if (deduped.size() >= 2)
-            contour_lines.push_back({std::move(deduped), level});
+          segs.push_back({
+            UniqueEdgeId(i, j, pairs[s].a, w, h),
+            UniqueEdgeId(i, j, pairs[s].b, w, h),
+            *p0, *p1,
+          });
         }
       }
     }
+
+    if (!polylines) {
+      for (const auto &s : segs)
+        contour_lines.push_back({{s.p0, s.p1}, level});
+      continue;
+    }
+
+    StitchRawSegments(segs, n_edges, level, contour_lines);
   }
 }
