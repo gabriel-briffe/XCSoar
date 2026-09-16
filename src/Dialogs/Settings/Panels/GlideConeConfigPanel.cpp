@@ -9,7 +9,14 @@
 #include "Language/Language.hpp"
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
+#include "MapWindow/GlueMapWindow.hpp"
+#include "Units/Units.hpp"
+#include "Units/Descriptor.hpp"
+#include "util/StringFormat.hpp"
 #include "LogFile.hpp"
+
+#include <algorithm>
+#include <cmath>
 
 enum ControlIndex {
   Mode,
@@ -33,7 +40,103 @@ static constexpr StaticEnumChoice glide_cone_mode_list[] = {
   nullptr
 };
 
+/**
+ * Convert #GetMapScale() metres ↔ map-ruler metres (screen width).
+ * factor = 8 × width / short_edge (see WindowProjection).
+ */
+[[gnu::pure]]
+static double
+GetMapScaleToRulerFactor() noexcept
+{
+  const GlueMapWindow *map = UIGlobals::GetMap();
+  if (map == nullptr)
+    return 8.;
+
+  const auto &projection = map->VisibleProjection();
+  const unsigned width = projection.GetScreenSize().width;
+  const unsigned min_edge = projection.GetMinScreenDistance();
+  if (width == 0 || min_edge == 0)
+    return 8.;
+
+  return 8. * double(width) / double(min_edge);
+}
+
+/** Default maximum for the chooser: 600 km, or 300 for mi/nm. */
+[[gnu::pure]]
+static unsigned
+GetDefaultMaxThresholdUser() noexcept
+{
+  if (Units::GetUserDistanceUnit() == Unit::KILOMETER)
+    return 600;
+
+  return 300;
+}
+
+[[gnu::pure]]
+static unsigned
+NextThresholdChoice(unsigned value) noexcept
+{
+  if (value < 20) {
+    const unsigned fine =
+      Units::GetUserDistanceUnit() == Unit::KILOMETER ? 5u : 2u;
+    return value + fine;
+  }
+
+  return value + 10;
+}
+
+static void
+FillThresholdChoices(DataFieldEnum &df, unsigned max_user,
+                     const char *unit_name) noexcept
+{
+  char label[32];
+  for (unsigned value = 0;;) {
+    StringFormat(label, sizeof(label), "%u %s", value, unit_name);
+    df.AddChoice(value, label, label);
+
+    if (value >= max_user)
+      break;
+
+    const unsigned next = NextThresholdChoice(value);
+    if (next <= value)
+      break;
+    value = next;
+  }
+}
+
+[[gnu::pure]]
+static unsigned
+SnapThresholdChoice(double value_user, unsigned max_user) noexcept
+{
+  if (value_user <= 0.)
+    return 0;
+
+  unsigned best = 0;
+  double best_delta = value_user;
+
+  for (unsigned value = 0;;) {
+    const double delta = std::fabs(double(value) - value_user);
+    if (delta < best_delta) {
+      best_delta = delta;
+      best = value;
+    }
+
+    if (value >= max_user)
+      break;
+
+    const unsigned next = NextThresholdChoice(value);
+    if (next <= value)
+      break;
+    value = next;
+  }
+
+  return best;
+}
+
 class GlideConeConfigPanel final : public RowFormWidget {
+  /** Cached at Prepare for stable edit↔store conversion. */
+  double map_scale_to_ruler = 8.;
+
 public:
   GlideConeConfigPanel()
     :RowFormWidget(UIGlobals::GetDialogLook()) {}
@@ -49,6 +152,10 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
   const ComputerSettings &settings_computer =
     CommonInterface::GetComputerSettings();
   const GlideConeSettings &glide_cone = settings_computer.glide_cone;
+
+  map_scale_to_ruler = GetMapScaleToRulerFactor();
+  if (map_scale_to_ruler <= 0.)
+    map_scale_to_ruler = 8.;
 
   RowFormWidget::Prepare(parent, rc);
 
@@ -85,11 +192,19 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
                "(debug)."),
              glide_cone.contour_polylines);
 
-  AddFloat(_("Contours min scale"),
-           _("Only show contours and labels when the map scale [m] is at "
-             "most this value, i.e. when zoomed in far enough."),
-           "%.0f m", "%.0f", 1000, 500000, 1000, false,
-           glide_cone.contours_min_scale);
+  /* UI is map-ruler distance (scale bar); store is GetMapScale() metres. */
+  const unsigned list_max = GetDefaultMaxThresholdUser();
+  const double ruler_user = Units::ToUserDistance(
+    glide_cone.contours_min_scale * map_scale_to_ruler);
+  auto *scale_control = AddEnum(
+    _("Contours min scale"),
+    _("Only show contours and labels when the map scale bar is at most "
+      "this distance (same meaning as topography label thresholds)."));
+  auto &scale_df = *(DataFieldEnum *)scale_control->GetDataField();
+  FillThresholdChoices(scale_df, list_max,
+                       Units::GetUnitName(Units::GetUserDistanceUnit()));
+  scale_df.SetValue(SnapThresholdChoice(ruler_user, list_max));
+  scale_control->RefreshDisplay();
 
   AddInteger(_("Label distance"),
              _("Minimum screen distance between labels of the same "
@@ -128,8 +243,14 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
                        ProfileKeys::GlideConeContourPolylines,
                        glide_cone.contour_polylines);
 
-  changed |= SaveValue(ContoursMinScale, ProfileKeys::GlideConeContoursMinScale,
-                       glide_cone.contours_min_scale);
+  const unsigned ruler_user = GetValueEnum(ContoursMinScale);
+  const double map_scale_m = std::max(
+    1., Units::ToSysDistance(double(ruler_user)) / map_scale_to_ruler);
+  if (map_scale_m != glide_cone.contours_min_scale) {
+    glide_cone.contours_min_scale = map_scale_m;
+    Profile::Set(ProfileKeys::GlideConeContoursMinScale, map_scale_m);
+    changed = true;
+  }
 
   if (SaveValueInteger(LabelSpacing, glide_cone.label_spacing)) {
     if (glide_cone.label_spacing < 20)

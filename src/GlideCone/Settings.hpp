@@ -67,9 +67,9 @@ struct GlideConeSettings {
   bool contour_polylines;
 
   /**
-   * Only show contours and labels when the map scale (see
-   * WindowProjection::GetMapScale(), metres) is at most this value, i.e.
-   * when zoomed in far enough.
+   * Only show contours and labels when #WindowProjection::GetMapScale()
+   * is at most this value [m].  Same units as topography label
+   * thresholds; the settings UI edits map-ruler metres (scale bar).
    */
   double contours_min_scale;
 

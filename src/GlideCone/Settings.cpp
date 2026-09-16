@@ -15,7 +15,8 @@ GlideConeSettings::SetDefaults() noexcept
   iteration_cap = 2000;
   contours = false;
   contour_polylines = true;
-  contours_min_scale = 30000;
+  /* ~30 km on the map scale bar at the usual 8× GetMapScale factor. */
+  contours_min_scale = 3750;
   label_spacing = 40;
 }
 
