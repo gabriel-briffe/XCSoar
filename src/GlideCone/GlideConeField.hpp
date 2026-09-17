@@ -7,6 +7,7 @@
 #include "Geo/GeoBounds.hpp"
 #include "Geo/GeoPoint.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -56,6 +57,13 @@ struct GlideConeField {
   /** Altitude contour polylines, built on demand by BuildContours(). */
   std::vector<ContourLine> contour_lines;
 
+  /**
+   * Reused cycle-detection stamps for Trace / RequiredAltitude.
+   * Epoch bump avoids clearing the whole grid each call.
+   */
+  mutable std::vector<std::uint32_t> visit_stamp;
+  mutable std::uint32_t visit_epoch = 0;
+
   [[gnu::pure]]
   bool IsValid() const noexcept {
     return result.IsValid() && bounds.IsValid();
@@ -70,6 +78,8 @@ struct GlideConeField {
     seeds.clear();
     elevation.clear();
     contour_lines.clear();
+    visit_stamp.clear();
+    visit_epoch = 0;
   }
 
   /**
@@ -98,7 +108,6 @@ struct GlideConeField {
    * by following origin pointers.  Returns an empty result if the start
    * cell is outside the grid or unreachable.
    */
-  [[gnu::pure]]
   std::vector<TraceCell> Trace(GeoPoint from) const noexcept;
 
   /**
@@ -119,6 +128,5 @@ struct GlideConeField {
    * added.  If the path is ground all the way to the seed, the result
    * is seed arrival altitude plus remaining distance / L/D.
    */
-  [[gnu::pure]]
   std::optional<double> RequiredAltitude(GeoPoint from) const noexcept;
 };

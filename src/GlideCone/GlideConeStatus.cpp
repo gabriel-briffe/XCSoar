@@ -13,6 +13,10 @@ void
 GlideConeStatus::Set(const Snapshot &snapshot) noexcept
 {
   const std::lock_guard lock{mutex};
+  if (current.valid == snapshot.valid &&
+      (!snapshot.valid ||
+       current.required_altitude == snapshot.required_altitude))
+    return;
   current = snapshot;
 }
 
@@ -20,6 +24,8 @@ void
 GlideConeStatus::SetInvalid() noexcept
 {
   const std::lock_guard lock{mutex};
+  if (!current.valid)
+    return;
   current = Snapshot{};
 }
 

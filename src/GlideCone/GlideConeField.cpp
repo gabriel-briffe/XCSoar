@@ -51,6 +51,36 @@ SeedArrivalAltitude(const GlideConeField &field, int x, int y) noexcept
   return field.result.altitudes[index];
 }
 
+/**
+ * Prepare #GlideConeField::visit_stamp for a new walk.  Uses an epoch
+ * counter so only touched cells are marked — no full-grid clear.
+ */
+void
+BeginVisit(const GlideConeField &field, std::size_t count) noexcept
+{
+  if (field.visit_stamp.size() != count)
+    field.visit_stamp.assign(count, 0);
+
+  ++field.visit_epoch;
+  if (field.visit_epoch == 0) {
+    std::fill(field.visit_stamp.begin(), field.visit_stamp.end(), 0);
+    field.visit_epoch = 1;
+  }
+}
+
+[[gnu::pure]]
+bool
+WasVisited(const GlideConeField &field, std::size_t index) noexcept
+{
+  return field.visit_stamp[index] == field.visit_epoch;
+}
+
+void
+MarkVisited(const GlideConeField &field, std::size_t index) noexcept
+{
+  field.visit_stamp[index] = field.visit_epoch;
+}
+
 } // anonymous namespace
 
 
@@ -101,14 +131,15 @@ GlideConeField::Trace(GeoPoint from) const noexcept
   if (result.altitudes[start_index] >= max_alt)
     return path;
 
-  std::vector<bool> visited(std::size_t(width) * height, false);
+  const std::size_t count = std::size_t(width) * height;
+  BeginVisit(*this, count);
   const unsigned max_steps = (width + height) * 2;
 
   for (unsigned step = 0; step < max_steps; ++step) {
     const std::size_t index = std::size_t(y) * width + x;
-    if (visited[index])
+    if (WasVisited(*this, index))
       break;
-    visited[index] = true;
+    MarkVisited(*this, index);
 
     path.push_back({x, y});
 
@@ -172,14 +203,14 @@ GlideConeField::RequiredAltitude(GeoPoint from) const noexcept
   /* ground cell: walk back to the first air cell (or the seed) */
   double distance_m = 0;
   int cx = x, cy = y;
-  std::vector<bool> visited(std::size_t(width) * height, false);
+  BeginVisit(*this, std::size_t(width) * height);
   const unsigned max_steps = (width + height) * 2;
 
   for (unsigned step = 0; step < max_steps; ++step) {
     const std::size_t index = std::size_t(cy) * width + cx;
-    if (visited[index])
+    if (WasVisited(*this, index))
       return std::nullopt;
-    visited[index] = true;
+    MarkVisited(*this, index);
 
     if (!IsGroundCell(result, index))
       return double(result.altitudes[index]) + distance_m / glide_ratio;
