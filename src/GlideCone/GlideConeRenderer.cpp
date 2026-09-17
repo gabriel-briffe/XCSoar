@@ -199,6 +199,18 @@ GlideConeRenderer::InstallField(GlideConePreparedGrid &&prepared,
 }
 
 void
+GlideConeRenderer::ClearJobClaim() noexcept
+{
+  /* A failed first build (DEM not ready, empty seeds, GPU context)
+     used to leave computed_center/signature set so need_job never
+     fired again until the aircraft moved. */
+  if (!field.IsValid())
+    computed_center = GeoPoint::Invalid();
+  computed_signature = 0;
+  last_job_attempt = std::chrono::steady_clock::now();
+}
+
+void
 GlideConeRenderer::InvalidateContourLabels() noexcept
 {
   contour_labels.clear();
@@ -491,7 +503,9 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     debounce_terrain_serial = terrain_serial;
     terrain_debounce_since = now;
   }
-  const bool terrain_ready = field.IsValid() &&
+  /* Do not require an existing field — cold start must retry when DEM
+     tiles appear after a failed first build. */
+  const bool terrain_ready =
     terrain_serial != computed_terrain_serial &&
     now - terrain_debounce_since >= GLIDE_CONE_DEBOUNCE;
 
@@ -504,7 +518,7 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       debounce_waypoint_serial = waypoint_serial;
       waypoint_debounce_since = now;
     }
-    waypoints_ready = field.IsValid() &&
+    waypoints_ready =
       waypoint_serial != computed_waypoint_serial &&
       now - waypoint_debounce_since >= GLIDE_CONE_DEBOUNCE;
   }
@@ -513,8 +527,11 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     (!computed_center.IsValid() ||
      computed_center.DistanceS(center) > recompute_threshold_m);
 
-  const bool need_job = have_center &&
-    (center_moved || sig_ready || terrain_ready || waypoints_ready);
+  const bool cooled_down =
+    now - last_job_attempt >= GLIDE_CONE_DEBOUNCE;
+  const bool need_job = have_center && !IsBusy() && cooled_down &&
+    (!field.IsValid() || center_moved || sig_ready || terrain_ready ||
+     waypoints_ready);
 
   if (need_job) {
     /* Keep the grid origin until the aircraft/seed actually crosses the
@@ -530,15 +547,16 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     gpu_worker.Cancel();
     awaiting_gpu = false;
     (void)gpu_worker.TakeReady();
+    last_job_attempt = now;
 
     LogFmt("glidecones: {} request gen={} via={} lat={:.5f} lon={:.5f} "
            "radius={:.0f}m L/D={:.0f} max_alt={:.0f} cell={:.0f} "
-           "why: center={} sig={} terrain={} wpts={} seeds={}",
+           "why: center={} sig={} terrain={} wpts={} empty={} seeds={}",
            ModeName(mode), job_generation, seed_source,
            job_center.latitude.Degrees(), job_center.longitude.Degrees(),
            radius_m, gc.glide_ratio, gc.max_altitude, gc.cell_size,
            center_moved, sig_ready, terrain_ready, waypoints_ready,
-           single_seeds.size());
+           !field.IsValid(), single_seeds.size());
 
     GlideConeGridRequest request;
     request.generation = job_generation;
@@ -562,6 +580,7 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
         computed_waypoint_serial = waypoint_serial;
     } else {
       awaiting_grid = false;
+      ClearJobClaim();
       LogFmt("glidecones: worker.Request failed gen={}", job_generation);
     }
   }
@@ -577,10 +596,13 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                prepared->grid.cell_size_x_m, prepared->grid.cell_size_y_m);
         if (gpu_worker.Request(std::move(prepared)))
           awaiting_gpu = true;
-        else
+        else {
+          ClearJobClaim();
           LogFmt("glidecones: GPU worker.Request failed gen={}",
                  job_generation);
+        }
       } else {
+        ClearJobClaim();
         LogFmt("glidecones: grid ready but invalid gen={} "
                "(build failed or empty seeds)",
                prepared->generation);
@@ -604,6 +626,7 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       InstallField(std::move(*gpu_ready->prepared),
                    std::move(gpu_ready->result));
     } else {
+      ClearJobClaim();
       LogFmt("glidecones: GPU Finish failed/stale gen={}", job_generation);
     }
   } else if (!gpu_worker.IsBusy()) {

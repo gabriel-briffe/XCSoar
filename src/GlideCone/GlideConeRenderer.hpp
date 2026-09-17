@@ -86,6 +86,9 @@ class GlideConeRenderer {
   Serial debounce_waypoint_serial{};
   std::chrono::steady_clock::time_point waypoint_debounce_since{};
 
+  /** Cooldown after starting/failing a job so cold-start DEM misses retry. */
+  std::chrono::steady_clock::time_point last_job_attempt{};
+
 public:
   /**
    * Set the airport for which the glide cone should be computed (single
@@ -145,6 +148,9 @@ private:
 
   void InstallField(GlideConePreparedGrid &&prepared,
                     GlideConeResult &&result) noexcept;
+
+  /** Undo computed_* claim so a failed cold-start build can retry. */
+  void ClearJobClaim() noexcept;
 
   void InvalidateContourLabels() noexcept;
 
