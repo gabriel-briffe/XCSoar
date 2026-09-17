@@ -37,9 +37,14 @@ GlideConeWorker::Tick() noexcept
 {
   SetIdlePriority();
 
-  const GlideConeGridRequest request = next;
+  /* Take ownership under the lock (like the GPU worker) so we do not
+     deep-copy seeds / settings while the draw thread waits. */
+  GlideConeGridRequest request = std::move(next);
+  next = {};
   const RasterTerrain *const terrain = next_terrain;
   const Waypoints *const waypoints = next_waypoints;
+  next_terrain = nullptr;
+  next_waypoints = nullptr;
 
   LogFmt("glidecones: worker.Tick start gen={} combined={}",
          request.generation, request.combined);
@@ -62,7 +67,9 @@ GlideConeWorker::Tick() noexcept
     }
   }
 
-  if (request.generation != next.generation) {
+  /* A newer Request() replaces #next while we were unlocked. */
+  if (next.generation != 0 &&
+      request.generation != next.generation) {
     LogFmt("glidecones: worker.Tick drop gen={} (superseded by {})",
            request.generation, next.generation);
     return;

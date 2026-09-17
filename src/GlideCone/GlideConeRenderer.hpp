@@ -4,21 +4,13 @@
 #pragma once
 
 #include "GlideConeField.hpp"
-#include "GlideConeWorker.hpp"
-#include "GlideConeContourWorker.hpp"
-#include "GlideConeGpuWorker.hpp"
+#include "GlideConeJobController.hpp"
+#include "GlideConeOverlay.hpp"
 #include "Geo/GeoPoint.hpp"
-#include "Math/Angle.hpp"
-#include "ui/dim/Size.hpp"
 #include "thread/Mutex.hxx"
-#include "util/Serial.hpp"
 
-#include <chrono>
-#include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <optional>
-#include <vector>
 
 class Canvas;
 class WindowProjection;
@@ -27,12 +19,11 @@ class Waypoints;
 struct MapLook;
 struct ComputerSettings;
 struct WaypointRendererSettings;
-struct GlideConeSettings;
 
 /**
- * Owns glide-cone CPU grid building (worker thread), GLES compute on a
- * dedicated shared-context thread, and drawing of the last-good relay
- * path.  Draw() never max-pools DEM and never runs GPU propagate.
+ * Map-facing glide-cone facade: pending single-mode target, last-good
+ * field, job controller (CPU/GPU/contours), and overlay drawing.
+ * Draw() never max-pools DEM and never runs GPU propagate.
  */
 class GlideConeRenderer {
   Mutex mutex;
@@ -43,69 +34,9 @@ class GlideConeRenderer {
   bool pending_valid = false;
   std::uint64_t pending_generation = 0;
 
-  GlideConeWorker worker;
-  GlideConeContourWorker contour_worker;
-  GlideConeGpuWorker gpu_worker;
-  std::uint64_t job_generation = 0;
-  std::uint64_t contour_generation = 0;
-  bool awaiting_grid = false;
-  bool awaiting_gpu = false;
-  bool awaiting_contours = false;
-
-  /* last-good field, painted while a new job runs */
   GlideConeField field;
-  GeoPoint computed_center = GeoPoint::Invalid();
-  std::size_t computed_signature = 0;
-  Serial computed_waypoint_serial{};
-  bool computed_contours = false;
-  bool computed_contour_polylines = true;
-
-  /**
-   * Contour labels anchored in geographic space.  Placement is redone
-   * when zoom/settings change or the view drifts out of the 1.5× cache
-   * (pan/rotate), after a settle debounce — not on every frame.
-   */
-  struct ContourLabel {
-    GeoPoint location;
-    /** Point ahead along the contour for screen-tangent orientation. */
-    GeoPoint along;
-    int level;
-    PixelSize text_size;
-    char text[32];
-  };
-  std::vector<ContourLabel> contour_labels;
-  double label_cache_map_scale = -1;
-  unsigned label_cache_spacing = 0;
-  unsigned label_cache_font_h = 0;
-  PixelSize label_cache_screen_size{};
-  GeoPoint label_cache_center = GeoPoint::Invalid();
-  Angle label_cache_angle = Angle::Zero();
-  /** When true, next InstallField drops the geo label cache (grid rebased). */
-  bool drop_labels_on_install = true;
-
-  /**
-   * Hold label rebuilds from the moment the compute center moves until
-   * new contours are placed — covers the cooldown gap before awaiting_*.
-   */
-  bool labels_hold_rebase = false;
-
-  /** Settle-debounce for label rebuilds (timer restarts while view moves). */
-  bool label_rebuild_pending = false;
-  std::chrono::steady_clock::time_point label_rebuild_since{};
-  double label_rebuild_watch_scale = -1;
-  GeoPoint label_rebuild_watch_center = GeoPoint::Invalid();
-  Angle label_rebuild_watch_angle = Angle::Zero();
-  /** Last logged debounce reason (avoid spamming identical lines). */
-  const char *label_debounce_reason = nullptr;
-
-  std::size_t debounce_signature = ~std::size_t{0};
-  std::chrono::steady_clock::time_point debounce_since{};
-
-  Serial debounce_waypoint_serial{};
-  std::chrono::steady_clock::time_point waypoint_debounce_since{};
-
-  /** Cooldown after starting/failing a job so cold-start DEM misses retry. */
-  std::chrono::steady_clock::time_point last_job_attempt{};
+  GlideConeJobController jobs;
+  GlideConeOverlay overlay;
 
 public:
   /**
@@ -148,9 +79,7 @@ public:
    */
   [[gnu::pure]]
   bool IsBusy() const noexcept {
-    return awaiting_grid || awaiting_gpu || awaiting_contours ||
-      gpu_worker.IsBusy() ||
-      const_cast<GlideConeContourWorker &>(contour_worker).IsBusy();
+    return jobs.IsBusy();
   }
 
   /**
@@ -164,31 +93,6 @@ public:
                                     double &radius) noexcept;
 
 private:
-  /** Drop in-flight CPU/GPU work. */
-  void AbortJobs() noexcept;
-
-  void InstallField(GlideConePreparedGrid &&prepared,
-                    GlideConeResult &&result) noexcept;
-
-  /** Undo computed_* claim so a failed cold-start build can retry. */
-  void ClearJobClaim() noexcept;
-
-  void RequestContours(bool polylines) noexcept;
-
-  void InvalidateContourLabels() noexcept;
-
-  void RebuildContourLabels(Canvas &canvas,
-                            const WindowProjection &projection,
-                            const GlideConeSettings &gc,
-                            const MapLook &look) noexcept;
-
-  void DrawContourLabels(Canvas &canvas,
-                         const WindowProjection &projection,
-                         const MapLook &look) const noexcept;
-
-  void DrawTraceFrom(Canvas &canvas, const WindowProjection &projection,
-                     GeoPoint from, const MapLook &look) const noexcept;
-
   void DrawField(Canvas &canvas, const WindowProjection &projection,
                  GeoPoint aircraft, bool aircraft_valid,
                  GeoPoint pan_probe,
