@@ -21,5 +21,17 @@ struct IconLook {
   MaskedIcon hBmpTabRules;
   MaskedIcon hBmpTabTimes;
 
+  // config menu tiles
+  MaskedIcon hBmpConfigPlanes;
+  MaskedIcon hBmpConfigProfiles;
+  MaskedIcon hBmpConfigFlightSetup;
+  MaskedIcon hBmpConfigWind;
+  MaskedIcon hBmpConfigDataManagement;
+  MaskedIcon hBmpConfigWaypointEditor;
+  MaskedIcon hBmpConfigReplay;
+  MaskedIcon hBmpConfigLoggerStart;
+  MaskedIcon hBmpConfigLua;
+  MaskedIcon hBmpConfigUpload;
+
   void Initialise();
 };

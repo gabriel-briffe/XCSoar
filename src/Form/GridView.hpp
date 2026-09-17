@@ -53,6 +53,10 @@ public:
     column_width = _column_width;
   }
 
+  void SetRowHeight(unsigned _row_height) noexcept {
+    row_height = _row_height;
+  }
+
   unsigned GetCurrentPage() const {
     return current_page;
   }

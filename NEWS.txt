@@ -1,4 +1,9 @@
 Version 7.46 - not yet released
+* ui
+  - open Config from the DU menu as a full-screen Garmin-style tile
+    grid (portrait 3×4, landscape 4×3) with page and Close buttons
+  - add a Tools tile (wrench) at the end of Config with Data
+    Management, Waypoint Editor, WeGlide Upload, and Replay
 * map
   - add an experimental terrain-aware glide cone overlay: when enabled,
     performing a "Goto" to an airport triggers a GPU (OpenGL ES 3.1)

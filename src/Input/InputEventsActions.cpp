@@ -807,6 +807,22 @@ InputEvents::eventQuickMenu([[maybe_unused]] const char *misc)
  dlgQuickMenuShowModal(*CommonInterface::main_window);
 }
 
+// ConfigMenu
+// Full-screen Garmin-style Config tile grid (Config1/2/3 actions).
+void
+InputEvents::eventConfigMenu([[maybe_unused]] const char *misc)
+{
+  dlgConfigMenuShowModal(*CommonInterface::main_window);
+}
+
+// ConfigTools
+// Tools submenu of the Config tile grid.
+void
+InputEvents::eventConfigTools([[maybe_unused]] const char *misc)
+{
+  dlgConfigToolsShowModal(*CommonInterface::main_window);
+}
+
 void
 InputEvents::eventFileManager([[maybe_unused]] const char *misc)
 {
