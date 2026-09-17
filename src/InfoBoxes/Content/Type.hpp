@@ -155,6 +155,7 @@ namespace InfoBoxFactory
     e_QNH, /* Current QNH pressure setting; tap to adjust manually */
     e_ActiveWaypoint, /* Active waypoint infobox: shows the current task's next waypoint name (or Goto waypoint if no task), arrival altitude diff, and distance */
     e_PreviousWaypoint, /* Previous waypoint infobox: shows the task waypoint before the active leg (start when on the first leg) with arrival altitude diff and distance; selection is informational only and never advances the task or sets a Goto */
+    e_GlideCone, /* Glide cone: altitude margin (glider altitude minus required altitude from the glide cone computation) to reach the Goto airport; bottom line shows the required altitude at the glider position */
     e_NUM_TYPES /* Last item */
   };
 
