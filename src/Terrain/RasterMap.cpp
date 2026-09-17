@@ -2,11 +2,14 @@
 // Copyright The XCSoar Project
 
 #include "Terrain/RasterMap.hpp"
+#include "Terrain/Height.hpp"
 #include "Geo/GeoClip.hpp"
 #include "Math/Util.hpp"
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 
 void
 RasterMap::UpdateProjection() noexcept
@@ -26,6 +29,51 @@ RasterMap::GetHeight(const GeoPoint &location) const noexcept
 {
   const auto pt = projection.ProjectCoarse(location);
   return raster_tile_cache.GetHeight(pt);
+}
+
+void
+RasterMap::MaxPoolElevation(SignedRasterLocation origin, unsigned pool,
+                            unsigned width, unsigned height,
+                            float *dest, float invalid_value) const noexcept
+{
+  assert(pool >= 1);
+  assert(dest != nullptr);
+
+  const auto map_size = raster_tile_cache.GetSize();
+
+  for (unsigned j = 0; j < height; ++j) {
+    for (unsigned i = 0; i < width; ++i) {
+      bool any = false;
+      int16_t max_h = 0;
+      const int x0 = origin.x + int(i * pool);
+      const int y0 = origin.y + int(j * pool);
+
+      for (unsigned dy = 0; dy < pool; ++dy) {
+        const int y = y0 + int(dy);
+        if (y < 0 || unsigned(y) >= map_size.y)
+          continue;
+
+        for (unsigned dx = 0; dx < pool; ++dx) {
+          const int x = x0 + int(dx);
+          if (x < 0 || unsigned(x) >= map_size.x)
+            continue;
+
+          const auto h = raster_tile_cache.GetHeight(
+            RasterLocation(unsigned(x), unsigned(y)));
+          if (h.IsInvalid())
+            continue;
+
+          const int16_t v = h.IsWater() ? int16_t(0) : h.GetValue();
+          if (!any || v > max_h)
+            max_h = v;
+          any = true;
+        }
+      }
+
+      dest[std::size_t(j) * width + i] =
+        any ? float(max_h) : invalid_value;
+    }
+  }
 }
 
 TerrainHeight

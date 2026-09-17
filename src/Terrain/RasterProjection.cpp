@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 
 void
 RasterProjection::Set(const GeoBounds &bounds,
@@ -17,6 +18,37 @@ RasterProjection::Set(const GeoBounds &bounds,
 
   y_scale = double(size.y) / bounds.GetHeight().Native();
   top = AngleToHeight(bounds.GetNorth());
+}
+
+double
+RasterProjection::FinePixelDistanceX(const GeoPoint &location,
+                                     unsigned pixels) const noexcept
+{
+  /**
+   * This factor is used to reduce fixed point rounding errors.
+   * x_scale and y_scale are quite large numbers, and building their
+   * reciprocals may lose a lot of precision.
+   */
+  constexpr double FACTOR = 256;
+
+  assert(x_scale != 0);
+
+  const Angle distance = WidthToAngle(FACTOR * pixels);
+  const GeoPoint p{location.longitude + distance, location.latitude};
+  return location.DistanceS(p) / FACTOR;
+}
+
+double
+RasterProjection::FinePixelDistanceY(const GeoPoint &location,
+                                     unsigned pixels) const noexcept
+{
+  constexpr double FACTOR = 256;
+
+  assert(y_scale != 0);
+
+  const Angle distance = HeightToAngle(FACTOR * pixels);
+  const GeoPoint p{location.longitude, location.latitude + distance};
+  return location.DistanceS(p) / FACTOR;
 }
 
 double

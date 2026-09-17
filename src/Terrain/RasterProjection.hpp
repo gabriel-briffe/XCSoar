@@ -74,6 +74,16 @@ public:
   double FinePixelDistance(const GeoPoint &location,
                            unsigned pixels) const noexcept;
 
+  /** Ground metres spanned by @p pixels fine pixels east–west. */
+  [[gnu::pure]]
+  double FinePixelDistanceX(const GeoPoint &location,
+                            unsigned pixels) const noexcept;
+
+  /** Ground metres spanned by @p pixels fine pixels north–south. */
+  [[gnu::pure]]
+  double FinePixelDistanceY(const GeoPoint &location,
+                            unsigned pixels) const noexcept;
+
   [[gnu::pure]]
   double CoarsePixelDistance(const GeoPoint &location,
                              unsigned pixels) const noexcept
@@ -81,6 +91,22 @@ public:
     /* factor 256 because the caller should pass a physical pixel
        number, not interpolated */
     return FinePixelDistance(location, pixels << RasterTraits::SUBPIXEL_BITS);
+  }
+
+  [[gnu::pure]]
+  double CoarsePixelDistanceX(const GeoPoint &location,
+                              unsigned pixels) const noexcept
+  {
+    return FinePixelDistanceX(location,
+                              pixels << RasterTraits::SUBPIXEL_BITS);
+  }
+
+  [[gnu::pure]]
+  double CoarsePixelDistanceY(const GeoPoint &location,
+                              unsigned pixels) const noexcept
+  {
+    return FinePixelDistanceY(location,
+                              pixels << RasterTraits::SUBPIXEL_BITS);
   }
 
   /**

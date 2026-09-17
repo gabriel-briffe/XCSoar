@@ -72,6 +72,10 @@ public:
     return projection;
   }
 
+  const RasterTileCache &GetTileCache() const noexcept {
+    return raster_tile_cache;
+  }
+
   /**
    * The geographical distance in meters of the given amount
    * of pixels multiplied by 256.
@@ -82,6 +86,26 @@ public:
   PixelDistance(const GeoPoint &location, unsigned pixels) const noexcept {
     return projection.CoarsePixelDistance(location, pixels);
   }
+
+  [[gnu::pure]] double
+  PixelDistanceX(const GeoPoint &location, unsigned pixels) const noexcept {
+    return projection.CoarsePixelDistanceX(location, pixels);
+  }
+
+  [[gnu::pure]] double
+  PixelDistanceY(const GeoPoint &location, unsigned pixels) const noexcept {
+    return projection.CoarsePixelDistanceY(location, pixels);
+  }
+
+  /**
+   * Downsample the DEM by taking the maximum valid height in each
+   * @p pool × @p pool block of coarse pixels, starting at @p origin.
+   * Water is treated as 0 m.  Blocks with no valid sample are written
+   * as @p invalid_value.
+   */
+  void MaxPoolElevation(SignedRasterLocation origin, unsigned pool,
+                        unsigned width, unsigned height,
+                        float *dest, float invalid_value) const noexcept;
 
   /**
    * Determine the non-interpolated height at the specified location.

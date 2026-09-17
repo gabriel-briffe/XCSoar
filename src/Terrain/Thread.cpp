@@ -6,6 +6,8 @@
 #include "Projection/WindowProjection.hpp"
 #include "thread/Util.hpp"
 
+#include <cassert>
+
 TerrainThread::TerrainThread(RasterTerrain &_terrain,
                              std::function<void()> &&_callback)
   :StandbyThread("Terrain"), terrain(_terrain),
