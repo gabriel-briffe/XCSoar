@@ -21,6 +21,7 @@ namespace Profile {
   static void Load(const ProfileMap &map, CirclingSettings &settings);
   static void Load(const ProfileMap &map, WaveSettings &settings);
   static void Load(const ProfileMap &map, WeGlideSettings &settings);
+  static void Load(const ProfileMap &map, GlideConeSettings &settings);
 };
 
 void
@@ -121,6 +122,25 @@ Profile::Load(const ProfileMap &map, WaveSettings &settings)
   map.Get(ProfileKeys::WaveAssistant, settings.enabled);
 }
 
+void
+Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
+{
+  map.GetEnum(ProfileKeys::GlideConeMode, settings.mode);
+  map.Get(ProfileKeys::GlideConeGlideRatio, settings.glide_ratio);
+  map.Get(ProfileKeys::GlideConeMaxAltitude, settings.max_altitude);
+  map.Get(ProfileKeys::GlideConeCellSize, settings.cell_size);
+  map.Get(ProfileKeys::GlideConeIterationCap, settings.iteration_cap);
+  map.Get(ProfileKeys::GlideConeContours, settings.contours);
+  map.Get(ProfileKeys::GlideConePanModePath, settings.pan_mode_path);
+  map.Get(ProfileKeys::GlideConeContoursMinScale, settings.contours_min_scale);
+  map.Get(ProfileKeys::GlideConeLabelSpacing, settings.label_spacing);
+  /* Was base pixels (20–400); now percent of min(screen side) (20–100). */
+  if (settings.label_spacing < 20)
+    settings.label_spacing = 20;
+  else if (settings.label_spacing > 100)
+    settings.label_spacing = 100;
+}
+
 bool
 Profile::LoadUTCOffset(const ProfileMap &map, RoughTimeDelta &value_r) noexcept
 {
@@ -178,6 +198,7 @@ Profile::Load(const ProfileMap &map, ComputerSettings &settings)
   Load(map, settings.contest);
   Load(map, settings.logger);
   Load(map, settings.weglide);
+  Load(map, settings.glide_cone);
 
 #ifdef HAVE_TRACKING
   Load(map, settings.tracking);

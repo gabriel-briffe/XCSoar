@@ -22,8 +22,8 @@
 #include "TransponderCode.hpp"
 #include "TransponderMode.hpp"
 #include "net/client/WeGlide/Settings.hpp"
+#include "GlideCone/Settings.hpp"
 #include "util/StaticString.hxx"
-
 #include <cstdint>
 #include <type_traits>
 
@@ -296,6 +296,8 @@ struct ComputerSettings {
   RadioSettings radio;
 
   TransponderSettings transponder;
+
+  GlideConeSettings glide_cone;
 
   void SetDefaults();
 };

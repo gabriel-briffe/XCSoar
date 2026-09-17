@@ -87,6 +87,7 @@ ComputerSettings::SetDefaults()
   radio.SetDefaults();
   transponder.SetDefaults();
   weglide.SetDefaults();
+  glide_cone.SetDefaults();
 }
 
 RoughTimeDelta
