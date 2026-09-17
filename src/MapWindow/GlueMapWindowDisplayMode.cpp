@@ -10,6 +10,8 @@
 #include "Profile/Profile.hpp"
 #include "Screen/Layout.hpp"
 #include "PageActions.hpp"
+#include "NMEA/MoreData.hpp"
+#include "NMEA/Derived.hpp"
 
 #ifdef ENABLE_OPENGL
 #include "ui/canvas/opengl/Globals.hpp"

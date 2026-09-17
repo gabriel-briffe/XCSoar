@@ -27,6 +27,8 @@
 #include "Components.hpp"
 #include "BackendComponents.hpp"
 #include "DataComponents.hpp"
+#include "UIGlobals.hpp"
+#include "MapWindow/GlueMapWindow.hpp"
 
 #include "util/StaticString.hxx"
 
@@ -136,6 +138,9 @@ InputEvents::eventGotoLookup(const char *misc)
   auto wp = ShowWaypointListDialog(*data_components->waypoints, basic.location,
                                    nullptr, 0, initial_type);
   if (wp != NULL) {
+    const GeoPoint goto_location = wp->location;
+    const double goto_elevation = wp->GetElevationOrZero();
+
     // Remove old temporary goto waypoint when selecting a regular waypoint
     auto &way_points = *data_components->waypoints;
     {
@@ -144,6 +149,10 @@ InputEvents::eventGotoLookup(const char *misc)
     }
 
     backend_components->protected_task_manager->DoGoto(std::move(wp));
+
+    if (auto *map = UIGlobals::GetMap())
+      map->SetGlideConeTarget(goto_location, goto_elevation);
+
     trigger_redraw();
   }
 }

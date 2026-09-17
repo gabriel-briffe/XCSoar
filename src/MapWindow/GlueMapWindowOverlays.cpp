@@ -154,6 +154,19 @@ GlueMapWindow::DrawPanInfo(Canvas &canvas) const noexcept
     }
   }
 
+  if (GetComputerSettings().glide_cone.IsEnabled() &&
+      GetComputerSettings().glide_cone.pan_mode_path) {
+    if (const auto required =
+          glide_cone_renderer.QueryRequiredAltitude(location)) {
+      StaticString<64> glide_cone_long;
+      glide_cone_long.Format("%s: %s", "GlideCone",
+                             FormatUserAltitude(*required).c_str());
+      TextInBox(canvas, glide_cone_long, p, mode,
+                render_projection.GetScreenSize());
+      p.y += height;
+    }
+  }
+
   char buffer[256];
   FormatGeoPoint(location, buffer, ARRAY_SIZE(buffer), '\n');
 

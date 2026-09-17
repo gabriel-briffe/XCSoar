@@ -296,6 +296,24 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
   draw_sw.Mark("RenderGlide");
   RenderGlide(canvas);
 
+  // Render the terrain-aware glide cone relay path (GPU/GLES3.1 only)
+  draw_sw.Mark("RenderGlideCone");
+  {
+    const auto &task_stats = Calculated().task_stats;
+    const GeoPoint gc_target = task_stats.current_leg.location_remaining;
+    const bool gc_target_valid = task_stats.task_valid && gc_target.IsValid();
+    const GeoPoint pan_probe =
+      IsPanning() && GetComputerSettings().glide_cone.pan_mode_path
+      ? render_projection.GetGeoLocation()
+      : GeoPoint::Invalid();
+    glide_cone_renderer.Draw(canvas, render_projection,
+                             basic.location, basic.location_available.IsValid(),
+                             gc_target, gc_target_valid,
+                             GetComputerSettings(), terrain, waypoints,
+                             GetMapSettings().waypoint, look,
+                             pan_probe);
+  }
+
   // Render track bearing (projected track ground/air relative)
   draw_sw.Mark("DrawTrackBearing");
   RenderTrackBearing(canvas, aircraft_pos);

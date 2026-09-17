@@ -86,3 +86,6 @@ static constexpr Color COLOR_XCTHERM_RED = Color(0xff, 0x00, 0x00);
 static constexpr Color COLOR_XCTHERM_PURPLE = Color(0xa0, 0x20, 0xf0);
 
 static constexpr uint8_t ALPHA_OVERLAY = 0xA0;
+
+/** Glide cone relay path overlay. */
+static constexpr Color COLOR_GLIDE_CONE = Color(0x28, 0x78, 0xff);
