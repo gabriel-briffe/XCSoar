@@ -40,31 +40,11 @@ GlideConeRenderer::ClearTarget() noexcept
 }
 
 void
-GlideConeRenderer::AdjustTerrainCoverage(const ComputerSettings &settings,
-                                         GeoPoint aircraft,
-                                         bool aircraft_valid,
-                                         GeoPoint target, bool target_valid,
-                                         GeoPoint &location,
-                                         double &radius) noexcept
-{
-  const GlideConeSettings &gc = settings.glide_cone;
-  if (!gc.IsEnabled())
-    return;
-
-  radius = std::max(radius, gc.WindowRadiusM());
-
-  if (gc.mode == GlideConeSettings::Mode::COMBINED && aircraft_valid)
-    location = aircraft;
-  else if (gc.mode == GlideConeSettings::Mode::SINGLE && target_valid)
-    location = target;
-}
-
-void
 GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
                         GeoPoint aircraft, bool aircraft_valid,
                         GeoPoint target, bool target_valid,
                         const ComputerSettings &settings,
-                        const RasterTerrain *terrain,
+                        RasterTerrain *terrain,
                         const Waypoints *waypoints,
                         const WaypointRendererSettings &waypoint_settings,
                         const MapLook &look,

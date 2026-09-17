@@ -10,6 +10,7 @@
 #include "thread/Mutex.hxx"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 class Canvas;
@@ -59,7 +60,7 @@ public:
             GeoPoint aircraft, bool aircraft_valid,
             GeoPoint target, bool target_valid,
             const ComputerSettings &settings,
-            const RasterTerrain *terrain, const Waypoints *waypoints,
+            RasterTerrain *terrain, const Waypoints *waypoints,
             const WaypointRendererSettings &waypoint_settings,
             const MapLook &look,
             GeoPoint pan_probe = GeoPoint::Invalid()) noexcept;
@@ -74,8 +75,7 @@ public:
 
   /**
    * True while CPU grid build, contour build, or GPU propagate is in
-   * flight.  The map keeps redrawing so completed results are picked
-   * up promptly.
+   * flight.
    */
   [[gnu::pure]]
   bool IsBusy() const noexcept {
@@ -83,14 +83,12 @@ public:
   }
 
   /**
-   * Expand a map-view terrain request so it also covers the glide-cone
-   * compute window (seed in single mode, aircraft in combined).
+   * Wake the map when a background job finishes (see
+   * GlueMapWindow::InjectRedraw).  Call once during map setup.
    */
-  static void AdjustTerrainCoverage(const ComputerSettings &settings,
-                                    GeoPoint aircraft, bool aircraft_valid,
-                                    GeoPoint target, bool target_valid,
-                                    GeoPoint &location,
-                                    double &radius) noexcept;
+  void SetReadyCallback(std::function<void()> callback) noexcept {
+    jobs.SetReadyCallback(std::move(callback));
+  }
 
 private:
   void DrawField(Canvas &canvas, const WindowProjection &projection,

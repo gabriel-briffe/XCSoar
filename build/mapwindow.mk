@@ -12,6 +12,7 @@ LIBMAPWINDOW_SOURCES = \
 	$(SRC)/MapWindow/MapWindow.cpp \
 	$(SRC)/MapWindow/MapWindowEvents.cpp \
 	$(SRC)/GlideCone/GlideConeField.cpp \
+	$(SRC)/GlideCone/GlideConeDemSampler.cpp \
 	$(SRC)/GlideCone/GlideConeGridBuilder.cpp \
 	$(SRC)/GlideCone/GlideConeWorker.cpp \
 	$(SRC)/GlideCone/GlideConeContourWorker.cpp \

@@ -225,6 +225,20 @@ public:
 
   void Reset() noexcept;
 
+  /**
+   * Drop all loaded fine tiles; keep overview / metadata so the next
+   * UpdateTiles() can reload.  Used for ephemeral compute DEM windows.
+   */
+  void UnloadTiles() noexcept;
+
+  /**
+   * Clone layout metadata (bounds, tile table, file segments, overview
+   * buffer) from @p src into this cache.  Fine tiles are not shared —
+   * dest starts with no HD tiles loaded.  Used so GlideCone can avoid a
+   * second overview scan of the map file.
+   */
+  void CopyLayoutFrom(const RasterTileCache &src) noexcept;
+
   const GeoBounds &GetBounds() const noexcept {
     assert(bounds.IsValid());
 

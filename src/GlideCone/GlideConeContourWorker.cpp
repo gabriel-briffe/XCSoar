@@ -54,6 +54,13 @@ GlideConeContourWorker::IsBusy() noexcept
 }
 
 void
+GlideConeContourWorker::NotifyReady() noexcept
+{
+  if (ready_callback)
+    ready_callback();
+}
+
+void
 GlideConeContourWorker::Tick() noexcept
 {
   SetIdlePriority();
@@ -87,10 +94,12 @@ GlideConeContourWorker::Tick() noexcept
   if (gen != next_generation) {
     LogFmt("glidecones: contour.Tick drop gen={} (superseded by {})",
            gen, next_generation);
+    NotifyReady();
     return;
   }
 
   LogFmt("glidecones: contour.Tick done gen={} lines={}",
          gen, out->contour_lines.size());
   ready = std::move(out);
+  NotifyReady();
 }

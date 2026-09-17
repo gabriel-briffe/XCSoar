@@ -172,6 +172,14 @@ GlideConeJobController::ClearContours(GlideConeField &field,
 }
 
 void
+GlideConeJobController::SetReadyCallback(std::function<void()> callback) noexcept
+{
+  worker.SetReadyCallback(callback);
+  gpu_worker.SetReadyCallback(callback);
+  contour_worker.SetReadyCallback(std::move(callback));
+}
+
+void
 GlideConeJobController::UpdateContours(GlideConeField &field,
                                        GlideConeOverlay &overlay,
                                        const GlideConeSettings &gc) noexcept
@@ -204,7 +212,7 @@ GlideConeJobController::Update(GlideConeField &field,
                                GeoPoint target, bool target_valid,
                                GeoPoint pending_seed, bool pending_valid,
                                const ComputerSettings &settings,
-                               const RasterTerrain *terrain,
+                               RasterTerrain *terrain,
                                const Waypoints *waypoints,
                                const WaypointRendererSettings &waypoint_settings) noexcept
 {
@@ -352,7 +360,7 @@ GlideConeJobController::Update(GlideConeField &field,
     request.combined = mode == GlideConeSettings::Mode::COMBINED;
     request.seeds = std::move(single_seeds);
     request.waypoint_settings = waypoint_settings;
-    if (worker.Request(std::move(request), terrain, waypoints)) {
+    if (worker.Request(std::move(request), waypoints, terrain)) {
       awaiting_grid = true;
       computed_center = job_center;
       computed_signature = signature;

@@ -73,7 +73,8 @@ struct GlideConeResult {
   bool IsValid() const noexcept {
     const std::size_t n = std::size_t(width) * height;
     return width > 0 && height > 0 &&
-      altitudes.size() == n && origin_x.size() == n && origin_y.size() == n;
+      altitudes.size() == n && origin_x.size() == n && origin_y.size() == n &&
+      ground.size() == n;
   }
 
   void Clear() noexcept {

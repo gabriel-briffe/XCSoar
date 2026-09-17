@@ -32,11 +32,6 @@ public:
 
   void Trigger(const WindowProjection &projection);
 
-  /**
-   * Request tiles around @p center covering at least @p radius metres.
-   */
-  void Trigger(GeoPoint center, double radius);
-
 private:
   /* virtual methods from class StandbyThread*/
   void Tick() noexcept override;

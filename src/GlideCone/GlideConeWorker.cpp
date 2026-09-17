@@ -6,16 +6,16 @@
 
 bool
 GlideConeWorker::Request(GlideConeGridRequest request,
-                         const RasterTerrain *terrain,
-                         const Waypoints *waypoints) noexcept
+                         const Waypoints *waypoints,
+                         RasterTerrain *terrain) noexcept
 {
   try {
     const std::lock_guard lock{mutex};
     LogFmt("glidecones: worker.Request gen={} combined={} radius={:.0f}",
            request.generation, request.combined, request.radius_m);
     next = std::move(request);
-    next_terrain = terrain;
     next_waypoints = waypoints;
+    next_terrain = terrain;
     Trigger();
     return true;
   } catch (...) {
@@ -33,6 +33,13 @@ GlideConeWorker::TakeReady() noexcept
 }
 
 void
+GlideConeWorker::NotifyReady() noexcept
+{
+  if (ready_callback)
+    ready_callback();
+}
+
+void
 GlideConeWorker::Tick() noexcept
 {
   SetIdlePriority();
@@ -41,10 +48,10 @@ GlideConeWorker::Tick() noexcept
      deep-copy seeds / settings while the draw thread waits. */
   GlideConeGridRequest request = std::move(next);
   next = {};
-  const RasterTerrain *const terrain = next_terrain;
   const Waypoints *const waypoints = next_waypoints;
-  next_terrain = nullptr;
   next_waypoints = nullptr;
+  RasterTerrain *const terrain = next_terrain;
+  next_terrain = nullptr;
 
   LogFmt("glidecones: worker.Tick start gen={} combined={}",
          request.generation, request.combined);
@@ -55,8 +62,7 @@ GlideConeWorker::Tick() noexcept
     try {
       built = std::make_unique<GlideConePreparedGrid>();
       built->generation = request.generation;
-      if (terrain == nullptr ||
-          !BuildGlideConeGrid(request, *terrain, waypoints, *built)) {
+      if (!BuildGlideConeGrid(request, dem, terrain, waypoints, *built)) {
         LogFmt("glidecones: worker.Tick build failed gen={}",
                request.generation);
         built->grid = {};
@@ -72,6 +78,7 @@ GlideConeWorker::Tick() noexcept
       request.generation != next.generation) {
     LogFmt("glidecones: worker.Tick drop gen={} (superseded by {})",
            request.generation, next.generation);
+    NotifyReady();
     return;
   }
 
@@ -80,6 +87,7 @@ GlideConeWorker::Tick() noexcept
       built = std::make_unique<GlideConePreparedGrid>();
       built->generation = request.generation;
     } catch (...) {
+      NotifyReady();
       return;
     }
   }
@@ -87,4 +95,5 @@ GlideConeWorker::Tick() noexcept
   LogFmt("glidecones: worker.Tick done gen={} valid={}",
          request.generation, built->grid.IsValid());
   ready = std::move(built);
+  NotifyReady();
 }

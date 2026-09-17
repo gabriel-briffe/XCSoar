@@ -12,6 +12,7 @@
 #endif
 
 #include <atomic>
+#include <functional>
 #include <utility>
 
 struct GlideConeGpuWorker::Impl
@@ -68,7 +69,17 @@ struct GlideConeGpuWorker::Impl
     return StandbyThread::IsBusy() || next != nullptr || ready != nullptr;
   }
 
+  void SetReadyCallback(std::function<void()> callback) noexcept {
+    const std::lock_guard lock{mutex};
+    ready_callback = std::move(callback);
+  }
+
 private:
+  void NotifyReady() noexcept {
+    if (ready_callback)
+      ready_callback();
+  }
+
   bool EnsureSharedContext() noexcept {
     if (compute_ctx != EGL_NO_CONTEXT)
       return true;
@@ -185,10 +196,10 @@ private:
     LogFmt("glidecones: GPU worker.Tick done gen={} ok={} hit_cap={}",
            gen, ok, hit_cap);
 
-    if (!ok)
-      return;
+    if (ok)
+      ready = std::move(out);
 
-    ready = std::move(out);
+    NotifyReady();
   }
 
   using StandbyThread::mutex;
@@ -197,6 +208,7 @@ private:
   std::unique_ptr<GlideConeGpuReady> ready;
   std::uint64_t running_gen = 0;
   std::atomic<std::uint64_t> cancel_gen{0};
+  std::function<void()> ready_callback;
 
   EGLDisplay dpy = EGL_NO_DISPLAY;
   EGLConfig config{};
@@ -212,6 +224,7 @@ private:
     return nullptr;
   }
   void Cancel() noexcept {}
+  void SetReadyCallback(std::function<void()>) noexcept {}
   bool IsBusy() noexcept {
     return false;
   }
@@ -242,6 +255,12 @@ void
 GlideConeGpuWorker::Cancel() noexcept
 {
   impl->Cancel();
+}
+
+void
+GlideConeGpuWorker::SetReadyCallback(std::function<void()> callback) noexcept
+{
+  impl->SetReadyCallback(std::move(callback));
 }
 
 bool

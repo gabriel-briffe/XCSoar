@@ -23,6 +23,9 @@ GlueMapWindow::GlueMapWindow(const Look &look) noexcept
    vario_bar_renderer(look.vario_bar),
    gesture_look(look.gesture)
 {
+  /* Redraw once when a GlideCone worker finishes — not a busy
+     Invalidate loop while IsBusy(). */
+  glide_cone_renderer.SetReadyCallback([this](){ InjectRedraw(); });
 }
 
 GlueMapWindow::~GlueMapWindow() noexcept

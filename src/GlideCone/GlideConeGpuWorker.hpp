@@ -7,6 +7,7 @@
 #include "GlideConeData.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 /**
@@ -48,6 +49,9 @@ public:
 
   /** Ask the in-flight job to abort at the next batch boundary. */
   void Cancel() noexcept;
+
+  /** Thread-safe redraw wake-up when a Tick() finishes. */
+  void SetReadyCallback(std::function<void()> callback) noexcept;
 
   [[gnu::pure]]
   bool IsBusy() const noexcept;

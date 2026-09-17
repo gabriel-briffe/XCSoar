@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 struct GlideConeField;
@@ -104,7 +105,7 @@ public:
               GeoPoint target, bool target_valid,
               GeoPoint pending_seed, bool pending_valid,
               const ComputerSettings &settings,
-              const RasterTerrain *terrain, const Waypoints *waypoints,
+              RasterTerrain *terrain, const Waypoints *waypoints,
               const WaypointRendererSettings &waypoint_settings) noexcept;
 
   /**
@@ -117,6 +118,13 @@ public:
   /** Cancel contours and clear field contour lines. */
   void ClearContours(GlideConeField &field,
                      GlideConeOverlay &overlay) noexcept;
+
+  /**
+   * Called from worker threads when a job attempt finishes.  Typically
+   * wired to GlueMapWindow::InjectRedraw() so the map paints once
+   * instead of spinning Invalidate while IsBusy().
+   */
+  void SetReadyCallback(std::function<void()> callback) noexcept;
 
 private:
   void InstallField(GlideConeField &field, GlideConeOverlay &overlay,

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <vector>
 
+class GlideConeDemSampler;
 class RasterTerrain;
 class Waypoints;
 
@@ -54,11 +55,12 @@ struct GlideConePreparedGrid {
 };
 
 /**
- * Max-pool the DEM and place seeds.  Uses #RasterTerrain::Lease.
- * Combined mode visits @p waypoints (may be nullptr).
+ * Max-pool the DEM and place seeds using #GlideConeDemSampler (private
+ * ephemeral tile set; layout copied from @p display when available).
  */
 bool
 BuildGlideConeGrid(const GlideConeGridRequest &request,
-                   const RasterTerrain &terrain,
+                   GlideConeDemSampler &dem,
+                   RasterTerrain *display,
                    const Waypoints *waypoints,
                    GlideConePreparedGrid &out) noexcept;

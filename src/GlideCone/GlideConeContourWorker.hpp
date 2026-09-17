@@ -7,6 +7,7 @@
 #include "thread/StandbyThread.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -32,6 +33,9 @@ class GlideConeContourWorker : private StandbyThread {
 
   std::unique_ptr<GlideConeContourReady> ready;
 
+  /** Called from the worker thread when a job attempt finishes. */
+  std::function<void()> ready_callback;
+
 public:
   GlideConeContourWorker() noexcept
     :StandbyThread("GlideConeContour") {}
@@ -55,9 +59,17 @@ public:
 
   void Cancel() noexcept;
 
+  /** Thread-safe redraw wake-up when a Tick() finishes. */
+  void SetReadyCallback(std::function<void()> callback) noexcept {
+    const std::lock_guard lock{mutex};
+    ready_callback = std::move(callback);
+  }
+
   [[gnu::pure]]
   bool IsBusy() noexcept;
 
 private:
+  void NotifyReady() noexcept;
+
   void Tick() noexcept override;
 };

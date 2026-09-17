@@ -221,6 +221,53 @@ RasterTileCache::Reset() noexcept
     i.Unload();
 }
 
+void
+RasterTileCache::UnloadTiles() noexcept
+{
+  for (auto &i : tiles)
+    i.Unload();
+
+  dirty = false;
+  ++serial;
+}
+
+void
+RasterTileCache::CopyLayoutFrom(const RasterTileCache &src) noexcept
+{
+  assert(src.IsValid());
+  assert(&src != this);
+
+  Reset();
+
+  SetSize(src.size, src.tile_size,
+          {src.tiles.GetWidth(), src.tiles.GetHeight()});
+  bounds = src.bounds;
+
+  segments.clear();
+  for (const auto &s : src.segments)
+    segments.append() = s;
+
+  for (unsigned i = 0; i < tiles.GetSize(); ++i) {
+    auto &dest = tiles.GetLinear(i);
+    const auto &from = src.tiles.GetLinear(i);
+    dest.Unload();
+    dest.ClearRequest();
+    if (from.IsDefined())
+      dest.Set(from.start, from.end);
+    else
+      dest.Clear();
+  }
+
+  const auto overview_size = overview.GetSize();
+  assert(overview_size.x == src.overview.GetSize().x);
+  assert(overview_size.y == src.overview.GetSize().y);
+  std::copy_n(src.overview.GetData(), overview_size.Area(),
+              overview.GetData());
+
+  dirty = false;
+  ++serial;
+}
+
 const RasterTileCache::MarkerSegmentInfo *
 RasterTileCache::FindMarkerSegment(uint32_t file_offset) const noexcept
 {

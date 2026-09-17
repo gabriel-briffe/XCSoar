@@ -121,20 +121,10 @@ MapWindow::UpdateTerrain() noexcept
   if (terrain == nullptr)
     return false;
 
-  GeoPoint location = visible_projection.GetGeoScreenCenter();
-  auto radius = visible_projection.GetScreenWidthMeters() / 2;
-
-  const auto &task_stats = Calculated().task_stats;
-  const GeoPoint gc_target = task_stats.current_leg.location_remaining;
-  const bool gc_target_valid = task_stats.task_valid && gc_target.IsValid();
-  GlideConeRenderer::AdjustTerrainCoverage(
-    GetComputerSettings(),
-    Basic().location, Basic().location_available.IsValid(),
-    gc_target, gc_target_valid, location, radius);
-
   // always service terrain even if it's not used by the map,
   // because it's used by other calculations
-  return terrain->UpdateTiles(location, radius);
+  return terrain->UpdateTiles(visible_projection.GetGeoScreenCenter(),
+                              visible_projection.GetScreenWidthMeters() / 2);
 }
 
 /**

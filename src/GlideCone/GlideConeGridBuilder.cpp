@@ -2,19 +2,21 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeGridBuilder.hpp"
-#include "Terrain/RasterTerrain.hpp"
+#include "GlideConeDemSampler.hpp"
 #include "Terrain/RasterMap.hpp"
 #include "Terrain/RasterProjection.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
 #include "LogFile.hpp"
+#include "util/ScopeExit.hxx"
 
 #include <algorithm>
 #include <cmath>
 
 bool
 BuildGlideConeGrid(const GlideConeGridRequest &request,
-                   const RasterTerrain &terrain,
+                   GlideConeDemSampler &dem,
+                   RasterTerrain *display,
                    const Waypoints *waypoints,
                    GlideConePreparedGrid &out) noexcept
 {
@@ -28,7 +30,14 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   const double desired_cell = std::clamp(request.cell_size, 50.0, 5000.0);
   const double radius_m = request.radius_m;
 
-  const RasterTerrain::Lease lease{terrain};
+  /* Ephemeral private DEM: load → sample → unload. */
+  AtScopeExit(&dem) { dem.ReleaseTiles(); };
+
+  for (unsigned i = 0; i < 64 &&
+         dem.UpdateTiles(display, request.center, radius_m); ++i) {
+  }
+
+  const GlideConeDemSampler::Lease lease{dem};
   const RasterMap &map = lease;
   if (!map.IsDefined()) {
     LogFmt("glidecones: build: DEM undefined gen={}", request.generation);
