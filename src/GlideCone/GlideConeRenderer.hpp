@@ -5,8 +5,10 @@
 
 #include "GlideConeField.hpp"
 #include "GlideConeWorker.hpp"
+#include "GlideConeContourWorker.hpp"
 #include "GlideConeGpuWorker.hpp"
 #include "Geo/GeoPoint.hpp"
+#include "Math/Angle.hpp"
 #include "ui/dim/Size.hpp"
 #include "thread/Mutex.hxx"
 #include "util/Serial.hpp"
@@ -42,25 +44,26 @@ class GlideConeRenderer {
   std::uint64_t pending_generation = 0;
 
   GlideConeWorker worker;
+  GlideConeContourWorker contour_worker;
   GlideConeGpuWorker gpu_worker;
   std::uint64_t job_generation = 0;
+  std::uint64_t contour_generation = 0;
   bool awaiting_grid = false;
   bool awaiting_gpu = false;
+  bool awaiting_contours = false;
 
   /* last-good field, painted while a new job runs */
   GlideConeField field;
   GeoPoint computed_center = GeoPoint::Invalid();
   std::size_t computed_signature = 0;
-  Serial computed_terrain_serial{};
   Serial computed_waypoint_serial{};
   bool computed_contours = false;
   bool computed_contour_polylines = true;
 
   /**
-   * Contour labels anchored in geographic space.  Placement
-   * (collision / spacing) is redone only when the field, map scale,
-   * screen size, font, or label-distance setting changes — not on
-   * pan / follow.  Each redraw only reprojects and draws.
+   * Contour labels anchored in geographic space.  Placement is redone
+   * when zoom/settings change or the view drifts out of the 1.5× cache
+   * (pan/rotate), after a settle debounce — not on every frame.
    */
   struct ContourLabel {
     GeoPoint location;
@@ -75,14 +78,29 @@ class GlideConeRenderer {
   unsigned label_cache_spacing = 0;
   unsigned label_cache_font_h = 0;
   PixelSize label_cache_screen_size{};
+  GeoPoint label_cache_center = GeoPoint::Invalid();
+  Angle label_cache_angle = Angle::Zero();
   /** When true, next InstallField drops the geo label cache (grid rebased). */
   bool drop_labels_on_install = true;
+
+  /**
+   * Hold label rebuilds from the moment the compute center moves until
+   * new contours are placed — covers the cooldown gap before awaiting_*.
+   */
+  bool labels_hold_rebase = false;
+
+  /** Settle-debounce for label rebuilds (timer restarts while view moves). */
+  bool label_rebuild_pending = false;
+  std::chrono::steady_clock::time_point label_rebuild_since{};
+  double label_rebuild_watch_scale = -1;
+  GeoPoint label_rebuild_watch_center = GeoPoint::Invalid();
+  Angle label_rebuild_watch_angle = Angle::Zero();
+  /** Last logged debounce reason (avoid spamming identical lines). */
+  const char *label_debounce_reason = nullptr;
 
   std::size_t debounce_signature = ~std::size_t{0};
   std::chrono::steady_clock::time_point debounce_since{};
 
-  Serial debounce_terrain_serial{};
-  std::chrono::steady_clock::time_point terrain_debounce_since{};
   Serial debounce_waypoint_serial{};
   std::chrono::steady_clock::time_point waypoint_debounce_since{};
 
@@ -124,12 +142,15 @@ public:
   QueryRequiredAltitude(GeoPoint location) const noexcept;
 
   /**
-   * True while CPU grid build or GPU propagate is in flight.  The map
-   * keeps redrawing so completed results are picked up promptly.
+   * True while CPU grid build, contour build, or GPU propagate is in
+   * flight.  The map keeps redrawing so completed results are picked
+   * up promptly.
    */
   [[gnu::pure]]
   bool IsBusy() const noexcept {
-    return awaiting_grid || awaiting_gpu || gpu_worker.IsBusy();
+    return awaiting_grid || awaiting_gpu || awaiting_contours ||
+      gpu_worker.IsBusy() ||
+      const_cast<GlideConeContourWorker &>(contour_worker).IsBusy();
   }
 
   /**
@@ -151,6 +172,8 @@ private:
 
   /** Undo computed_* claim so a failed cold-start build can retry. */
   void ClearJobClaim() noexcept;
+
+  void RequestContours(bool polylines) noexcept;
 
   void InvalidateContourLabels() noexcept;
 

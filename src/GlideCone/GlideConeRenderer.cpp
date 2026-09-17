@@ -41,6 +41,9 @@ static constexpr double GLIDE_CONE_SEED_EPSILON_M = 50;
 /** Debounce for parameter / terrain-tile changes. */
 static constexpr std::chrono::milliseconds GLIDE_CONE_DEBOUNCE{400};
 
+/** Debounce zoom/settings-driven contour label rebuilds. */
+static constexpr std::chrono::milliseconds GLIDE_CONE_LABEL_DEBOUNCE{100};
+
 [[gnu::pure]]
 static const char *
 ModeName(GlideConeSettings::Mode mode) noexcept
@@ -155,18 +158,26 @@ GlideConeRenderer::AdjustTerrainCoverage(const ComputerSettings &settings,
 void
 GlideConeRenderer::AbortJobs() noexcept
 {
-  const bool busy = awaiting_grid || awaiting_gpu || gpu_worker.IsBusy();
+  const bool busy = awaiting_grid || awaiting_gpu || awaiting_contours ||
+    gpu_worker.IsBusy() || contour_worker.IsBusy();
   if (busy)
     LogFmt("glidecones: AbortJobs gen={} awaiting_grid={} awaiting_gpu={} "
-           "gpu_busy={}",
-           job_generation, awaiting_grid, awaiting_gpu, gpu_worker.IsBusy());
+           "awaiting_contours={} gpu_busy={}",
+           job_generation, awaiting_grid, awaiting_gpu, awaiting_contours,
+           gpu_worker.IsBusy());
   gpu_worker.Cancel();
+  contour_worker.Cancel();
   awaiting_grid = false;
   awaiting_gpu = false;
-  if (busy)
+  awaiting_contours = false;
+  labels_hold_rebase = false;
+  if (busy) {
     ++job_generation;
+    ++contour_generation;
+  }
   (void)worker.TakeReady();
   (void)gpu_worker.TakeReady();
+  (void)contour_worker.TakeReady();
 }
 
 void
@@ -189,12 +200,21 @@ GlideConeRenderer::InstallField(GlideConePreparedGrid &&prepared,
   field.home_y = prepared.grid.seeds.front().y;
   field.seeds = std::move(prepared.grid.seeds);
   field.elevation = std::move(prepared.grid.elevation);
+  field.contour_lines.clear();
   computed_contours = false;
+  awaiting_contours = false;
+  ++contour_generation;
+  contour_worker.Cancel();
+  (void)contour_worker.TakeReady();
   /* Terrain/settings refreshes keep the same grid origin; dropping the
      geo cache would re-place labels from the current screen and make
      them jump while flying.  Only rebase after a real center move. */
-  if (drop_labels_on_install)
+  if (drop_labels_on_install) {
+    LogFmt("glidecones: InstallField drop label cache (rebase)");
     InvalidateContourLabels();
+  } else {
+    LogFmt("glidecones: InstallField keep label cache (same origin)");
+  }
   drop_labels_on_install = true;
 }
 
@@ -211,13 +231,42 @@ GlideConeRenderer::ClearJobClaim() noexcept
 }
 
 void
+GlideConeRenderer::RequestContours(bool polylines) noexcept
+{
+  if (!field.IsValid())
+    return;
+
+  ++contour_generation;
+  GlideConeField snapshot = field;
+  snapshot.contour_lines.clear();
+  if (contour_worker.Request(contour_generation, std::move(snapshot),
+                             polylines)) {
+    awaiting_contours = true;
+    computed_contours = false;
+  } else {
+    awaiting_contours = false;
+    LogFmt("glidecones: contour.Request failed gen={}", contour_generation);
+  }
+}
+
+void
 GlideConeRenderer::InvalidateContourLabels() noexcept
 {
+  const bool had = label_cache_map_scale > 0 || !contour_labels.empty();
   contour_labels.clear();
   label_cache_map_scale = -1;
   label_cache_spacing = 0;
   label_cache_font_h = 0;
   label_cache_screen_size = {};
+  label_cache_center = GeoPoint::Invalid();
+  label_cache_angle = Angle::Zero();
+  label_rebuild_pending = false;
+  label_rebuild_watch_scale = -1;
+  label_rebuild_watch_center = GeoPoint::Invalid();
+  label_rebuild_watch_angle = Angle::Zero();
+  label_debounce_reason = nullptr;
+  if (had)
+    LogFmt("glidecones: labels invalidated");
 }
 
 void
@@ -234,12 +283,16 @@ GlideConeRenderer::RebuildContourLabels(Canvas &canvas,
   LabelBlock label_block;
   label_block.reset();
 
-  /* Place over a padded viewport so modest pans still find labels. */
+  /* Place over 1.5× the screen so modest pans still find labels. */
+  constexpr double LABEL_CACHE_COVER = 1.5;
   const PixelRect screen = projection.GetScreenRect();
-  const int pad = int(std::min(screen.GetWidth(), screen.GetHeight()) / 4);
+  const int pad_x =
+    int((LABEL_CACHE_COVER - 1.0) * 0.5 * screen.GetWidth());
+  const int pad_y =
+    int((LABEL_CACHE_COVER - 1.0) * 0.5 * screen.GetHeight());
   const PixelRect place_rect{
-    screen.left - pad, screen.top - pad,
-    screen.right + pad, screen.bottom + pad,
+    screen.left - pad_x, screen.top - pad_y,
+    screen.right + pad_x, screen.bottom + pad_y,
   };
 
   const unsigned short_side =
@@ -339,6 +392,16 @@ GlideConeRenderer::RebuildContourLabels(Canvas &canvas,
   label_cache_spacing = pct;
   label_cache_font_h = look.overlay.overlay_font->GetHeight();
   label_cache_screen_size = projection.GetScreenSize();
+  label_cache_center = projection.GetGeoLocation();
+  label_cache_angle = projection.GetScreenAngle();
+  label_rebuild_watch_scale = label_cache_map_scale;
+  label_rebuild_watch_center = label_cache_center;
+  label_rebuild_watch_angle = label_cache_angle;
+  label_debounce_reason = nullptr;
+  if (labels_hold_rebase) {
+    labels_hold_rebase = false;
+    LogFmt("glidecones: labels hold rebase cleared after rebuild");
+  }
   LogFmt("glidecones: label geo-cache rebuild n={} scale={:.0f}",
          contour_labels.size(), label_cache_map_scale);
 }
@@ -497,17 +560,9 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
   const bool sig_ready = sig_changed &&
     now - debounce_since >= GLIDE_CONE_DEBOUNCE;
 
-  const Serial terrain_serial = terrain->GetSerial();
-  if (terrain_serial != computed_terrain_serial &&
-      terrain_serial != debounce_terrain_serial) {
-    debounce_terrain_serial = terrain_serial;
-    terrain_debounce_since = now;
-  }
-  /* Do not require an existing field — cold start must retry when DEM
-     tiles appear after a failed first build. */
-  const bool terrain_ready =
-    terrain_serial != computed_terrain_serial &&
-    now - terrain_debounce_since >= GLIDE_CONE_DEBOUNCE;
+  /* Terrain tile-cache serial is ignored: DEM files do not change in a
+     normal session.  Cache fills after a jump are not a reason to
+     recompute; each job samples the window it needs from memory. */
 
   bool waypoints_ready = false;
   Serial waypoint_serial{};
@@ -527,17 +582,23 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
     (!computed_center.IsValid() ||
      computed_center.DistanceS(center) > recompute_threshold_m);
 
+  if (center_moved && !labels_hold_rebase) {
+    labels_hold_rebase = true;
+    LogFmt("glidecones: labels hold rebase (center moved "
+           "by {:.0f}m, threshold {:.0f}m)",
+           computed_center.IsValid()
+             ? computed_center.DistanceS(center) : -1.0,
+           recompute_threshold_m);
+  }
+
   const bool cooled_down =
     now - last_job_attempt >= GLIDE_CONE_DEBOUNCE;
   const bool need_job = have_center && !IsBusy() && cooled_down &&
-    (!field.IsValid() || center_moved || sig_ready || terrain_ready ||
-     waypoints_ready);
+    (!field.IsValid() || center_moved || sig_ready || waypoints_ready);
 
   if (need_job) {
     /* Keep the grid origin until the aircraft/seed actually crosses the
-       recompute threshold.  Terrain/settings refreshes used to re-center
-       on the live aircraft, which rebuilt contours/labels every tile load
-       while flying. */
+       recompute threshold. */
     const GeoPoint job_center =
       (!center_moved && computed_center.IsValid()) ? computed_center
                                                    : center;
@@ -551,11 +612,11 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
 
     LogFmt("glidecones: {} request gen={} via={} lat={:.5f} lon={:.5f} "
            "radius={:.0f}m L/D={:.0f} max_alt={:.0f} cell={:.0f} "
-           "why: center={} sig={} terrain={} wpts={} empty={} seeds={}",
+           "why: center={} sig={} wpts={} empty={} seeds={}",
            ModeName(mode), job_generation, seed_source,
            job_center.latitude.Degrees(), job_center.longitude.Degrees(),
            radius_m, gc.glide_ratio, gc.max_altitude, gc.cell_size,
-           center_moved, sig_ready, terrain_ready, waypoints_ready,
+           center_moved, sig_ready, waypoints_ready,
            !field.IsValid(), single_seeds.size());
 
     GlideConeGridRequest request;
@@ -575,7 +636,6 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
       awaiting_grid = true;
       computed_center = job_center;
       computed_signature = signature;
-      computed_terrain_serial = terrain_serial;
       if (mode == GlideConeSettings::Mode::COMBINED)
         computed_waypoint_serial = waypoint_serial;
     } else {
@@ -729,13 +789,29 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   }
 
   if (gc.contours) {
-    if (!computed_contours ||
-        computed_contour_polylines != gc.contour_polylines) {
-      field.BuildContours(100, gc.contour_polylines);
-      computed_contours = true;
-      computed_contour_polylines = gc.contour_polylines;
-      InvalidateContourLabels();
+    if (auto ready = contour_worker.TakeReady()) {
+      awaiting_contours = false;
+      if (ready->generation == contour_generation) {
+        field.contour_lines = std::move(ready->contour_lines);
+        computed_contours = true;
+        computed_contour_polylines = ready->polylines;
+        InvalidateContourLabels();
+        if (labels_hold_rebase) {
+          labels_hold_rebase = false;
+          LogFmt("glidecones: labels hold rebase released (contours ready)");
+        }
+        LogFmt("glidecones: contours ready gen={} lines={} polylines={}",
+               ready->generation, field.contour_lines.size(),
+               ready->polylines);
+      }
+    } else if (!contour_worker.IsBusy()) {
+      awaiting_contours = false;
     }
+
+    const bool need_contours = !computed_contours ||
+      computed_contour_polylines != gc.contour_polylines;
+    if (need_contours && !awaiting_contours && !contour_worker.IsBusy())
+      RequestContours(gc.contour_polylines);
 
     const bool show = projection.GetMapScale() <= gc.contours_min_scale;
 
@@ -751,26 +827,118 @@ GlideConeRenderer::DrawField(Canvas &canvas,
         const unsigned font_h = look.overlay.overlay_font->GetHeight();
         const PixelSize screen_size = projection.GetScreenSize();
         const double map_scale = projection.GetMapScale();
+        const GeoPoint view_center = projection.GetGeoLocation();
+        const Angle view_angle = projection.GetScreenAngle();
 
-        /* Geo anchors: ignore pan/follow.  Rebuild on zoom / settings. */
         const bool scale_ok = label_cache_map_scale > 0 &&
           std::abs(label_cache_map_scale - map_scale) <=
             label_cache_map_scale * 0.02;
-        const bool cache_ok =
-          label_cache_map_scale > 0 &&
-          scale_ok &&
+        const bool settings_ok =
           label_cache_spacing == pct &&
           label_cache_font_h == font_h &&
           label_cache_screen_size.width == screen_size.width &&
           label_cache_screen_size.height == screen_size.height;
 
-        if (!cache_ok)
+        bool view_ok = label_cache_center.IsValid();
+        double drift_px = 0;
+        double angle_deg = 0;
+        if (view_ok) {
+          const PixelPoint cached =
+            projection.GeoToScreen(label_cache_center);
+          const PixelPoint mid = projection.GetScreenRect().GetCenter();
+          drift_px = std::hypot(double(cached.x - mid.x),
+                                double(cached.y - mid.y));
+          const double drift_limit =
+            0.25 * double(std::min(screen_size.width, screen_size.height));
+          angle_deg =
+            std::fabs((view_angle - label_cache_angle).AsDelta().Degrees());
+          view_ok = drift_px <= drift_limit && angle_deg <= 5.0;
+        }
+
+        const bool cache_ok = label_cache_map_scale > 0 && scale_ok &&
+          settings_ok && view_ok;
+
+        const bool hold_labels = awaiting_grid || awaiting_gpu ||
+          awaiting_contours || labels_hold_rebase;
+
+        const char *dirty =
+          label_cache_map_scale < 0 ? "empty" :
+          !scale_ok ? "scale" :
+          !settings_ok ? "settings" :
+          !view_ok ? "view" : "ok";
+
+        if (hold_labels) {
+          if (label_rebuild_pending || label_debounce_reason != nullptr) {
+            LogFmt("glidecones: labels rebuild held "
+                   "(grid={} gpu={} contours={} rebase={} was={})",
+                   awaiting_grid, awaiting_gpu, awaiting_contours,
+                   labels_hold_rebase,
+                   label_debounce_reason != nullptr
+                     ? label_debounce_reason : "-");
+            label_debounce_reason = nullptr;
+          }
+          label_rebuild_pending = false;
+        } else if (cache_ok) {
+          label_rebuild_pending = false;
+          label_debounce_reason = nullptr;
+        } else if (label_cache_map_scale < 0) {
+          /* After recompute/contours: show labels immediately when
+             visible (this block only runs when show + polylines). */
+          LogFmt("glidecones: labels rebuild immediate (new contours)");
           RebuildContourLabels(canvas, projection, gc, look);
+          label_rebuild_pending = false;
+        } else {
+          /* Settle debounce for zoom / pan / rotate / settings. */
+          const auto now = std::chrono::steady_clock::now();
+          const bool still_moving =
+            label_rebuild_watch_scale > 0 &&
+            (std::abs(label_rebuild_watch_scale - map_scale) >
+               label_rebuild_watch_scale * 0.005 ||
+             (label_rebuild_watch_center.IsValid() &&
+              view_center.IsValid() &&
+              label_rebuild_watch_center.DistanceS(view_center) > 5.0) ||
+             std::fabs((view_angle - label_rebuild_watch_angle)
+                         .AsDelta().Degrees()) > 1.0);
+
+          if (!label_rebuild_pending) {
+            label_rebuild_pending = true;
+            label_rebuild_since = now;
+            label_rebuild_watch_scale = map_scale;
+            label_rebuild_watch_center = view_center;
+            label_rebuild_watch_angle = view_angle;
+            label_debounce_reason = dirty;
+            LogFmt("glidecones: labels debounce start reason={} "
+                   "scale={:.0f} drift={:.0f}px angle={:.1f}deg",
+                   dirty, map_scale, drift_px, angle_deg);
+          } else if (still_moving) {
+            label_rebuild_since = now;
+            label_rebuild_watch_scale = map_scale;
+            label_rebuild_watch_center = view_center;
+            label_rebuild_watch_angle = view_angle;
+            if (label_debounce_reason != dirty) {
+              label_debounce_reason = dirty;
+              LogFmt("glidecones: labels debounce reset reason={}", dirty);
+            }
+          } else if (now - label_rebuild_since >=
+                     GLIDE_CONE_LABEL_DEBOUNCE) {
+            LogFmt("glidecones: labels debounce fire reason={}",
+                   label_debounce_reason != nullptr
+                     ? label_debounce_reason : dirty);
+            RebuildContourLabels(canvas, projection, gc, look);
+            label_rebuild_pending = false;
+          }
+        }
 
         DrawContourLabels(canvas, projection, look);
       }
+    } else {
+      label_rebuild_pending = false;
     }
-  } else if (computed_contours) {
+  } else if (computed_contours || awaiting_contours ||
+             !field.contour_lines.empty()) {
+    contour_worker.Cancel();
+    (void)contour_worker.TakeReady();
+    awaiting_contours = false;
     field.contour_lines.clear();
     computed_contours = false;
     InvalidateContourLabels();

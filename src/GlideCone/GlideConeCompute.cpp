@@ -444,7 +444,8 @@ GlideConeGpuSession::DeleteBuffers() noexcept
   cell_bytes = 0;
   allocated_cell_bytes = 0;
   allocated_elev_bytes = 0;
-  width = height = wg_x = wg_y = 0;
+  /* Do not clear width/height/wg_* — Begin sets those before
+     EnsureBuffers(), which may call DeleteBuffers() to grow SSBOs. */
 }
 
 void
