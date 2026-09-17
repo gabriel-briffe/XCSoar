@@ -1220,6 +1220,14 @@ static constexpr MetaData meta_data[] = {
     IBFHelper<InfoBoxContentGlideCone>::Create,
   },
 
+  // e_GlideConeDist
+  {
+    NC_("InfoBox", "Glide Cone Distance"),
+    NC_("Abbreviation", "GC Dist"),
+    N_("Euclidean ground distance along the terrain-aware glide cone relay path from the aircraft to the Goto airport (or nearest landable, in combined mode). Requires the glide cone feature (GPU/OpenGL ES 3.1)."),
+    IBFHelper<InfoBoxContentGlideConeDist>::Create,
+  },
+
 };
 
 static_assert(ARRAY_SIZE(meta_data) == NUM_TYPES,

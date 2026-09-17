@@ -388,6 +388,20 @@ along the current task leg. At this location, the altitude will be below the
 configured terrain clearance altitude.}
 
 %%%%%%%%%%%
+\section{Glide cone}
+
+\ibi{Glide Cone}{GlideCone}{Altitude margin to the Goto airport (or nearest
+landable, in combined mode) from the terrain-aware glide cone computation.
+The main value is the glider's current altitude minus the altitude required
+at the glider position (green when at or above, red when below); the bottom
+line is that required altitude.  The title shows the current glide ratio
+(GC L/D).  Tap to choose the mode and adjust the glide ratio.  Requires
+OpenGL ES 3.1 (Android).}
+\ibi{Glide Cone Distance}{GC Dist}{Euclidean ground distance along the
+terrain-aware glide cone relay path from the aircraft to the Goto airport
+(or nearest landable, in combined mode).  Requires OpenGL ES 3.1 (Android).}
+
+%%%%%%%%%%%
 \section{Radio}
 
 \ibi{Active radio frequency}{Act Freq}{Currently active radio frequency.}

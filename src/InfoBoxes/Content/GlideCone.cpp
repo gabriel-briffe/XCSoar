@@ -67,3 +67,23 @@ InfoBoxContentGlideCone::Update(InfoBoxData &data) noexcept
   // green when at/above required altitude, red when below
   data.SetValueColor(delta >= 0 ? 3 : 1);
 }
+
+const InfoBoxPanel *
+InfoBoxContentGlideConeDist::GetDialogContent() noexcept
+{
+  return panels;
+}
+
+void
+InfoBoxContentGlideConeDist::Update(InfoBoxData &data) noexcept
+{
+  data.SetTitle(_("GC Dist"));
+
+  const auto status = GlideConeStatus::Get();
+  if (!status.valid || status.path_distance <= 0) {
+    data.SetValueInvalid();
+    return;
+  }
+
+  data.SetValueFromDistance(status.path_distance);
+}

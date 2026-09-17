@@ -127,4 +127,11 @@ struct GlideConeField {
    * is seed arrival altitude plus remaining distance / L/D.
    */
   std::optional<double> RequiredAltitude(GeoPoint from) const noexcept;
+
+  /**
+   * Total Euclidean ground distance [m] along the relay path from
+   * @p from to the seed (sum of cell-centre hops).  Empty when no
+   * path exists.
+   */
+  std::optional<double> PathDistance(GeoPoint from) const noexcept;
 };
