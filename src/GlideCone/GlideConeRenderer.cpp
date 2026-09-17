@@ -60,9 +60,10 @@ ModeName(GlideConeSettings::Mode mode) noexcept
 }
 
 /**
- * Draw a geo polyline clipped to the visible map.  Unclipped
- * GeoToScreen points can sit far off-screen when zoomed in; connecting
- * them produces lines that slash across the viewport.
+ * Draw a geo polyline clipped to the visible map (one DrawLine per
+ * edge).  Used when Contour Polylines is off.  Unclipped GeoToScreen
+ * points can sit far off-screen when zoomed in; connecting them
+ * produces lines that slash across the viewport.
  */
 static void
 DrawClippedGeoPolyline(Canvas &canvas, const WindowProjection &projection,
@@ -83,6 +84,63 @@ DrawClippedGeoPolyline(Canvas &canvas, const WindowProjection &projection,
     canvas.DrawLine(projection.GeoToScreen(a),
                     projection.GeoToScreen(b));
   }
+}
+
+/**
+ * Clip geo edges, then stroke contiguous visible runs with
+ * Canvas::DrawPolyline (fewer driver submissions than per-edge
+ * DrawLine).  Clip still runs per edge so antimeridian / projection
+ * wrap cannot slash across the viewport.  A new run starts whenever
+ * ClipLine drops an edge or the clipped start does not join the
+ * previous end.
+ */
+static void
+DrawClippedGeoPolylineBatched(Canvas &canvas,
+                              const WindowProjection &projection,
+                              const GeoClip &clip,
+                              std::span<const GeoPoint> points,
+                              std::vector<BulkPixelPoint> &run) noexcept
+{
+  if (points.size() < 2)
+    return;
+
+  run.clear();
+
+  const auto flush = [&]() noexcept {
+    if (run.size() >= 2)
+      canvas.DrawPolyline(run.data(), unsigned(run.size()));
+    run.clear();
+  };
+
+  for (std::size_t i = 1; i < points.size(); ++i) {
+    GeoPoint a = points[i - 1];
+    GeoPoint b = points[i];
+    if (!a.IsValid() || !b.IsValid()) {
+      flush();
+      continue;
+    }
+    if (!clip.ClipLine(a, b)) {
+      flush();
+      continue;
+    }
+
+    const BulkPixelPoint sa = projection.GeoToScreen(a);
+    const BulkPixelPoint sb = projection.GeoToScreen(b);
+
+    if (run.empty()) {
+      run.push_back(sa);
+      run.push_back(sb);
+      continue;
+    }
+
+    if (run.back().x != sa.x || run.back().y != sa.y) {
+      flush();
+      run.push_back(sa);
+    }
+    run.push_back(sb);
+  }
+
+  flush();
 }
 
 void
@@ -819,8 +877,16 @@ GlideConeRenderer::DrawField(Canvas &canvas,
       const GeoClip clip(projection.GetScreenBounds().Scale(1.1));
 
       canvas.Select(look.glide_cone_contour_pen);
-      for (const auto &line : field.contour_lines)
-        DrawClippedGeoPolyline(canvas, projection, clip, line.points);
+      if (gc.contour_polylines) {
+        std::vector<BulkPixelPoint> run;
+        run.reserve(64);
+        for (const auto &line : field.contour_lines)
+          DrawClippedGeoPolylineBatched(canvas, projection, clip,
+                                        line.points, run);
+      } else {
+        for (const auto &line : field.contour_lines)
+          DrawClippedGeoPolyline(canvas, projection, clip, line.points);
+      }
 
       if (gc.contour_polylines && look.overlay.overlay_font != nullptr) {
         const unsigned pct = std::clamp(gc.label_spacing, 20u, 100u);
