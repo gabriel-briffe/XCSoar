@@ -156,3 +156,31 @@ GLTexture::Draw(PixelRect dest, PixelRect src) const noexcept
 
   glDisableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
 }
+
+void
+GLTexture::Draw(const std::array<BulkPixelPoint, 4> &vertices,
+                PixelRect src) const noexcept
+{
+  const ScopeVertexPointer vp(vertices.data());
+
+  const PixelSize allocated = GetAllocatedSize();
+  const GLfloat x0 = (GLfloat)src.left / allocated.width;
+  const GLfloat y0 = (GLfloat)src.top / allocated.height;
+  const GLfloat x1 = (GLfloat)src.right / allocated.width;
+  const GLfloat y1 = (GLfloat)src.bottom / allocated.height;
+
+  const GLfloat coord[] = {
+    x0, flipped ? y1 : y0,
+    x1, flipped ? y1 : y0,
+    x0, flipped ? y0 : y1,
+    x1, flipped ? y0 : y1,
+  };
+
+  glEnableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
+  glVertexAttribPointer(OpenGL::Attribute::TEXCOORD, 2, GL_FLOAT, GL_FALSE,
+                        0, coord);
+
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  glDisableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
+}
