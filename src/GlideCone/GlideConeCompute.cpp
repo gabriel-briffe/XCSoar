@@ -10,11 +10,10 @@
 #include <GLES3/gl31.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
-#include <cstring>
 #include <functional>
 #include <utility>
-#include <vector>
 
 namespace {
 
@@ -331,6 +330,35 @@ void main() {
 }
 )GLSL";
 
+constexpr char CLEAR_SHADER[] = R"GLSL(#version 310 es
+precision highp float;
+precision highp int;
+
+layout(local_size_x = 64) in;
+
+struct Cell {
+  float alt;
+  int ox;
+  int oy;
+  uint flags;
+};
+
+layout(std430, binding = 0) buffer CellBuf { Cell cells[]; };
+
+uniform float uMaxAlt;
+uniform uint uCount;
+
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+  if (i >= uCount)
+    return;
+  cells[i].alt = uMaxAlt;
+  cells[i].ox = -1;
+  cells[i].oy = -1;
+  cells[i].flags = 0u;
+}
+)GLSL";
+
 [[gnu::pure]]
 bool
 IsComputeContext() noexcept
@@ -382,6 +410,20 @@ CompileComputeProgram(const char *src) noexcept
   return program;
 }
 
+void
+WaitGpuFence() noexcept
+{
+  const GLsync fence =
+    glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  if (fence != nullptr) {
+    glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT,
+                     GL_TIMEOUT_IGNORED);
+    glDeleteSync(fence);
+  } else {
+    glFinish();
+  }
+}
+
 } // anonymous namespace
 
 void
@@ -400,18 +442,19 @@ GlideConeGpuSession::DeleteBuffers() noexcept
   elev_buf = cell_a = cell_b = change_buf = 0;
   cell_cur = cell_next = 0;
   cell_bytes = 0;
+  allocated_cell_bytes = 0;
+  allocated_elev_bytes = 0;
   width = height = wg_x = wg_y = 0;
 }
 
 void
 GlideConeGpuSession::Cancel() noexcept
 {
-  if (!active && elev_buf == 0)
+  if (!active)
     return;
 
-  LogFmt("glidecones: GPU Cancel active={} remaining={}",
-         active, remaining);
-  DeleteBuffers();
+  LogFmt("glidecones: GPU Cancel remaining={}", remaining);
+  /* Keep SSBOs for the next job — DestroyGL() frees them. */
   active = false;
   remaining = 0;
 }
@@ -419,10 +462,16 @@ GlideConeGpuSession::Cancel() noexcept
 void
 GlideConeGpuSession::DestroyGL() noexcept
 {
-  Cancel();
+  active = false;
+  remaining = 0;
+  DeleteBuffers();
   if (program != 0) {
     glDeleteProgram(program);
     program = 0;
+  }
+  if (clear_program != 0) {
+    glDeleteProgram(clear_program);
+    clear_program = 0;
   }
 }
 
@@ -436,6 +485,59 @@ GlideConeGpuSession::EnsureProgram() noexcept
 }
 
 bool
+GlideConeGpuSession::EnsureClearProgram() noexcept
+{
+  if (clear_program != 0)
+    return true;
+  clear_program = CompileComputeProgram(CLEAR_SHADER);
+  return clear_program != 0;
+}
+
+bool
+GlideConeGpuSession::EnsureBuffers(std::size_t count) noexcept
+{
+  const GLsizeiptr need_cell = GLsizeiptr(count * sizeof(GpuCell));
+  const GLsizeiptr need_elev = GLsizeiptr(count * sizeof(float));
+
+  if (elev_buf != 0 && cell_a != 0 && cell_b != 0 && change_buf != 0 &&
+      allocated_cell_bytes >= need_cell &&
+      allocated_elev_bytes >= need_elev) {
+    cell_bytes = need_cell;
+    return true;
+  }
+
+  DeleteBuffers();
+
+  GLuint bufs[4] = {};
+  glGenBuffers(4, bufs);
+  elev_buf = bufs[0];
+  cell_a = bufs[1];
+  cell_b = bufs[2];
+  change_buf = bufs[3];
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, elev_buf);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, need_elev, nullptr,
+               GL_DYNAMIC_DRAW);
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_a);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, need_cell, nullptr,
+               GL_DYNAMIC_COPY);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_b);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, need_cell, nullptr,
+               GL_DYNAMIC_COPY);
+
+  const std::uint32_t zero = 0;
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(zero), &zero,
+               GL_DYNAMIC_COPY);
+
+  cell_bytes = need_cell;
+  allocated_cell_bytes = need_cell;
+  allocated_elev_bytes = need_elev;
+  return true;
+}
+
+bool
 GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
 {
   Cancel();
@@ -445,7 +547,7 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
            grid.IsValid(), IsComputeContext());
     return false;
   }
-  if (!EnsureProgram()) {
+  if (!EnsureProgram() || !EnsureClearProgram()) {
     LogFmt("glidecones: GPU Begin EnsureProgram failed");
     return false;
   }
@@ -456,47 +558,53 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   wg_x = (width + 7) / 8;
   wg_y = (height + 7) / 8;
   remaining = grid.iteration_cap > 0 ? grid.iteration_cap : 2000u;
-  cell_bytes = GLsizeiptr(count * sizeof(GpuCell));
+
+  if (!EnsureBuffers(count)) {
+    LogFmt("glidecones: GPU Begin EnsureBuffers failed");
+    return false;
+  }
 
   LogFmt("glidecones: GPU Begin {}x{} seeds={} iters={} "
          "cell={:.0f}x{:.0f}m L/D={:.0f}",
          width, height, grid.seeds.size(), remaining,
          grid.cell_size_x_m, grid.cell_size_y_m, grid.glide_ratio);
 
-  std::vector<GpuCell> cells(count);
-  for (std::size_t i = 0; i < count; ++i)
-    cells[i] = GpuCell{grid.max_alt, -1, -1, 0u};
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, elev_buf);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                  GLsizeiptr(count * sizeof(float)),
+                  grid.elevation.data());
 
+  /* Fill cell_a on the GPU, then poke only seed cells from the host. */
+  glUseProgram(clear_program);
+  glUniform1f(glGetUniformLocation(clear_program, "uMaxAlt"),
+              grid.max_alt);
+  glUniform1ui(glGetUniformLocation(clear_program, "uCount"),
+               GLuint(count));
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, cell_a);
+  glDispatchCompute(GLuint((count + 63) / 64), 1, 1);
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT |
+                  GL_BUFFER_UPDATE_BARRIER_BIT);
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_a);
   for (const auto &s : grid.seeds) {
     if (s.x < 0 || s.y < 0 ||
         unsigned(s.x) >= width || unsigned(s.y) >= height)
       continue;
     const std::size_t seed = std::size_t(s.y) * width + s.x;
-    cells[seed] = GpuCell{s.alt, s.x, s.y, FLAG_CHANGED};
+    const GpuCell cell{s.alt, s.x, s.y, FLAG_CHANGED};
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER,
+                    GLintptr(seed * sizeof(GpuCell)),
+                    sizeof(cell), &cell);
   }
 
-  GLuint bufs[4] = {};
-  glGenBuffers(4, bufs);
-  elev_buf = bufs[0];
-  cell_a = bufs[1];
-  cell_b = bufs[2];
-  change_buf = bufs[3];
-
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, elev_buf);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(count * sizeof(float)),
-               grid.elevation.data(), GL_STATIC_DRAW);
-
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_a);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, cell_bytes, cells.data(),
-               GL_DYNAMIC_COPY);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_b);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, cell_bytes, cells.data(),
-               GL_DYNAMIC_COPY);
+  glBindBuffer(GL_COPY_READ_BUFFER, cell_a);
+  glBindBuffer(GL_COPY_WRITE_BUFFER, cell_b);
+  glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
+                      0, 0, cell_bytes);
 
   const std::uint32_t zero = 0;
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(zero), &zero,
-               GL_DYNAMIC_COPY);
+  glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(zero), &zero);
 
   glUseProgram(program);
   glUniform1i(glGetUniformLocation(program, "uWidth"), int(width));
@@ -556,16 +664,7 @@ GlideConeGpuSession::Dispatch(unsigned n) noexcept
     return false;
 
   /* Wait for the whole batch before mapping change_count. */
-  const GLsync fence =
-    glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-  if (fence != nullptr) {
-    glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT,
-                     GL_TIMEOUT_IGNORED);
-    glDeleteSync(fence);
-  } else {
-    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-    glFinish();
-  }
+  WaitGpuFence();
 
   std::uint32_t changes = 1;
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
@@ -591,7 +690,7 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
     return false;
 
   glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-  glFinish();
+  WaitGpuFence();
 
   const std::size_t count = std::size_t(width) * height;
   out.width = width;
@@ -619,7 +718,7 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
     out.Clear();
   }
 
-  DeleteBuffers();
+  /* Keep SSBOs allocated for the next job of similar size. */
   active = false;
   remaining = 0;
   LogFmt("glidecones: GPU Finish {} mapped={} {}x{}",
@@ -636,9 +735,13 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
   if (hit_iteration_cap != nullptr)
     *hit_iteration_cap = false;
 
+  using clock = std::chrono::steady_clock;
+  const auto t0 = clock::now();
+
   if (!Begin(grid))
     return false;
 
+  const auto t1 = clock::now();
   const unsigned cap = remaining;
   bool converged = false;
   while (remaining > 0) {
@@ -662,8 +765,19 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
       LogFmt("glidecones: GPU Run {}/{} iters", iterations_done, cap);
   }
 
+  const auto t2 = clock::now();
+
   if (!Finish(out))
     return false;
+
+  const auto t3 = clock::now();
+  const auto ms = [](clock::time_point a, clock::time_point b) {
+    return std::chrono::duration<double, std::milli>(b - a).count();
+  };
+  LogFmt("glidecones times: prep={:.1f}ms iter={:.1f}ms finish={:.1f}ms "
+         "iters={}/{} {}x{}",
+         ms(t0, t1), ms(t1, t2), ms(t2, t3),
+         iterations_done, cap, out.width, out.height);
 
   if (!converged) {
     LogFmt("glidecones: GPU hit iteration cap {} (not converged)", cap);

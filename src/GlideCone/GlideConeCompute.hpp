@@ -24,6 +24,7 @@ class GlideConeGpuSession {
 
 #ifdef HAVE_GLES_COMPUTE
   GLuint program = 0;
+  GLuint clear_program = 0;
   GLuint elev_buf = 0;
   GLuint cell_a = 0;
   GLuint cell_b = 0;
@@ -32,7 +33,11 @@ class GlideConeGpuSession {
   GLuint change_buf = 0;
   unsigned width = 0, height = 0;
   unsigned wg_x = 0, wg_y = 0;
+  /** Bytes used by the current job (width*height cells). */
   GLsizeiptr cell_bytes = 0;
+  /** Allocated SSBO capacities (may exceed the current job). */
+  GLsizeiptr allocated_cell_bytes = 0;
+  GLsizeiptr allocated_elev_bytes = 0;
   unsigned iterations_done = 0;
 #endif
 
@@ -88,6 +93,8 @@ private:
   bool Finish(GlideConeResult &out) noexcept;
   void DeleteBuffers() noexcept;
   bool EnsureProgram() noexcept;
+  bool EnsureClearProgram() noexcept;
+  bool EnsureBuffers(std::size_t count) noexcept;
 #else
   bool Run(const GlideConeGrid &,
            const std::function<bool()> &,
