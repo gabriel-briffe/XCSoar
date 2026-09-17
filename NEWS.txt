@@ -1,4 +1,20 @@
 Version 7.46 - not yet released
+* map
+  - add an experimental terrain-aware glide cone overlay: when enabled,
+    performing a "Goto" to an airport triggers a GPU (OpenGL ES 3.1)
+    computation of the reachable terrain and draws the glide path from
+    the aircraft back to the airport (Android only).  Terrain is
+    max-pooled to a configurable cell size (default 400 m); the window
+    is 1.1 × max altitude × L/D around the airport (single) or 1.25 ×
+    around the glider (combined); default glide ratio is 25.  Combined
+    mode seeds the landables within the compute window.  Downhill-ground
+    path segments are black dotted.  DEM pooling and GPU propagate run
+    on background threads (shared GLES 3.1 context) so the map stays
+    interactive; the last path and InfoBox value remain until the new
+    field is ready.  The Glide Cone InfoBox reconstructs required
+    altitude on ground cells from the first air cell plus distance /
+    L/D.  Pan-mode path and altitude at the crosshair can be toggled
+    in settings
 * android
   - target Android 16 so Google Play still accepts updates #2874
   - fix crash when exiting the app #2873

@@ -90,9 +90,8 @@ TEST_NAMES = \
 	TestUnits TestEarth TestSunEphemeris \
 	TestValidity TestUTM \
 	TestAllocatedGrid \
-	TestRadixTree TestGeoBounds TestGeoClip \
-	TestLogger TestGPSDeviceName TestGRecord TestClimbAvCalc TestCirclingWind \
-	TestFilteredVarioComputer \
+	TestRadixTree TestGeoBounds TestGeoClip TestGlideConeField \
+	TestLogger TestGPSDeviceName TestGRecord TestClimbAvCalc TestCirclingWind \	TestFilteredVarioComputer \
 	TestVarioSynthesiser TestAudioVario \
 	TestWaypointReader TestThermalBase \
 	TestFlarmNet TestFlarmMessaging TestFlarmBinaryProtocol \
@@ -633,6 +632,13 @@ TEST_GEO_BOUNDS_SOURCES = \
 	$(TEST_SRC_DIR)/TestGeoBounds.cpp
 TEST_GEO_BOUNDS_DEPENDS = GEO MATH
 $(eval $(call link-program,TestGeoBounds,TEST_GEO_BOUNDS))
+
+TEST_GLIDE_CONE_FIELD_SOURCES = \
+	$(SRC)/GlideCone/GlideConeField.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestGlideConeField.cpp
+TEST_GLIDE_CONE_FIELD_DEPENDS = GEO MATH UTIL
+$(eval $(call link-program,TestGlideConeField,TEST_GLIDE_CONE_FIELD))
 
 TEST_FLARM_NET_SOURCES = \
 	$(SRC)/FLARM/FlarmNetReader.cpp \
