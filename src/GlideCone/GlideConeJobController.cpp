@@ -12,7 +12,6 @@
 #include "Terrain/RasterTerrain.hpp"
 #include "Message.hpp"
 #include "Language/Language.hpp"
-#include "LogFile.hpp"
 
 #include <cmath>
 #include <functional>
@@ -27,21 +26,6 @@ static constexpr double GLIDE_CONE_SEED_EPSILON_M = 50;
 
 /** Debounce for parameter / waypoint-list changes. */
 static constexpr std::chrono::milliseconds GLIDE_CONE_DEBOUNCE{400};
-
-[[gnu::pure]]
-static const char *
-ModeName(GlideConeSettings::Mode mode) noexcept
-{
-  switch (mode) {
-  case GlideConeSettings::Mode::OFF:
-    return "off";
-  case GlideConeSettings::Mode::SINGLE:
-    return "single";
-  case GlideConeSettings::Mode::COMBINED:
-    return "combined";
-  }
-  return "?";
-}
 
 [[gnu::pure]]
 static std::size_t
@@ -73,11 +57,6 @@ GlideConeJobController::Abort(GlideConeOverlay &overlay) noexcept
 {
   const bool busy = awaiting_grid || awaiting_gpu || awaiting_contours ||
     gpu_worker.IsBusy() || contour_worker.IsBusy();
-  if (busy)
-    LogFmt("glidecones: AbortJobs gen={} awaiting_grid={} awaiting_gpu={} "
-           "awaiting_contours={} gpu_busy={}",
-           job_generation, awaiting_grid, awaiting_gpu, awaiting_contours,
-           gpu_worker.IsBusy());
   gpu_worker.Cancel();
   contour_worker.Cancel();
   awaiting_grid = false;
@@ -111,10 +90,6 @@ GlideConeJobController::InstallField(GlideConeField &field,
                                      GlideConePreparedGrid &&prepared,
                                      GlideConeResult &&result) noexcept
 {
-  LogFmt("glidecones: InstallField gen={} {}x{} seeds={} cell={:.0f}x{:.0f}m",
-         prepared.generation, result.width, result.height,
-         prepared.grid.seeds.size(),
-         prepared.grid.cell_size_x_m, prepared.grid.cell_size_y_m);
   field.result = std::move(result);
   field.bounds = prepared.bounds;
   field.cell_size_m = std::sqrt(prepared.grid.cell_size_x_m *
@@ -153,7 +128,6 @@ GlideConeJobController::RequestContours(GlideConeField &field) noexcept
     computed_contours = false;
   } else {
     awaiting_contours = false;
-    LogFmt("glidecones: contour.Request failed gen={}", contour_generation);
   }
 }
 
@@ -188,8 +162,6 @@ GlideConeJobController::UpdateContours(GlideConeField &field,
       field.contour_lines = std::move(ready->contour_lines);
       computed_contours = true;
       overlay.OnContoursReady();
-      LogFmt("glidecones: contours ready gen={} lines={}",
-             ready->generation, field.contour_lines.size());
     }
   } else if (!contour_worker.IsBusy()) {
     awaiting_contours = false;
@@ -222,12 +194,6 @@ GlideConeJobController::Update(GlideConeField &field,
 
   if (mode == GlideConeSettings::Mode::OFF || terrain == nullptr ||
       !GlideConeGpuSession::Available()) {
-    if (field.IsValid() || awaiting_grid || awaiting_gpu ||
-        gpu_worker.IsBusy())
-      LogFmt("glidecones: idle mode={} terrain={} gpu_avail={} "
-             "(clearing pipeline)",
-             ModeName(mode), terrain != nullptr,
-             GlideConeGpuSession::Available());
     Abort(overlay);
     field.Clear();
     computed_center = GeoPoint::Invalid();
@@ -239,7 +205,6 @@ GlideConeJobController::Update(GlideConeField &field,
   double recompute_threshold_m = GLIDE_CONE_SEED_EPSILON_M;
   std::vector<GeoPoint> single_seeds;
   bool have_center = false;
-  const char *seed_source = "-";
 
   if (mode == GlideConeSettings::Mode::SINGLE) {
     GeoPoint seed;
@@ -247,17 +212,12 @@ GlideConeJobController::Update(GlideConeField &field,
     if (target_valid) {
       seed = target;
       valid = true;
-      seed_source = "map_target";
     } else {
       seed = pending_seed;
       valid = pending_valid;
-      seed_source = "pending";
     }
 
     if (!valid) {
-      if (field.IsValid() || awaiting_grid || awaiting_gpu)
-        LogFmt("glidecones: single: no seed (target_valid={} pending={})",
-               target_valid, pending_valid);
       Abort(overlay);
       field.Clear();
       computed_center = GeoPoint::Invalid();
@@ -271,12 +231,7 @@ GlideConeJobController::Update(GlideConeField &field,
   } else if (aircraft_valid && waypoints != nullptr) {
     center = aircraft;
     have_center = true;
-    seed_source = "aircraft";
     recompute_threshold_m = GLIDE_CONE_MAX_OFFSET_FROM_CENTER * radius_m;
-  } else if (mode == GlideConeSettings::Mode::COMBINED) {
-    if (field.IsValid() || awaiting_grid || awaiting_gpu)
-      LogFmt("glidecones: combined: waiting aircraft={} waypoints={}",
-             aircraft_valid, waypoints != nullptr);
   }
 
   const auto now = std::chrono::steady_clock::now();
@@ -308,11 +263,6 @@ GlideConeJobController::Update(GlideConeField &field,
 
   if (center_moved && !overlay.IsHoldRebase()) {
     overlay.HoldRebase();
-    LogFmt("glidecones: labels hold rebase (center moved "
-           "by {:.0f}m, threshold {:.0f}m)",
-           computed_center.IsValid()
-             ? computed_center.DistanceS(center) : -1.0,
-           recompute_threshold_m);
   }
 
   const bool cooled_down =
@@ -331,15 +281,6 @@ GlideConeJobController::Update(GlideConeField &field,
     awaiting_gpu = false;
     (void)gpu_worker.TakeReady();
     last_job_attempt = now;
-
-    LogFmt("glidecones: {} request gen={} via={} lat={:.5f} lon={:.5f} "
-           "radius={:.0f}m L/D={:.0f} max_alt={:.0f} cell={:.0f} "
-           "why: center={} sig={} wpts={} empty={} seeds={}",
-           ModeName(mode), job_generation, seed_source,
-           job_center.latitude.Degrees(), job_center.longitude.Degrees(),
-           radius_m, gc.glide_ratio, gc.max_altitude, gc.cell_size,
-           center_moved, sig_ready, waypoints_ready,
-           !field.IsValid(), single_seeds.size());
 
     GlideConeGridRequest request;
     request.generation = job_generation;
@@ -363,7 +304,6 @@ GlideConeJobController::Update(GlideConeField &field,
     } else {
       awaiting_grid = false;
       ClearFieldClaim(field.IsValid());
-      LogFmt("glidecones: worker.Request failed gen={}", job_generation);
     }
   }
 
@@ -371,27 +311,13 @@ GlideConeJobController::Update(GlideConeField &field,
     if (prepared->generation == job_generation) {
       awaiting_grid = false;
       if (prepared->grid.IsValid()) {
-        LogFmt("glidecones: grid ready gen={} {}x{} seeds={} "
-               "cell={:.0f}x{:.0f}m → GPU worker",
-               prepared->generation, prepared->grid.width,
-               prepared->grid.height, prepared->grid.seeds.size(),
-               prepared->grid.cell_size_x_m, prepared->grid.cell_size_y_m);
         if (gpu_worker.Request(std::move(prepared)))
           awaiting_gpu = true;
-        else {
+        else
           ClearFieldClaim(field.IsValid());
-          LogFmt("glidecones: GPU worker.Request failed gen={}",
-                 job_generation);
-        }
       } else {
         ClearFieldClaim(field.IsValid());
-        LogFmt("glidecones: grid ready but invalid gen={} "
-               "(build failed or empty seeds)",
-               prepared->generation);
       }
-    } else {
-      LogFmt("glidecones: drop stale grid gen={} (current={})",
-             prepared->generation, job_generation);
     }
   }
 
@@ -400,8 +326,6 @@ GlideConeJobController::Update(GlideConeField &field,
     if (gpu_ready->prepared != nullptr &&
         gpu_ready->prepared->generation == job_generation &&
         gpu_ready->ok && gpu_ready->result.IsValid()) {
-      LogFmt("glidecones: GPU Finish ok gen={}",
-             gpu_ready->prepared->generation);
       if (gpu_ready->hit_iteration_cap)
         Message::AddMessage(
           _("GlideCone compute stopped, raise iteration cap"));
@@ -410,7 +334,6 @@ GlideConeJobController::Update(GlideConeField &field,
                    std::move(gpu_ready->result));
     } else {
       ClearFieldClaim(field.IsValid());
-      LogFmt("glidecones: GPU Finish failed/stale gen={}", job_generation);
     }
   } else if (!gpu_worker.IsBusy()) {
     awaiting_gpu = false;

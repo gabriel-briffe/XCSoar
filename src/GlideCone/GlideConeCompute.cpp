@@ -5,12 +5,9 @@
 
 #ifdef HAVE_GLES_COMPUTE
 
-#include "LogFile.hpp"
-
 #include <GLES3/gl31.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <utility>
@@ -388,7 +385,6 @@ CompileComputeProgram(const char *src) noexcept
   if (!status) {
     char log[1024];
     glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-    LogFmt("glidecones: GPU shader compile failed: {}", log);
     glDeleteShader(shader);
     return 0;
   }
@@ -402,7 +398,6 @@ CompileComputeProgram(const char *src) noexcept
   if (!status) {
     char log[1024];
     glGetProgramInfoLog(program, sizeof(log), nullptr, log);
-    LogFmt("glidecones: GPU shader link failed: {}", log);
     glDeleteProgram(program);
     return 0;
   }
@@ -454,7 +449,6 @@ GlideConeGpuSession::Cancel() noexcept
   if (!active)
     return;
 
-  LogFmt("glidecones: GPU Cancel remaining={}", remaining);
   /* Keep SSBOs for the next job — DestroyGL() frees them. */
   active = false;
   remaining = 0;
@@ -544,12 +538,9 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   Cancel();
 
   if (!grid.IsValid() || !IsComputeContext()) {
-    LogFmt("glidecones: GPU Begin refused valid={} compute_ctx={}",
-           grid.IsValid(), IsComputeContext());
     return false;
   }
   if (!EnsureProgram() || !EnsureClearProgram()) {
-    LogFmt("glidecones: GPU Begin EnsureProgram failed");
     return false;
   }
 
@@ -561,14 +552,8 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   remaining = grid.iteration_cap > 0 ? grid.iteration_cap : 2000u;
 
   if (!EnsureBuffers(count)) {
-    LogFmt("glidecones: GPU Begin EnsureBuffers failed");
     return false;
   }
-
-  LogFmt("glidecones: GPU Begin {}x{} seeds={} iters={} "
-         "cell={:.0f}x{:.0f}m L/D={:.0f}",
-         width, height, grid.seeds.size(), remaining,
-         grid.cell_size_x_m, grid.cell_size_y_m, grid.glide_ratio);
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, elev_buf);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
@@ -722,8 +707,6 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
   /* Keep SSBOs allocated for the next job of similar size. */
   active = false;
   remaining = 0;
-  LogFmt("glidecones: GPU Finish {} mapped={} {}x{}",
-         ok ? "ok" : "fail", ok, out.width, out.height);
   return ok;
 }
 
@@ -736,19 +719,12 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
   if (hit_iteration_cap != nullptr)
     *hit_iteration_cap = false;
 
-  using clock = std::chrono::steady_clock;
-  const auto t0 = clock::now();
-
   if (!Begin(grid))
     return false;
 
-  const auto t1 = clock::now();
-  const unsigned cap = remaining;
   bool converged = false;
   while (remaining > 0) {
     if (should_abort && should_abort()) {
-      LogFmt("glidecones: GPU Run aborted after {}/{} iters",
-             iterations_done, cap);
       Cancel();
       return false;
     }
@@ -756,35 +732,16 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
     if (Dispatch(BATCH)) {
       converged = true;
       glFlush();
-      LogFmt("glidecones: GPU converged after {}/{} iters",
-             iterations_done, cap);
       break;
     }
     glFlush();
-
-    if (iterations_done % 256 < BATCH || remaining == 0)
-      LogFmt("glidecones: GPU Run {}/{} iters", iterations_done, cap);
   }
-
-  const auto t2 = clock::now();
 
   if (!Finish(out))
     return false;
 
-  const auto t3 = clock::now();
-  const auto ms = [](clock::time_point a, clock::time_point b) {
-    return std::chrono::duration<double, std::milli>(b - a).count();
-  };
-  LogFmt("glidecones times: prep={:.1f}ms iter={:.1f}ms finish={:.1f}ms "
-         "iters={}/{} {}x{}",
-         ms(t0, t1), ms(t1, t2), ms(t2, t3),
-         iterations_done, cap, out.width, out.height);
-
-  if (!converged) {
-    LogFmt("glidecones: GPU hit iteration cap {} (not converged)", cap);
-    if (hit_iteration_cap != nullptr)
-      *hit_iteration_cap = true;
-  }
+  if (!converged && hit_iteration_cap != nullptr)
+    *hit_iteration_cap = true;
   return true;
 }
 

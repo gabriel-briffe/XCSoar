@@ -2,7 +2,6 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeContourWorker.hpp"
-#include "LogFile.hpp"
 
 #include <utility>
 
@@ -17,13 +16,9 @@ GlideConeContourWorker::Request(std::uint64_t generation,
     next_interval_m = interval_m;
     next_field = std::make_unique<GlideConeField>(std::move(field));
     next_field->contour_lines.clear();
-    LogFmt("glidecones: contour.Request gen={} {}x{}",
-           generation,
-           next_field->result.width, next_field->result.height);
     Trigger();
     return true;
   } catch (...) {
-    LogFmt("glidecones: contour.Request exception");
     return false;
   }
 }
@@ -74,8 +69,6 @@ GlideConeContourWorker::Tick() noexcept
     interval_m = next_interval_m;
   }
 
-  LogFmt("glidecones: contour.Tick start gen={}", gen);
-
   auto out = std::make_unique<GlideConeContourReady>();
   out->generation = gen;
 
@@ -86,14 +79,10 @@ GlideConeContourWorker::Tick() noexcept
   }
 
   if (gen != next_generation) {
-    LogFmt("glidecones: contour.Tick drop gen={} (superseded by {})",
-           gen, next_generation);
     NotifyReady();
     return;
   }
 
-  LogFmt("glidecones: contour.Tick done gen={} lines={}",
-         gen, out->contour_lines.size());
   ready = std::move(out);
   NotifyReady();
 }

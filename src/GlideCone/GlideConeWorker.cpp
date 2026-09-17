@@ -2,7 +2,6 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeWorker.hpp"
-#include "LogFile.hpp"
 
 bool
 GlideConeWorker::Request(GlideConeGridRequest request,
@@ -11,8 +10,6 @@ GlideConeWorker::Request(GlideConeGridRequest request,
 {
   try {
     const std::lock_guard lock{mutex};
-    LogFmt("glidecones: worker.Request gen={} combined={} radius={:.0f}",
-           request.generation, request.combined, request.radius_m);
     next = std::move(request);
     next_waypoints = waypoints;
     next_terrain = terrain;
@@ -20,7 +17,6 @@ GlideConeWorker::Request(GlideConeGridRequest request,
     return true;
   } catch (...) {
     /* thread failed to start; Draw keeps the last-good field */
-    LogFmt("glidecones: worker.Request exception (thread start failed)");
     return false;
   }
 }
@@ -53,9 +49,6 @@ GlideConeWorker::Tick() noexcept
   RasterTerrain *const terrain = next_terrain;
   next_terrain = nullptr;
 
-  LogFmt("glidecones: worker.Tick start gen={} combined={}",
-         request.generation, request.combined);
-
   std::unique_ptr<GlideConePreparedGrid> built;
   {
     const ScopeUnlock unlock{mutex};
@@ -63,12 +56,9 @@ GlideConeWorker::Tick() noexcept
       built = std::make_unique<GlideConePreparedGrid>();
       built->generation = request.generation;
       if (!BuildGlideConeGrid(request, dem, terrain, waypoints, *built)) {
-        LogFmt("glidecones: worker.Tick build failed gen={}",
-               request.generation);
         built->grid = {};
       }
     } catch (...) {
-      LogFmt("glidecones: worker.Tick exception gen={}", request.generation);
       built.reset();
     }
   }
@@ -76,8 +66,6 @@ GlideConeWorker::Tick() noexcept
   /* A newer Request() replaces #next while we were unlocked. */
   if (next.generation != 0 &&
       request.generation != next.generation) {
-    LogFmt("glidecones: worker.Tick drop gen={} (superseded by {})",
-           request.generation, next.generation);
     NotifyReady();
     return;
   }
@@ -92,8 +80,6 @@ GlideConeWorker::Tick() noexcept
     }
   }
 
-  LogFmt("glidecones: worker.Tick done gen={} valid={}",
-         request.generation, built->grid.IsValid());
   ready = std::move(built);
   NotifyReady();
 }

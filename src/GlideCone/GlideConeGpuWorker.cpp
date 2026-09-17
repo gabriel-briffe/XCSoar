@@ -3,7 +3,6 @@
 
 #include "GlideConeGpuWorker.hpp"
 #include "GlideConeCompute.hpp"
-#include "LogFile.hpp"
 #include "thread/StandbyThread.hpp"
 #include "thread/Mutex.hxx"
 
@@ -39,11 +38,9 @@ struct GlideConeGpuWorker::Impl
         cancel_gen.store(running_gen, std::memory_order_relaxed);
 
       next = std::move(prepared);
-      LogFmt("glidecones: GPU worker.Request gen={}", next->generation);
       Trigger();
       return true;
     } catch (...) {
-      LogFmt("glidecones: GPU worker.Request exception");
       return false;
     }
   }
@@ -61,7 +58,6 @@ struct GlideConeGpuWorker::Impl
     if (gen != 0)
       cancel_gen.store(gen, std::memory_order_relaxed);
     next.reset();
-    LogFmt("glidecones: GPU worker.Cancel gen={}", gen);
   }
 
   bool IsBusy() noexcept {
@@ -87,22 +83,17 @@ private:
     dpy = eglGetCurrentDisplay();
     const EGLContext ui_ctx = eglGetCurrentContext();
     if (dpy == EGL_NO_DISPLAY || ui_ctx == EGL_NO_CONTEXT) {
-      LogFmt("glidecones: GPU worker: no current EGL display/context");
       return false;
     }
 
     EGLint config_id = 0;
     if (!eglQueryContext(dpy, ui_ctx, EGL_CONFIG_ID, &config_id)) {
-      LogFmt("glidecones: GPU worker: eglQueryContext failed {:#x}",
-             eglGetError());
       return false;
     }
 
     const EGLint cfg_attrs[] = { EGL_CONFIG_ID, config_id, EGL_NONE };
     EGLint n = 0;
     if (!eglChooseConfig(dpy, cfg_attrs, &config, 1, &n) || n < 1) {
-      LogFmt("glidecones: GPU worker: eglChooseConfig failed {:#x}",
-             eglGetError());
       return false;
     }
 
@@ -114,8 +105,6 @@ private:
 
     compute_ctx = eglCreateContext(dpy, config, ui_ctx, es31_attrs);
     if (compute_ctx == EGL_NO_CONTEXT) {
-      LogFmt("glidecones: GPU worker: eglCreateContext(share) failed {:#x}",
-             eglGetError());
       return false;
     }
 
@@ -126,13 +115,11 @@ private:
     };
     compute_surf = eglCreatePbufferSurface(dpy, config, pbuffer_attrs);
     if (compute_surf == EGL_NO_SURFACE) {
-      LogFmt("glidecones: GPU worker: pbuffer failed {:#x}", eglGetError());
       eglDestroyContext(dpy, compute_ctx);
       compute_ctx = EGL_NO_CONTEXT;
       return false;
     }
 
-    LogFmt("glidecones: GPU worker: shared ES 3.1 context ready");
     return true;
   }
 
@@ -150,7 +137,6 @@ private:
     compute_surf = EGL_NO_SURFACE;
     compute_ctx = EGL_NO_CONTEXT;
     dpy = EGL_NO_DISPLAY;
-    LogFmt("glidecones: GPU worker: shared context destroyed");
   }
 
   void Tick() noexcept override {
@@ -162,9 +148,6 @@ private:
     const std::uint64_t gen = job->generation;
     running_gen = gen;
     cancel_gen.store(0, std::memory_order_relaxed);
-
-    LogFmt("glidecones: GPU worker.Tick start gen={} {}x{}",
-           gen, job->grid.width, job->grid.height);
 
     const auto should_abort = [&]() noexcept {
       if (IsStopped())
@@ -180,10 +163,7 @@ private:
     {
       const ScopeUnlock unlock{mutex};
 
-      if (!eglMakeCurrent(dpy, compute_surf, compute_surf, compute_ctx)) {
-        LogFmt("glidecones: GPU worker: MakeCurrent failed {:#x}",
-               eglGetError());
-      } else {
+      if (eglMakeCurrent(dpy, compute_surf, compute_surf, compute_ctx)) {
         ok = session.Run(out->prepared->grid, should_abort, out->result,
                          &hit_cap);
         eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -193,8 +173,6 @@ private:
     out->ok = ok;
     out->hit_iteration_cap = hit_cap;
     running_gen = 0;
-    LogFmt("glidecones: GPU worker.Tick done gen={} ok={} hit_cap={}",
-           gen, ok, hit_cap);
 
     if (ok)
       ready = std::move(out);

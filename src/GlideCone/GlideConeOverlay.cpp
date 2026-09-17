@@ -13,7 +13,6 @@
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Color.hpp"
 #include "ui/dim/BulkPoint.hpp"
-#include "LogFile.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -83,7 +82,6 @@ DrawClippedGeoPolylineBatched(Canvas &canvas,
 void
 GlideConeOverlay::InvalidateLabels() noexcept
 {
-  const bool had = label_cache_map_scale > 0 || !contour_labels.empty();
   contour_labels.clear();
   label_cache_map_scale = -1;
   label_cache_spacing = 0;
@@ -96,8 +94,6 @@ GlideConeOverlay::InvalidateLabels() noexcept
   label_rebuild_watch_center = GeoPoint::Invalid();
   label_rebuild_watch_angle = Angle::Zero();
   label_debounce_reason = nullptr;
-  if (had)
-    LogFmt("glidecones: labels invalidated");
 }
 
 void
@@ -117,12 +113,8 @@ GlideConeOverlay::ClearHoldRebase() noexcept
 void
 GlideConeOverlay::OnFieldInstalled(bool drop_labels) noexcept
 {
-  if (drop_labels) {
-    LogFmt("glidecones: InstallField drop label cache (rebase)");
+  if (drop_labels)
     InvalidateLabels();
-  } else {
-    LogFmt("glidecones: InstallField keep label cache (same origin)");
-  }
 }
 
 void
@@ -131,7 +123,6 @@ GlideConeOverlay::OnContoursReady() noexcept
   InvalidateLabels();
   if (labels_hold_rebase) {
     labels_hold_rebase = false;
-    LogFmt("glidecones: labels hold rebase released (contours ready)");
   }
 }
 
@@ -267,10 +258,7 @@ GlideConeOverlay::RebuildLabels(Canvas &canvas,
   label_debounce_reason = nullptr;
   if (labels_hold_rebase) {
     labels_hold_rebase = false;
-    LogFmt("glidecones: labels hold rebase cleared after rebuild");
   }
-  LogFmt("glidecones: label geo-cache rebuild n={} scale={:.0f}",
-         contour_labels.size(), label_cache_map_scale);
 }
 
 void
@@ -418,8 +406,9 @@ GlideConeOverlay::DrawContours(Canvas &canvas,
                                const GlideConeSettings &gc,
                                const MapLook &look,
                                bool hold_labels,
-                               bool awaiting_grid, bool awaiting_gpu,
-                               bool awaiting_contours) noexcept
+                               [[maybe_unused]] bool awaiting_grid,
+                               [[maybe_unused]] bool awaiting_gpu,
+                               [[maybe_unused]] bool awaiting_contours) noexcept
 {
   const bool show = projection.GetMapScale() <= gc.contours_min_scale;
   if (!show || field.contour_lines.empty()) {
@@ -482,12 +471,6 @@ GlideConeOverlay::DrawContours(Canvas &canvas,
 
   if (hold_labels) {
     if (label_rebuild_pending || label_debounce_reason != nullptr) {
-      LogFmt("glidecones: labels rebuild held "
-             "(grid={} gpu={} contours={} rebase={} was={})",
-             awaiting_grid, awaiting_gpu, awaiting_contours,
-             labels_hold_rebase,
-             label_debounce_reason != nullptr
-               ? label_debounce_reason : "-");
       label_debounce_reason = nullptr;
     }
     label_rebuild_pending = false;
@@ -495,7 +478,6 @@ GlideConeOverlay::DrawContours(Canvas &canvas,
     label_rebuild_pending = false;
     label_debounce_reason = nullptr;
   } else if (label_cache_map_scale < 0) {
-    LogFmt("glidecones: labels rebuild immediate (new contours)");
     RebuildLabels(canvas, projection, field, gc, look);
     label_rebuild_pending = false;
   } else {
@@ -517,9 +499,6 @@ GlideConeOverlay::DrawContours(Canvas &canvas,
       label_rebuild_watch_center = view_center;
       label_rebuild_watch_angle = view_angle;
       label_debounce_reason = dirty;
-      LogFmt("glidecones: labels debounce start reason={} "
-             "scale={:.0f} drift={:.0f}px angle={:.1f}deg",
-             dirty, map_scale, drift_px, angle_deg);
     } else if (still_moving) {
       label_rebuild_since = now;
       label_rebuild_watch_scale = map_scale;
@@ -527,12 +506,8 @@ GlideConeOverlay::DrawContours(Canvas &canvas,
       label_rebuild_watch_angle = view_angle;
       if (label_debounce_reason != dirty) {
         label_debounce_reason = dirty;
-        LogFmt("glidecones: labels debounce reset reason={}", dirty);
       }
     } else if (now - label_rebuild_since >= GLIDE_CONE_LABEL_DEBOUNCE) {
-      LogFmt("glidecones: labels debounce fire reason={}",
-             label_debounce_reason != nullptr
-               ? label_debounce_reason : dirty);
       RebuildLabels(canvas, projection, field, gc, look);
       label_rebuild_pending = false;
     }

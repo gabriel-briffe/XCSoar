@@ -7,7 +7,6 @@
 #include "Terrain/RasterProjection.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
-#include "LogFile.hpp"
 #include "util/ScopeExit.hxx"
 
 #include <algorithm>
@@ -21,7 +20,6 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
                    GlideConePreparedGrid &out) noexcept
 {
   if (!request.center.IsValid() || request.radius_m <= 0) {
-    LogFmt("glidecones: build: bad center/radius gen={}", request.generation);
     return false;
   }
 
@@ -40,7 +38,6 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   const GlideConeDemSampler::Lease lease{dem};
   const RasterMap &map = lease;
   if (!map.IsDefined()) {
-    LogFmt("glidecones: build: DEM undefined gen={}", request.generation);
     return false;
   }
 
@@ -93,7 +90,6 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   });
   const GeoBounds bounds{nw, se};
   if (!bounds.IsValid()) {
-    LogFmt("glidecones: build: invalid bounds gen={}", request.generation);
     return false;
   }
 
@@ -119,15 +115,10 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
               request.waypoint_settings.IsWaypointDisplayed(*wp))
             seeds.push_back(wp->location);
         });
-    LogFmt("glidecones: build: combined landables in range={} gen={}",
-           seeds.size(), request.generation);
     if (seeds.empty()) {
-      LogFmt("glidecones: build: no landables gen={}", request.generation);
       return false;
     }
   } else if (seeds.empty()) {
-    LogFmt("glidecones: build: single with empty seeds gen={}",
-           request.generation);
     return false;
   }
 
@@ -150,15 +141,8 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   }
 
   if (grid.seeds.empty()) {
-    LogFmt("glidecones: build: no seeds in grid gen={} candidates={}",
-           request.generation, seeds.size());
     return false;
   }
-
-  LogFmt("glidecones: build: ok gen={} {}x{} pool={} cell={:.0f}x{:.0f}m "
-         "seeds={}/{} dem={:.0f}x{:.0f}m",
-         request.generation, dim_x, dim_y, pool, cell_x, cell_y,
-         grid.seeds.size(), seeds.size(), dem_x, dem_y);
 
   out.generation = request.generation;
   out.center = request.center;

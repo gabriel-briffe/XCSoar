@@ -6,7 +6,6 @@
 #include "Terrain/Loader.hpp"
 #include "Profile/Profile.hpp"
 #include "Operation/Operation.hpp"
-#include "LogFile.hpp"
 
 bool
 GlideConeDemSampler::EnsureOverview(RasterTerrain *display) noexcept
@@ -40,12 +39,9 @@ GlideConeDemSampler::EnsureOverview(RasterTerrain *display) noexcept
     LoadTerrainOverview(archive->get(), map.GetTileCache(), env);
     map.UpdateProjection();
     overview_ready = map.IsDefined();
-    if (!overview_ready)
-      LogFmt("glidecones: dem: overview load failed");
 
     return overview_ready;
   } catch (...) {
-    LogError(std::current_exception(), "GlideCone DEM overview failed");
     overview_ready = false;
     archive.reset();
     return false;
@@ -65,7 +61,6 @@ GlideConeDemSampler::UpdateTiles(RasterTerrain *display,
     UpdateTerrainTiles(archive->get(), tile_cache, mutex,
                        map.GetProjection(), location, radius);
   } catch (...) {
-    LogError(std::current_exception(), "GlideCone DEM tile update failed");
   }
 
   return map.IsDirty();

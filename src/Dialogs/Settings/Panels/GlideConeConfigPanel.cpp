@@ -13,7 +13,6 @@
 #include "Units/Units.hpp"
 #include "Units/Descriptor.hpp"
 #include "util/StringFormat.hpp"
-#include "LogFile.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -258,12 +257,6 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValue(PanModePath, ProfileKeys::GlideConePanModePath,
                        glide_cone.pan_mode_path);
-
-  if (changed)
-    LogFmt("glidecones: config saved mode={} L/D={:.0f} max_alt={:.0f} "
-           "cell={:.0f}",
-           int(glide_cone.mode), glide_cone.glide_ratio,
-           glide_cone.max_altitude, glide_cone.cell_size);
 
   _changed |= changed;
   return true;

@@ -9,7 +9,6 @@
 #include "Terrain/RasterTerrain.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Renderer/WaypointRendererSettings.hpp"
-#include "LogFile.hpp"
 #include "ui/canvas/Canvas.hpp"
 
 #include <algorithm>
@@ -22,12 +21,6 @@ GlideConeRenderer::SetTarget(GeoPoint seed, double elevation) noexcept
   pending_seed_alt = elevation;
   pending_valid = seed.IsValid();
   ++pending_generation;
-  if (pending_valid)
-    LogFmt("glidecones: SetTarget gen={} lat={:.5f} lon={:.5f} elev={:.0f}",
-           pending_generation, seed.latitude.Degrees(),
-           seed.longitude.Degrees(), elevation);
-  else
-    LogFmt("glidecones: SetTarget gen={} invalid", pending_generation);
 }
 
 void
@@ -36,7 +29,6 @@ GlideConeRenderer::ClearTarget() noexcept
   const std::lock_guard lock{mutex};
   pending_valid = false;
   ++pending_generation;
-  LogFmt("glidecones: ClearTarget gen={}", pending_generation);
 }
 
 void
