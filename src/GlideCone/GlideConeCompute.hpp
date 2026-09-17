@@ -78,7 +78,12 @@ public:
 
 private:
   bool Begin(const GlideConeGrid &grid) noexcept;
-  /** @return true if the field converged (no cell changes). */
+  /**
+   * Run up to @p n iterations.  Change-count is read only at batch end
+   * once iterations_done exceeds max(width,height)/2+1, after a GPU
+   * fence signals the batch finished.
+   * @return true if the field converged (no cell changes in the batch).
+   */
   bool Dispatch(unsigned n) noexcept;
   bool Finish(GlideConeResult &out) noexcept;
   void DeleteBuffers() noexcept;

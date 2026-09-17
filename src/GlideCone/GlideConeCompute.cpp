@@ -529,34 +529,57 @@ GlideConeGpuSession::Dispatch(unsigned n) noexcept
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, change_buf);
 
   const unsigned batch = std::min(n, remaining);
-  for (unsigned i = 0; i < batch; ++i) {
+  /* Skip change-count readback until a batch ends past the Manhattan
+     radius of the grid — earlier iterations cannot have converged. */
+  const unsigned first_check_after =
+    std::max(width, height) / 2 + 1;
+  const bool check_changes =
+    iterations_done + batch > first_check_after;
+
+  if (check_changes) {
     const std::uint32_t zero = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(zero), &zero);
+  }
 
+  for (unsigned i = 0; i < batch; ++i) {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, cell_cur);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, cell_next);
     glDispatchCompute(wg_x, wg_y, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT |
-                    GL_BUFFER_UPDATE_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     std::swap(cell_cur, cell_next);
     --remaining;
     ++iterations_done;
+  }
 
-    std::uint32_t changes = 1;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
-    const auto *mapped = static_cast<const std::uint32_t *>(
-      glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sizeof(changes),
-                       GL_MAP_READ_BIT));
-    if (mapped != nullptr) {
-      changes = *mapped;
-      glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-    }
+  if (!check_changes)
+    return false;
 
-    if (changes == 0) {
-      remaining = 0;
-      return true;
-    }
+  /* Wait for the whole batch before mapping change_count. */
+  const GLsync fence =
+    glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  if (fence != nullptr) {
+    glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT,
+                     GL_TIMEOUT_IGNORED);
+    glDeleteSync(fence);
+  } else {
+    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+    glFinish();
+  }
+
+  std::uint32_t changes = 1;
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
+  const auto *mapped = static_cast<const std::uint32_t *>(
+    glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sizeof(changes),
+                     GL_MAP_READ_BIT));
+  if (mapped != nullptr) {
+    changes = *mapped;
+    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+  }
+
+  if (changes == 0) {
+    remaining = 0;
+    return true;
   }
   return false;
 }
