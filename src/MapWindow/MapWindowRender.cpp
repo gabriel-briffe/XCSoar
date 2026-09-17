@@ -304,7 +304,8 @@ MapWindow::Render(Canvas &canvas, const PixelRect &rc) noexcept
     const auto &task_stats = Calculated().task_stats;
     const GeoPoint gc_target = task_stats.current_leg.location_remaining;
     const bool gc_target_valid = task_stats.task_valid && gc_target.IsValid();
-    const GeoPoint pan_probe = IsPanning()
+    const GeoPoint pan_probe =
+      IsPanning() && GetComputerSettings().glide_cone.pan_mode_path
       ? render_projection.GetGeoLocation()
       : GeoPoint::Invalid();
     glide_cone_renderer.Draw(canvas, render_projection,

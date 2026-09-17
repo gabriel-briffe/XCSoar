@@ -131,7 +131,7 @@ Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
   map.Get(ProfileKeys::GlideConeCellSize, settings.cell_size);
   map.Get(ProfileKeys::GlideConeIterationCap, settings.iteration_cap);
   map.Get(ProfileKeys::GlideConeContours, settings.contours);
-  map.Get(ProfileKeys::GlideConeContourPolylines, settings.contour_polylines);
+  map.Get(ProfileKeys::GlideConePanModePath, settings.pan_mode_path);
   map.Get(ProfileKeys::GlideConeContoursMinScale, settings.contours_min_scale);
   map.Get(ProfileKeys::GlideConeLabelSpacing, settings.label_spacing);
   /* Was base pixels (20–400); now percent of min(screen side) (20–100). */

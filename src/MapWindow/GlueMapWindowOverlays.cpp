@@ -123,7 +123,8 @@ GlueMapWindow::DrawPanInfo(Canvas &canvas) const noexcept
     }
   }
 
-  if (GetComputerSettings().glide_cone.IsEnabled()) {
+  if (GetComputerSettings().glide_cone.IsEnabled() &&
+      GetComputerSettings().glide_cone.pan_mode_path) {
     if (const auto required =
           glide_cone_renderer.QueryRequiredAltitude(location)) {
       StaticString<64> glide_cone_long;

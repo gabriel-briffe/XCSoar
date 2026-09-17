@@ -12,12 +12,11 @@
 #include <vector>
 
 /**
- * Completed background contour build (raw segments or stitched
- * polylines) for a glide-cone field generation.
+ * Completed background contour build (stitched polylines) for a
+ * glide-cone field generation.
  */
 struct GlideConeContourReady {
   std::uint64_t generation = 0;
-  bool polylines = true;
   std::vector<GlideConeField::ContourLine> contour_lines;
 };
 
@@ -27,7 +26,6 @@ struct GlideConeContourReady {
  */
 class GlideConeContourWorker : private StandbyThread {
   std::uint64_t next_generation = 0;
-  bool next_polylines = true;
   double next_interval_m = 100;
   std::unique_ptr<GlideConeField> next_field;
 
@@ -52,7 +50,7 @@ public:
    * @return false if the worker thread could not be started.
    */
   bool Request(std::uint64_t generation, GlideConeField field,
-               bool polylines, double interval_m = 100) noexcept;
+               double interval_m = 100) noexcept;
 
   /** Take the latest completed contours, or nullptr. */
   std::unique_ptr<GlideConeContourReady> TakeReady() noexcept;

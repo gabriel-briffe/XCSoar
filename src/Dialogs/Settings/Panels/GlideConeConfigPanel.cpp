@@ -25,9 +25,9 @@ enum ControlIndex {
   CellSize,
   IterationCap,
   Contours,
-  ContourPolylines,
   ContoursMinScale,
   LabelSpacing,
+  PanModePath,
 };
 
 static constexpr StaticEnumChoice glide_cone_mode_list[] = {
@@ -186,12 +186,6 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
              _("Draw 100 m altitude contour lines of the reachable area."),
              glide_cone.contours);
 
-  AddBoolean(_("Polylines"),
-             _("On: stitch contour edges into continuous polylines and "
-               "draw labels.  Off: draw raw marching-squares segments "
-               "(debug)."),
-             glide_cone.contour_polylines);
-
   /* UI is map-ruler distance (scale bar); store is GetMapScale() metres. */
   const unsigned list_max = GetDefaultMaxThresholdUser();
   const double ruler_user = Units::ToUserDistance(
@@ -210,6 +204,11 @@ GlideConeConfigPanel::Prepare(ContainerWindow &parent,
              _("Minimum screen distance between labels of the same "
                "altitude, as a percentage of the shorter map side."),
              "%d %%", "%d", 20, 100, 5, int(glide_cone.label_spacing));
+
+  AddBoolean(_("Pan mode path"),
+             _("Draw the glide path and GlideCone altitude at the pan "
+               "crosshair while panning the map."),
+             glide_cone.pan_mode_path);
 }
 
 bool
@@ -239,10 +238,6 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
   changed |= SaveValue(Contours, ProfileKeys::GlideConeContours,
                        glide_cone.contours);
 
-  changed |= SaveValue(ContourPolylines,
-                       ProfileKeys::GlideConeContourPolylines,
-                       glide_cone.contour_polylines);
-
   const unsigned ruler_user = GetValueEnum(ContoursMinScale);
   const double map_scale_m = std::max(
     1., Units::ToSysDistance(double(ruler_user)) / map_scale_to_ruler);
@@ -260,6 +255,9 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
     Profile::Set(ProfileKeys::GlideConeLabelSpacing, glide_cone.label_spacing);
     changed = true;
   }
+
+  changed |= SaveValue(PanModePath, ProfileKeys::GlideConePanModePath,
+                       glide_cone.pan_mode_path);
 
   if (changed)
     LogFmt("glidecones: config saved mode={} L/D={:.0f} max_alt={:.0f} "

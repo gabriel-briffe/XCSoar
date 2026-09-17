@@ -44,7 +44,6 @@ class GlideConeJobController {
   std::size_t computed_signature = 0;
   Serial computed_waypoint_serial{};
   bool computed_contours = false;
-  bool computed_contour_polylines = true;
 
   /**
    * When true, next successful InstallField drops the geo label cache
@@ -131,5 +130,5 @@ private:
                     GlideConePreparedGrid &&prepared,
                     GlideConeResult &&result) noexcept;
 
-  void RequestContours(GlideConeField &field, bool polylines) noexcept;
+  void RequestContours(GlideConeField &field) noexcept;
 };

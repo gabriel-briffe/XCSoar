@@ -28,32 +28,6 @@ static constexpr double GLIDE_CONE_SEED_EPSILON_M = 50;
 static constexpr std::chrono::milliseconds GLIDE_CONE_LABEL_DEBOUNCE{100};
 
 /**
- * Draw a geo polyline clipped to the visible map (one DrawLine per
- * edge).  Used when Contour Polylines is off.
- */
-static void
-DrawClippedGeoPolyline(Canvas &canvas,
-                       const WindowProjection &projection,
-                       const GeoClip &clip,
-                       std::span<const GeoPoint> points) noexcept
-{
-  if (points.size() < 2)
-    return;
-
-  for (std::size_t i = 1; i < points.size(); ++i) {
-    GeoPoint a = points[i - 1];
-    GeoPoint b = points[i];
-    if (!a.IsValid() || !b.IsValid())
-      continue;
-    if (!clip.ClipLine(a, b))
-      continue;
-
-    canvas.DrawLine(projection.GeoToScreen(a),
-                    projection.GeoToScreen(b));
-  }
-}
-
-/**
  * Clip geo edges, then stroke contiguous visible runs with
  * Canvas::DrawPolyline.
  */
@@ -456,18 +430,13 @@ GlideConeOverlay::DrawContours(Canvas &canvas,
   const GeoClip clip(projection.GetScreenBounds().Scale(1.1));
 
   canvas.Select(look.glide_cone_contour_pen);
-  if (gc.contour_polylines) {
-    std::vector<BulkPixelPoint> run;
-    run.reserve(64);
-    for (const auto &line : field.contour_lines)
-      DrawClippedGeoPolylineBatched(canvas, projection, clip,
-                                    line.points, run);
-  } else {
-    for (const auto &line : field.contour_lines)
-      DrawClippedGeoPolyline(canvas, projection, clip, line.points);
-  }
+  std::vector<BulkPixelPoint> run;
+  run.reserve(64);
+  for (const auto &line : field.contour_lines)
+    DrawClippedGeoPolylineBatched(canvas, projection, clip,
+                                  line.points, run);
 
-  if (!gc.contour_polylines || look.overlay.overlay_font == nullptr)
+  if (look.overlay.overlay_font == nullptr)
     return;
 
   const unsigned pct = std::clamp(gc.label_spacing, 20u, 100u);

@@ -435,7 +435,7 @@ StitchRawSegments(const std::vector<RawSeg> &segs, std::size_t n_edges,
 } // anonymous namespace
 
 void
-GlideConeField::BuildContours(double interval_m, bool polylines) noexcept
+GlideConeField::BuildContours(double interval_m) noexcept
 {
   contour_lines.clear();
   if (!IsValid() || interval_m <= 0)
@@ -556,12 +556,6 @@ GlideConeField::BuildContours(double interval_m, bool polylines) noexcept
           });
         }
       }
-    }
-
-    if (!polylines) {
-      for (const auto &s : segs)
-        contour_lines.push_back({{s.p0, s.p1}, level});
-      continue;
     }
 
     StitchRawSegments(segs, n_edges, level, contour_lines);

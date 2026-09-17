@@ -9,18 +9,16 @@
 bool
 GlideConeContourWorker::Request(std::uint64_t generation,
                                 GlideConeField field,
-                                bool polylines,
                                 double interval_m) noexcept
 {
   try {
     const std::lock_guard lock{mutex};
     next_generation = generation;
-    next_polylines = polylines;
     next_interval_m = interval_m;
     next_field = std::make_unique<GlideConeField>(std::move(field));
     next_field->contour_lines.clear();
-    LogFmt("glidecones: contour.Request gen={} polylines={} {}x{}",
-           generation, polylines,
+    LogFmt("glidecones: contour.Request gen={} {}x{}",
+           generation,
            next_field->result.width, next_field->result.height);
     Trigger();
     return true;
@@ -67,27 +65,23 @@ GlideConeContourWorker::Tick() noexcept
 
   std::unique_ptr<GlideConeField> job;
   std::uint64_t gen;
-  bool polylines;
   double interval_m;
   {
     job = std::move(next_field);
     if (job == nullptr)
       return;
     gen = next_generation;
-    polylines = next_polylines;
     interval_m = next_interval_m;
   }
 
-  LogFmt("glidecones: contour.Tick start gen={} polylines={}",
-         gen, polylines);
+  LogFmt("glidecones: contour.Tick start gen={}", gen);
 
   auto out = std::make_unique<GlideConeContourReady>();
   out->generation = gen;
-  out->polylines = polylines;
 
   {
     const ScopeUnlock unlock{mutex};
-    job->BuildContours(interval_m, polylines);
+    job->BuildContours(interval_m);
     out->contour_lines = std::move(job->contour_lines);
   }
 

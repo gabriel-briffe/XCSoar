@@ -140,8 +140,7 @@ GlideConeJobController::InstallField(GlideConeField &field,
 }
 
 void
-GlideConeJobController::RequestContours(GlideConeField &field,
-                                        bool polylines) noexcept
+GlideConeJobController::RequestContours(GlideConeField &field) noexcept
 {
   if (!field.IsValid())
     return;
@@ -149,8 +148,7 @@ GlideConeJobController::RequestContours(GlideConeField &field,
   ++contour_generation;
   GlideConeField snapshot = field;
   snapshot.contour_lines.clear();
-  if (contour_worker.Request(contour_generation, std::move(snapshot),
-                             polylines)) {
+  if (contour_worker.Request(contour_generation, std::move(snapshot))) {
     awaiting_contours = true;
     computed_contours = false;
   } else {
@@ -182,27 +180,23 @@ GlideConeJobController::SetReadyCallback(std::function<void()> callback) noexcep
 void
 GlideConeJobController::UpdateContours(GlideConeField &field,
                                        GlideConeOverlay &overlay,
-                                       const GlideConeSettings &gc) noexcept
+                                       [[maybe_unused]] const GlideConeSettings &gc) noexcept
 {
   if (auto ready = contour_worker.TakeReady()) {
     awaiting_contours = false;
     if (ready->generation == contour_generation) {
       field.contour_lines = std::move(ready->contour_lines);
       computed_contours = true;
-      computed_contour_polylines = ready->polylines;
       overlay.OnContoursReady();
-      LogFmt("glidecones: contours ready gen={} lines={} polylines={}",
-             ready->generation, field.contour_lines.size(),
-             ready->polylines);
+      LogFmt("glidecones: contours ready gen={} lines={}",
+             ready->generation, field.contour_lines.size());
     }
   } else if (!contour_worker.IsBusy()) {
     awaiting_contours = false;
   }
 
-  const bool need_contours = !computed_contours ||
-    computed_contour_polylines != gc.contour_polylines;
-  if (need_contours && !awaiting_contours && !contour_worker.IsBusy())
-    RequestContours(field, gc.contour_polylines);
+  if (!computed_contours && !awaiting_contours && !contour_worker.IsBusy())
+    RequestContours(field);
 }
 
 bool

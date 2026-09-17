@@ -60,11 +60,10 @@ struct GlideConeSettings {
   bool contours;
 
   /**
-   * When true (default), stitch marching-squares edges into continuous
-   * polylines and draw altitude labels.  When false, draw only the raw
-   * per-cell segments (debug).
+   * When true (default), draw the relay path and GlideCone altitude
+   * text at the pan crosshair while the map is panning.
    */
-  bool contour_polylines;
+  bool pan_mode_path;
 
   /**
    * Only show contours and labels when #WindowProjection::GetMapScale()
