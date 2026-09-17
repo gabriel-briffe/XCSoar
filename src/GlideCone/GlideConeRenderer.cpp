@@ -87,10 +87,13 @@ GlideConeRenderer::DrawField(Canvas &canvas,
 
   if (aircraft_valid) {
     const auto required = field.RequiredAltitude(aircraft);
-    if (required)
-      GlideConeStatus::Set({true, *required});
-    else
+    if (required) {
+      const auto path_distance = field.PathDistance(aircraft);
+      GlideConeStatus::Set({true, *required,
+                            path_distance ? *path_distance : 0.});
+    } else {
       GlideConeStatus::SetInvalid();
+    }
   } else {
     GlideConeStatus::SetInvalid();
   }

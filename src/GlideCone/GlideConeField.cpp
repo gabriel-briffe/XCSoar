@@ -161,6 +161,25 @@ GlideConeField::Trace(GeoPoint from) const noexcept
   return path;
 }
 
+std::optional<double>
+GlideConeField::PathDistance(GeoPoint from) const noexcept
+{
+  const auto path = Trace(from);
+  if (path.size() < 2)
+    return std::nullopt;
+
+  double distance_m = 0;
+  for (std::size_t i = 1; i < path.size(); ++i) {
+    const GeoPoint a = CellToGeo(path[i - 1].x, path[i - 1].y);
+    const GeoPoint b = CellToGeo(path[i].x, path[i].y);
+    if (!a.IsValid() || !b.IsValid())
+      return std::nullopt;
+    distance_m += a.DistanceS(b);
+  }
+
+  return distance_m;
+}
+
 bool
 GlideConeField::IsDownhillGroundSegment(int from_x, int from_y,
                                         int to_x, int to_y) const noexcept

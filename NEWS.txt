@@ -13,7 +13,8 @@ Version 7.46 - not yet released
     interactive; the last path and InfoBox value remain until the new
     field is ready.  The Glide Cone InfoBox reconstructs required
     altitude on ground cells from the first air cell plus distance /
-    L/D.  Pan-mode path and altitude at the crosshair can be toggled
+    L/D; a Glide Cone Distance InfoBox shows the Euclidean path length.
+    Pan-mode path and altitude at the crosshair can be toggled
     in settings
 * android
   - target Android 16 so Google Play still accepts updates #2874

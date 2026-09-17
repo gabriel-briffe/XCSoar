@@ -13,3 +13,10 @@ public:
   void Update(InfoBoxData &data) noexcept override;
   const InfoBoxPanel *GetDialogContent() noexcept override;
 };
+
+/** Euclidean ground distance along the glide-cone relay path. */
+class InfoBoxContentGlideConeDist : public InfoBoxContent {
+public:
+  void Update(InfoBoxData &data) noexcept override;
+  const InfoBoxPanel *GetDialogContent() noexcept override;
+};
