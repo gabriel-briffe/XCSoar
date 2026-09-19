@@ -10,11 +10,13 @@
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
 #include "MapSettings.hpp"
+#include "util/Macros.hpp"
 
 enum ControlIndex {
   DISPLAY_TRACK_BEARING,
   ENABLE_FLARM_MAP,
   TRAFFIC_SYMBOL,
+  TRAFFIC_SYMBOL_STYLE,
   FADE_TRAFFIC,
   TRAIL_LENGTH,
   TRAIL_VBO,
@@ -36,6 +38,7 @@ public:
 
 public:
   void ShowTrailControls(bool show);
+  void ShowTrafficSymbolStyle(bool show);
 
   /* methods from Widget */
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
@@ -56,12 +59,22 @@ SymbolsConfigPanel::ShowTrailControls(bool show)
 }
 
 void
+SymbolsConfigPanel::ShowTrafficSymbolStyle(bool show)
+{
+  SetRowVisible(TRAFFIC_SYMBOL_STYLE, show);
+}
+
+void
 SymbolsConfigPanel::OnModified(DataField &df) noexcept
 {
   if (IsDataField(TRAIL_LENGTH, df)) {
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
     TrailSettings::Length trail_length = (TrailSettings::Length)dfe.GetValue();
     ShowTrailControls(trail_length != TrailSettings::Length::OFF);
+  } else if (IsDataField(TRAFFIC_SYMBOL, df)) {
+    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
+    ShowTrafficSymbolStyle(TrafficSymbol(dfe.GetValue()) ==
+                           TrafficSymbol::AIRCRAFT_TYPE);
   }
 }
 
@@ -125,6 +138,26 @@ static constexpr StaticEnumChoice traffic_symbol_list[] = {
   nullptr
 };
 
+static_assert(ARRAY_SIZE(traffic_symbol_list) ==
+              unsigned(TrafficSymbol::COUNT) + 1);
+
+static constexpr StaticEnumChoice traffic_symbol_style_list[] = {
+  { AircraftTypeSymbolStyle::COLOURED_HALO, N_("Colored halo"),
+    N_("The silhouette is filled with the traffic colour; the glyph is black.") },
+  { AircraftTypeSymbolStyle::COLOURED_HALO_OUTLINED, N_("Colored halo with border"),
+    N_("Like Colored halo, plus a thin border around the silhouette.") },
+  { AircraftTypeSymbolStyle::WHITE_HALO, N_("White halo, colored glyph"),
+    N_("White silhouette with the traffic colour in the glyph. Calm on the map; "
+       "the halo vanishes on a white radar background.") },
+  { AircraftTypeSymbolStyle::BLACK_OUTLINE, N_("Black outline"),
+    N_("No halo; the glyph is filled with the traffic colour and outlined in black, "
+       "like the classic arrow head.") },
+  nullptr
+};
+
+static_assert(ARRAY_SIZE(traffic_symbol_style_list) ==
+              unsigned(AircraftTypeSymbolStyle::COUNT) + 1);
+
 static constexpr StaticEnumChoice wind_arrow_list[] = {
   { WindArrowStyle::NO_ARROW, N_("Off"), N_("No wind arrow is drawn.") },
   { WindArrowStyle::ARROW_HEAD, N_("Arrow head"), N_("Draws an arrow head only.") },
@@ -154,7 +187,12 @@ SymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
 
   AddEnum(_("Traffic symbol"),
           _("Determines how FLARM, ADS-B and online traffic is drawn on the map and the traffic radar."),
-          traffic_symbol_list, (unsigned)settings_map.traffic_symbol);
+          traffic_symbol_list, (unsigned)settings_map.traffic_symbol, this);
+
+  AddEnum(_("Traffic symbol style"),
+          _("How aircraft-type traffic symbols are coloured (halo and glyph)."),
+          traffic_symbol_style_list,
+          (unsigned)settings_map.traffic_symbol_style);
 
   AddBoolean(_("Fade traffic"), _("Keep showing traffic for a while after it has disappeared."),
              settings_map.fade_traffic);
@@ -213,6 +251,8 @@ SymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
              settings_map.distance_rings_enabled);
 
   ShowTrailControls(settings_map.trail.length != TrailSettings::Length::OFF);
+  ShowTrafficSymbolStyle(settings_map.traffic_symbol ==
+                         TrafficSymbol::AIRCRAFT_TYPE);
 }
 
 bool
@@ -230,6 +270,10 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValueEnum(TRAFFIC_SYMBOL, ProfileKeys::TrafficSymbol,
                            settings_map.traffic_symbol);
+
+  changed |= SaveValueEnum(TRAFFIC_SYMBOL_STYLE,
+                           ProfileKeys::TrafficSymbolStyle,
+                           settings_map.traffic_symbol_style);
 
   changed |= SaveValue(FADE_TRAFFIC, ProfileKeys::FadeTraffic,
                        settings_map.fade_traffic);

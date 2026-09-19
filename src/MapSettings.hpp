@@ -32,6 +32,24 @@ enum class TrafficSymbol : uint8_t {
   ARROW,
   /** a glyph per FLARM aircraft type, a generic one for unknown types */
   AIRCRAFT_TYPE,
+
+  COUNT
+};
+
+/**
+ * How aircraft-type traffic symbols are composed (halo + glyph).
+ */
+enum class AircraftTypeSymbolStyle : uint8_t {
+  /** traffic colour fills the halo; glyph is black */
+  COLOURED_HALO,
+  /** like COLOURED_HALO plus a 1 px border */
+  COLOURED_HALO_OUTLINED,
+  /** white halo; glyph carries the traffic colour */
+  WHITE_HALO,
+  /** no halo; glyph filled with traffic colour, black outline */
+  BLACK_OUTLINE,
+
+  COUNT
 };
 
 enum class MapOrientation : uint8_t {
@@ -165,6 +183,9 @@ struct MapSettings {
 
   /** The symbol style of traffic on the map, radar and in lists */
   TrafficSymbol traffic_symbol;
+
+  /** Halo/glyph composition when traffic_symbol is AIRCRAFT_TYPE */
+  AircraftTypeSymbolStyle traffic_symbol_style;
 
   /**
    * This is an inverted copy of TrafficSettings::enable_gauge.  The

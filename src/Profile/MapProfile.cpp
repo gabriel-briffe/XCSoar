@@ -46,6 +46,7 @@ Profile::Load(const ProfileMap &map, MapSettings &settings)
 
   map.GetEnum(ProfileKeys::AircraftSymbol, settings.aircraft_symbol);
   map.GetEnum(ProfileKeys::TrafficSymbol, settings.traffic_symbol);
+  map.GetEnum(ProfileKeys::TrafficSymbolStyle, settings.traffic_symbol_style);
 
   map.Get(ProfileKeys::DetourCostMarker, settings.detour_cost_markers_enabled);
   map.GetEnum(ProfileKeys::DisplayTrackBearing, settings.display_ground_track);

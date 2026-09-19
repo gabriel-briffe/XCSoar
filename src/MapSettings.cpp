@@ -42,6 +42,7 @@ MapSettings::SetDefaults() noexcept
   cruise_scale = 1 / 60.;
   show_flarm_on_map = true;
   traffic_symbol = TrafficSymbol::AIRCRAFT_TYPE;
+  traffic_symbol_style = AircraftTypeSymbolStyle::COLOURED_HALO;
   show_flarm_alarm_level = true;
   fade_traffic = true;
   show_thermal_profile = true;

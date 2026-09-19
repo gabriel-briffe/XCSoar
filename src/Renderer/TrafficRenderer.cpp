@@ -150,6 +150,7 @@ TrafficRenderer::DrawAircraftTypeSymbol(Canvas &canvas,
                                         FlarmTraffic::AircraftType type,
                                         const Angle angle, const PixelPoint pt,
                                         const unsigned size,
+                                        AircraftTypeSymbolStyle style,
                                         const Color body_color,
                                         const Color glyph_color,
                                         const Color halo_color,
@@ -163,13 +164,13 @@ TrafficRenderer::DrawAircraftTypeSymbol(Canvas &canvas,
      native object into the device context) */
   const Brush body_brush(body_color);
 
-  if (AIRCRAFT_TYPE_SYMBOL_STYLE == AircraftTypeSymbolStyle::COLOURED_HALO ||
-      AIRCRAFT_TYPE_SYMBOL_STYLE == AircraftTypeSymbolStyle::COLOURED_HALO_OUTLINED) {
+  if (style == AircraftTypeSymbolStyle::COLOURED_HALO ||
+      style == AircraftTypeSymbolStyle::COLOURED_HALO_OUTLINED) {
     const Brush glyph_brush(glyph_color);
 
     /* the halo silhouette carries the traffic colour, optionally with
        the same border the classic arrow head would have */
-    if (AIRCRAFT_TYPE_SYMBOL_STYLE == AircraftTypeSymbolStyle::COLOURED_HALO)
+    if (style == AircraftTypeSymbolStyle::COLOURED_HALO)
       canvas.SelectNullPen();
     else
       canvas.Select(border_pen);
@@ -184,7 +185,7 @@ TrafficRenderer::DrawAircraftTypeSymbol(Canvas &canvas,
     DrawSymbolShape(canvas, symbol.glyph, angle, pt, size, false);
     canvas.Select(body_brush);
     DrawSymbolShape(canvas, symbol.glyph, angle, pt, size, true);
-  } else if (AIRCRAFT_TYPE_SYMBOL_STYLE == AircraftTypeSymbolStyle::WHITE_HALO) {
+  } else if (style == AircraftTypeSymbolStyle::WHITE_HALO) {
     const Brush halo_brush(halo_color);
 
     /* the halo keeps the icon's white and separates the glyph from
@@ -304,7 +305,8 @@ DrawFlarmArrow(Canvas &canvas, const TrafficLook &traffic_look,
 
 static void
 DrawFlarmSymbol(Canvas &canvas, const TrafficLook &traffic_look,
-                TrafficSymbol symbol, bool fading,
+                TrafficSymbol symbol, AircraftTypeSymbolStyle symbol_style,
+                bool fading,
                 const FlarmTraffic &traffic,
                 const Angle angle, const FlarmColor color,
                 const PixelPoint pt,
@@ -317,6 +319,7 @@ DrawFlarmSymbol(Canvas &canvas, const TrafficLook &traffic_look,
     else
       TrafficRenderer::DrawAircraftTypeSymbol(canvas, traffic.type,
                                               angle, pt, scale.symbol_size,
+                                              symbol_style,
                                               traffic_look.GetBodyColor(traffic),
                                               traffic_look.symbol_glyph_color,
                                               traffic_look.symbol_halo_color,
@@ -353,28 +356,31 @@ TrafficRenderer::MapLabelLayout() noexcept
 
 void
 TrafficRenderer::Draw(Canvas &canvas, const TrafficLook &traffic_look,
-                      TrafficSymbol symbol, bool fading,
+                      TrafficSymbol symbol,
+                      AircraftTypeSymbolStyle symbol_style, bool fading,
                       const FlarmTraffic &traffic, const Angle angle,
                       const FlarmColor color, const PixelPoint pt) noexcept
 {
-  DrawFlarmSymbol(canvas, traffic_look, symbol, fading, traffic, angle,
-                  color, pt, GetMapTrafficScale());
+  DrawFlarmSymbol(canvas, traffic_look, symbol, symbol_style, fading, traffic,
+                  angle, color, pt, GetMapTrafficScale());
 }
 
 void
 TrafficRenderer::DrawList(Canvas &canvas, const TrafficLook &traffic_look,
                           TrafficSymbol symbol,
+                          AircraftTypeSymbolStyle symbol_style,
                           const FlarmTraffic &traffic, const Angle angle,
                           const FlarmColor color, const PixelPoint pt,
                           unsigned icon_size) noexcept
 {
-  DrawFlarmSymbol(canvas, traffic_look, symbol, false, traffic, angle,
-                  color, pt, MapTrafficScaleFromIconSize(icon_size));
+  DrawFlarmSymbol(canvas, traffic_look, symbol, symbol_style, false, traffic,
+                  angle, color, pt, MapTrafficScaleFromIconSize(icon_size));
 }
 
 void
 TrafficRenderer::Draw(Canvas &canvas, const TrafficLook &traffic_look,
                       TrafficSymbol symbol,
+                      AircraftTypeSymbolStyle symbol_style,
                       [[maybe_unused]] const GliderLinkTraffic &traffic,
                       const Angle angle, const PixelPoint pt) noexcept
 {
@@ -384,7 +390,7 @@ TrafficRenderer::Draw(Canvas &canvas, const TrafficLook &traffic_look,
     /* GliderLink carries no aircraft type; everything on that
        network is a glider */
     DrawAircraftTypeSymbol(canvas, FlarmTraffic::AircraftType::GLIDER,
-                           angle, pt, scale.symbol_size,
+                           angle, pt, scale.symbol_size, symbol_style,
                            traffic_look.safe_above_color,
                            traffic_look.symbol_glyph_color,
                            traffic_look.symbol_halo_color,

@@ -510,6 +510,8 @@ FlarmTrafficWindow::PaintRadarTarget(Canvas &canvas,
     TrafficRenderer::DrawAircraftTypeSymbol(canvas, traffic.type,
                                             symbol_angle, sc[i],
                                             RadarSymbolSize(icon_size),
+                                            CommonInterface::GetMapSettings()
+                                              .traffic_symbol_style,
                                             *target_brush_color,
                                             *glyph_color,
                                             look.background_color,
