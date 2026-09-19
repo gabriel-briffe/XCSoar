@@ -32,4 +32,7 @@ void
 dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept;
 
 void
+dlgConfigDataShowModal(UI::SingleWindow &parent) noexcept;
+
+void
 dlgConfigToolsShowModal(UI::SingleWindow &parent) noexcept;

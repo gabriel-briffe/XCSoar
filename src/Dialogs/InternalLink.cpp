@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright The XCSoar Project
 
-#include "InternalLink.hpp"
+#include "Dialogs/InternalLink.hpp"
 #include "util/StringCompare.hxx"
 #include "Dialogs/Dialogs.h"
 #include "Dialogs/Device/DeviceListDialog.hpp"
 #include "Dialogs/Plane/PlaneDialogs.hpp"
 #include "Dialogs/Task/TaskDialogs.hpp"
 #include "Dialogs/dlgAnalysis.hpp"
-#include "Dialogs/WidgetDialog.hpp"
 #include "Dialogs/dlgGestureHelp.hpp"
 #include "Dialogs/ReplayDialog.hpp"
 #include "Dialogs/Settings/Panels/SiteConfigPanel.hpp"
@@ -24,45 +23,15 @@
 #include "Dialogs/Settings/Panels/TerrainDisplayConfigPanel.hpp"
 #include "Dialogs/DataManagement/BackupRestorePanel.hpp"
 #include "Widget/Widget.hpp"
-#include "Look/DialogLook.hpp"
 #include "UIGlobals.hpp"
 #include "Interface.hpp"
 #include "MainWindow.hpp"
-#include "Profile/Profile.hpp"
 #include "UtilsSettings.hpp"
 #include "Computer/Settings.hpp"
 #include "Components.hpp"
 #include "BackendComponents.hpp"
 #include "DataComponents.hpp"
 #include "Language/Language.hpp"
-
-void
-ShowConfigPanel(const char *title,
-                std::unique_ptr<Widget> (*create_panel)())
-{
-  const UISettings old_ui_settings = CommonInterface::GetUISettings();
-  SettingsEnter();
-
-  try {
-    const DialogLook &look = UIGlobals::GetDialogLook();
-    WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
-                        look, title);
-    auto panel = create_panel();
-    dialog.FinishPreliminary(std::move(panel));
-    dialog.AddButton(_("Close"), mrOK);
-    dialog.ShowModal();
-    if (dialog.GetChanged())
-      Profile::Save();
-  } catch (...) {
-    SettingsLeave(old_ui_settings);
-    throw;
-  }
-
-  /* Always run leave: resumes threads suspended in SettingsEnter() and
-     applies any change flags set by the panel Save() (same as
-     SystemConfiguration after dlgConfigurationShowModal). */
-  SettingsLeave(old_ui_settings);
-}
 
 /**
  * Table of config panel links that all follow the

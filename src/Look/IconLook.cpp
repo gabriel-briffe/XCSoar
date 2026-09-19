@@ -28,4 +28,12 @@ IconLook::Initialise()
   hBmpConfigLua.LoadResource(IDB_LUA_ALL);
   hBmpConfigUpload.LoadResource(IDB_UPLOAD_ALL);
   hBmpConfigHidden.LoadResource(IDB_HIDDEN_ALL);
+  hBmpConfigDisplay.LoadResource(IDB_DISPLAY_ALL);
+  hBmpConfigMap.LoadResource(IDB_MAP_ALL);
+  hBmpConfigGauges.LoadResource(IDB_GAUGES_ALL);
+  hBmpConfigInfoBoxes.LoadResource(IDB_INFOBOXES_ALL);
+  hBmpConfigOrientation.LoadResource(IDB_ORIENTATION_ALL);
+  hBmpConfigWaypoints.LoadResource(IDB_WAYPOINTS_ALL);
+  hBmpConfigTerrain.LoadResource(IDB_TERRAIN_ICON_ALL);
+  hBmpConfigTopology.LoadResource(IDB_TOPOLOGY_ALL);
 }

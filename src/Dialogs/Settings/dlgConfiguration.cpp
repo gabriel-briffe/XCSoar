@@ -2,9 +2,11 @@
 // Copyright The XCSoar Project
 
 #include "Dialogs/Dialogs.h"
+#include "Dialogs/InternalLink.hpp"
 #include "Dialogs/Message.hpp"
 #include "Widget/ArrowPagerWidget.hpp"
 #include "Widget/CreateWindowWidget.hpp"
+#include "Widget/Widget.hpp"
 #include "Dialogs/WidgetDialog.hpp"
 #include "Look/DialogLook.hpp"
 #include "UIGlobals.hpp"
@@ -35,6 +37,7 @@
 #include "Panels/RouteConfigPanel.hpp"
 #include "Panels/InterfaceConfigPanel.hpp"
 #include "Panels/LayoutConfigPanel.hpp"
+#include "Panels/InfoBoxLayoutConfigPanel.hpp"
 #include "Panels/GaugesConfigPanel.hpp"
 #include "Panels/VarioConfigPanel.hpp"
 #include "Panels/TaskRulesConfigPanel.hpp"
@@ -142,6 +145,7 @@ static constexpr TabMenuPage look_pages[] = {
   { N_("Language, Input"), CreateInterfaceConfigPanel },
   { N_("Screen Layout"), CreateLayoutConfigPanel },
   { N_("Pages"), CreatePagesConfigPanel },
+  { N_("InfoBox Layout"), CreateInfoBoxLayoutConfigPanel },
   { N_("InfoBox Sets"), CreateInfoBoxesConfigPanel },
   { N_("Quick Menu"), CreateQuickMenuConfigPanel },
   { nullptr, nullptr }
@@ -309,6 +313,9 @@ void
 ConfigPanel::BorrowExtraButton(unsigned i, const char *caption,
                                std::function<void()> callback) noexcept
 {
+  if (pager == nullptr)
+    return;
+
   ConfigurationExtraButtons &extra =
     (ConfigurationExtraButtons &)pager->GetExtra();
   Button &button = extra.GetButton(i);
@@ -320,6 +327,9 @@ ConfigPanel::BorrowExtraButton(unsigned i, const char *caption,
 void
 ConfigPanel::ReturnExtraButton(unsigned i)
 {
+  if (pager == nullptr)
+    return;
+
   ConfigurationExtraButtons &extra =
     (ConfigurationExtraButtons &)pager->GetExtra();
   Button &button = extra.GetButton(i);
@@ -439,4 +449,41 @@ void dlgConfigurationShowModal()
       ShowMessageBox(_("Changes to configuration saved. Restart XCSoar to apply changes."),
                   "", MB_OK);
   }
+
+  pager = nullptr;
+}
+
+void
+ShowConfigPanel(const char *title,
+                std::unique_ptr<Widget> (*create_panel)())
+{
+  const UISettings old_ui_settings = CommonInterface::GetUISettings();
+  SettingsEnter();
+
+  ArrowPagerWidget *const previous_pager = pager;
+
+  try {
+    const DialogLook &look = UIGlobals::GetDialogLook();
+    WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
+                        look, title);
+
+    /* Same host as dlgConfigurationShowModal so panels that call
+       ConfigPanel::BorrowExtraButton (Filter, Colours, …) work. */
+    pager = new ArrowPagerWidget(look.button,
+                                 [&dialog](){ dialog.SetModalResult(mrOK); },
+                                 std::make_unique<ConfigurationExtraButtons>(look));
+    pager->Add(create_panel());
+    dialog.FinishPreliminary(pager);
+    dialog.ShowModal();
+
+    if (dialog.GetChanged())
+      Profile::Save();
+  } catch (...) {
+    pager = previous_pager;
+    SettingsLeave(old_ui_settings);
+    throw;
+  }
+
+  pager = previous_pager;
+  SettingsLeave(old_ui_settings);
 }

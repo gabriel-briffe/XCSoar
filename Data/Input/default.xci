@@ -979,14 +979,6 @@ location=9
 # -------------
 mode=ConfigTools
 type=key
-data=6
-event=DataManagement
-event=Mode default
-label=Data Management
-location=5
-
-mode=ConfigTools
-type=key
 data=7
 event=WaypointEditor
 event=Mode default

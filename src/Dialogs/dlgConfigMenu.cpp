@@ -3,12 +3,38 @@
 
 #include "dlgConfigMenu.hpp"
 #include "Asset.hpp"
-#include "Dialogs/Dialogs.h"
+#include "Audio/Features.hpp"
+#include "Dialogs/InternalLink.hpp"
 #include "Dialogs/Message.hpp"
+#include "Dialogs/Settings/Panels/AirspaceConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/GaugesConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/GlideComputerConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/GlideConeConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/InfoBoxLayoutConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/InfoBoxesConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/MapDisplayConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/RouteConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/SafetyFactorsConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/ScoringConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/SiteConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/SymbolsConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/TaskDefaultsConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/TaskRulesConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/TerrainDisplayConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/TopographyDisplayConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/VarioConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/WaypointDisplayConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/WindConfigPanel.hpp"
+#include "Dialogs/DataManagement/AdvancedFileExplorer.hpp"
+#include "Dialogs/DataManagement/BackupRestorePanel.hpp"
+#include "Dialogs/DataManagement/ExportFlightsPanel.hpp"
+#include "Dialogs/DataManagement/ImportDataPanel.hpp"
+#include "Dialogs/FileManager.hpp"
 #include "Form/Button.hpp"
 #include "Form/Form.hpp"
 #include "Form/Frame.hpp"
 #include "Form/GridView.hpp"
+#include "Form/TabMenuData.hpp"
 #include "Input/InputEvents.hpp"
 #include "Language/Language.hpp"
 #include "Look/Colors.hpp"
@@ -17,14 +43,15 @@
 #include "Math/Util.hpp"
 #include "Menu/ButtonLabel.hpp"
 #include "Menu/MenuData.hpp"
-#include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
 #include "Renderer/ButtonRenderer.hpp"
 #include "Renderer/TextRenderer.hpp"
 #include "Screen/Layout.hpp"
 #include "UIGlobals.hpp"
 #include "Widget/WindowWidget.hpp"
 #include "WidgetDialog.hpp"
+#include "net/http/Features.hpp"
 #include "ui/canvas/Brush.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Icon.hpp"
@@ -35,13 +62,20 @@
 #include "util/StringAPI.hxx"
 #include "util/StringCompare.hxx"
 
+#ifdef HAVE_HTTP
+#include "Dialogs/Settings/Panels/NOTAMConfigPanel.hpp"
+#endif
+
+#ifdef HAVE_PCM_PLAYER
+#include "Dialogs/Settings/Panels/AudioVarioConfigPanel.hpp"
+#endif
+
 #include <algorithm>
 #include <boost/container/static_vector.hpp>
 #include <cstdlib>
 #include <initializer_list>
 #include <memory>
 #include <string>
-#include <string_view>
 
 namespace {
 
@@ -243,8 +277,6 @@ public:
       const unsigned H = unsigned(inner.GetHeight());
       const unsigned W = unsigned(inner.GetWidth());
       const unsigned line_h = look.button.font->GetHeight();
-      /* Allow wrapped captions (e.g. "Data Management"); cap at two
-         lines so the icon still has room. */
       unsigned T = text_renderer.GetHeight(*look.button.font, W, caption);
       if (T < line_h)
         T = line_h;
@@ -252,8 +284,6 @@ public:
         T = 2 * line_h;
       unsigned I = Layout::Scale(36);
 
-      /* Three equal gaps: above icon, between icon and text, below
-         text.  Shrink the icon if needed so all three fit. */
       if (I + T + 3 > H) {
         if (H > T + 3)
           I = H - T - 3;
@@ -311,6 +341,28 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpConfigPlanes;
   if (StringIsEqual(label, "Configuration"))
     return &icons.hBmpTabSettings;
+  if (StringIsEqual(label, "Display"))
+    return &icons.hBmpConfigDisplay;
+  if (StringIsEqual(label, "Glide Computer"))
+    return &icons.hBmpTabCalculator;
+  if (StringIsEqual(label, "Task"))
+    return &icons.hBmpTabTask;
+  if (StringIsEqual(label, "Task Defaults"))
+    return &icons.hBmpTabRules;
+  if (StringIsEqual(label, "Map"))
+    return &icons.hBmpConfigMap;
+  if (StringIsEqual(label, "Gauges"))
+    return &icons.hBmpConfigGauges;
+  if (StringIsEqual(label, "InfoBoxes"))
+    return &icons.hBmpConfigInfoBoxes;
+  if (StringIsEqual(label, "Orientation"))
+    return &icons.hBmpConfigOrientation;
+  if (StringIsEqual(label, "Waypoints"))
+    return &icons.hBmpConfigWaypoints;
+  if (StringIsEqual(label, "Terrain"))
+    return &icons.hBmpConfigTerrain;
+  if (StringIsEqual(label, "Topology"))
+    return &icons.hBmpConfigTopology;
   if (StringIsEqual(label, "Tools"))
     return &icons.hBmpTabWrench;
   if (StringIsEqual(label, "Profiles"))
@@ -321,6 +373,8 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpTabSystem;
   if (StringIsEqual(label, "Wind"))
     return &icons.hBmpConfigWind;
+  if (StringIsEqual(label, "Data"))
+    return &icons.hBmpConfigDataManagement;
   if (StringIsEqual(label, "Data Management"))
     return &icons.hBmpConfigDataManagement;
   if (StringIsEqual(label, "Waypoint Editor"))
@@ -361,12 +415,53 @@ MakeHiddenProfileKey(const char *menu_id) noexcept
   return key;
 }
 
+/**
+ * One tile in a tiled menu.  EVENT closes the menu and returns an
+ * InputEvents id; NESTED / PANEL / ACTION open a child UI without
+ * closing.
+ */
+struct TiledMenuItem {
+  StaticString<64> id;
+  StaticString<64> caption;
+  const MaskedIcon *icon = nullptr;
+  bool enabled = true;
+
+  enum class Kind : uint8_t {
+    EVENT,
+    NESTED,
+    PANEL,
+    ACTION,
+  } kind = Kind::EVENT;
+
+  unsigned event = 0;
+  void (*show_nested)(UI::SingleWindow &parent) noexcept = nullptr;
+  std::unique_ptr<Widget> (*create_panel)() = nullptr;
+  void (*show_action)() noexcept = nullptr;
+};
+
+using TiledMenuItemList =
+  boost::container::static_vector<TiledMenuItem, GridView::MAX_ITEMS>;
+
+static void ShowDisplayTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowMapTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowGaugesTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowInfoBoxesTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowGlideComputerTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowTaskTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowTaskDefaultsTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowDataTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowTiledMenuList(UI::SingleWindow &parent,
+                              const char *title,
+                              const char *menu_id,
+                              TiledMenuItemList items) noexcept;
+
 class TiledMenu final : public WindowWidget {
   WndForm &dialog;
-  const Menu &items;
+  TiledMenuItemList &items;
   const char *title;
   const char *menu_id;
   const bool showing_hidden;
+  UI::SingleWindow &parent_window;
 
   boost::container::static_vector<Button, GridView::MAX_ITEMS> buttons;
 
@@ -391,15 +486,17 @@ class TiledMenu final : public WindowWidget {
   void RebuildTiles() noexcept;
   void OnHideTile(const char *label, const char *caption) noexcept;
   void OnUnhideTile(const char *label, const char *caption) noexcept;
+  void ActivateItem(const TiledMenuItem &item) noexcept;
 
 public:
   unsigned clicked_event = 0;
 
-  TiledMenu(WndForm &_dialog, const Menu &_items,
+  TiledMenu(WndForm &_dialog, TiledMenuItemList &_items,
             const char *_title, const char *_menu_id,
-            bool _showing_hidden) noexcept
+            bool _showing_hidden,
+            UI::SingleWindow &_parent_window) noexcept
     :dialog(_dialog), items(_items), title(_title), menu_id(_menu_id),
-     showing_hidden(_showing_hidden)
+     showing_hidden(_showing_hidden), parent_window(_parent_window)
   {
     LoadHiddenLabels();
   }
@@ -566,6 +663,34 @@ TiledMenu::OnUnhideTile(const char *label, const char *caption) noexcept
 }
 
 void
+TiledMenu::ActivateItem(const TiledMenuItem &item) noexcept
+{
+  switch (item.kind) {
+  case TiledMenuItem::Kind::EVENT:
+    if (!item.enabled)
+      return;
+    clicked_event = item.event;
+    dialog.SetModalResult(mrOK);
+    break;
+
+  case TiledMenuItem::Kind::NESTED:
+    if (item.show_nested != nullptr)
+      item.show_nested(parent_window);
+    break;
+
+  case TiledMenuItem::Kind::PANEL:
+    if (item.create_panel != nullptr)
+      ShowConfigPanel(item.caption.c_str(), item.create_panel);
+    break;
+
+  case TiledMenuItem::Kind::ACTION:
+    if (item.show_action != nullptr)
+      item.show_action();
+    break;
+  }
+}
+
+void
 TiledMenu::PopulateTiles() noexcept
 {
   auto &grid_view = GetWindow();
@@ -582,54 +707,36 @@ TiledMenu::PopulateTiles() noexcept
 
   unsigned visible_count = 0;
 
-  for (unsigned i = 0; i < Menu::MAX_ITEMS; ++i) {
+  for (unsigned i = 0; i < items.size(); ++i) {
     if (buttons.size() >= buttons.max_size())
       break;
 
-    const auto &menu_item = items[i];
-    if (!menu_item.IsDefined())
-      continue;
-    if (IsConfigPagerOrCancel(menu_item.label))
-      continue;
-
-    const bool item_hidden = IsHiddenLabel(menu_item.label);
+    const TiledMenuItem &item = items[i];
+    const bool item_hidden = IsHiddenLabel(item.id.c_str());
     if (showing_hidden != item_hidden)
       continue;
 
-    char buffer[100];
-    const auto expanded =
-      ButtonLabel::Expand(menu_item.label, std::span{buffer});
-    if (!expanded.visible)
-      continue;
-
-    const char *raw_label = menu_item.label;
-    StaticString<64> caption_copy{expanded.text};
-    const bool action_enabled = expanded.enabled;
+    StaticString<64> id_copy{item.id.c_str()};
+    StaticString<64> caption_copy{item.caption.c_str()};
+    const unsigned item_index = i;
 
     auto &button = buttons.emplace_back(
       grid_view, button_rc, button_style,
       std::make_unique<ConfigMenuTileRenderer>(
-        dialog_look, expanded.text,
-        ConfigMenuIconForLabel(menu_item.label),
-        action_enabled),
-      [this, &menu_item, action_enabled]() {
-        /* Macro-disabled tiles (e.g. Vega) stay clickable for
-           long-press hide, but a short press does nothing. */
-        if (!action_enabled)
-          return;
-        clicked_event = menu_item.event;
-        dialog.SetModalResult(mrOK);
+        dialog_look, item.caption.c_str(), item.icon, item.enabled),
+      [this, item_index]() {
+        ActivateItem(items[item_index]);
       });
 
     if (showing_hidden) {
       button.SetLongPressCallback(
-        [this, raw_label, caption_copy]() {
-          OnUnhideTile(raw_label, caption_copy.c_str());
+        [this, id_copy, caption_copy]() {
+          OnUnhideTile(id_copy.c_str(), caption_copy.c_str());
         });
     } else {
       button.SetLongPressCallback(
-        [this, raw_label, caption_copy]() {
-          OnHideTile(raw_label, caption_copy.c_str());
+        [this, id_copy, caption_copy]() {
+          OnHideTile(id_copy.c_str(), caption_copy.c_str());
         });
     }
 
@@ -637,20 +744,16 @@ TiledMenu::PopulateTiles() noexcept
     ++visible_count;
   }
 
-  /* Hidden folder tile: only on the root tiled menu, and only when
-     at least one item is hidden.  Always alone on its own page at
+  /* Hidden folder tile: only on the root of a tiled menu, and only
+     when at least one item is hidden.  Alone on its own page at
      bottom-right. */
   if (!showing_hidden && !hidden_labels.empty() &&
       buttons.size() < buttons.max_size()) {
     const unsigned page_size =
       std::max(1u, grid_view.GetNumColumns() * grid_view.GetNumRows());
 
-    /* Pad to the end of the last content page, then to bottom-right
-       of a dedicated following page. */
     unsigned slots_used = visible_count;
-    if (slots_used == 0) {
-      /* Only the Hidden tile: still put it bottom-right of page 0. */
-    } else if (slots_used % page_size != 0)
+    if (slots_used > 0 && slots_used % page_size != 0)
       slots_used = DivideRoundUp(slots_used, page_size) * page_size;
 
     const unsigned hidden_index = slots_used + page_size - 1;
@@ -686,8 +789,6 @@ TiledMenu::RebuildTiles() noexcept
     return;
 
   ClearTiles();
-  /* Refresh with an empty grid so column/row counts match the
-     current geometry before padding the Hidden tile. */
   GetWindow().RefreshLayout();
   PopulateTiles();
   GetWindow().RefreshLayout();
@@ -717,8 +818,6 @@ TiledMenu::Prepare(ContainerWindow &parent,
   grid_view->Create(parent, dialog_look, client_rc, grid_view_style,
                     column_width, row_height);
 
-  /* NumColumns/Rows are computed in RefreshLayout; seed them so
-     PopulateTiles can pad the Hidden tile correctly. */
   SetWindow(std::move(grid_view));
   GetWindow().RefreshLayout();
   PopulateTiles();
@@ -890,44 +989,8 @@ protected:
   }
 };
 
-/**
- * Flatten menu items from the given InputEvents modes into one Menu,
- * dropping page-nav and Cancel entries.
- */
-static void
-CollectMenuItems(Menu &out, std::initializer_list<const char *> modes) noexcept
-{
-  out.Clear();
-  unsigned dest = 0;
-
-  for (const char *mode : modes) {
-    const Menu *menu = InputEvents::GetMenu(mode);
-    if (menu == nullptr)
-      continue;
-
-    for (unsigned i = 0; i < Menu::MAX_ITEMS; ++i) {
-      const auto &item = (*menu)[i];
-      if (!item.IsDefined())
-        continue;
-      if (IsConfigPagerOrCancel(item.label))
-        continue;
-      if (dest >= Menu::MAX_ITEMS)
-        return;
-      out.Add(item.label, dest++, item.event);
-    }
-  }
-}
-
-/**
- * Show one tiled-menu dialog.  Returns the chosen event id, -1 on
- * cancel, or a negative sentinel when the Hidden folder was opened
- * (caller should check mrOpenHidden via the modal result path).
- *
- * Actually returns: event (>=0), -1 cancel, or we need open_hidden
- * flag.  Use out parameter for open_hidden.
- */
 static int
-ShowTiledMenuDialog(UI::SingleWindow &parent, const Menu &menu,
+ShowTiledMenuDialog(UI::SingleWindow &parent, TiledMenuItemList &items,
                     const char *title, const char *menu_id,
                     bool showing_hidden,
                     bool &open_hidden) noexcept
@@ -936,7 +999,7 @@ ShowTiledMenuDialog(UI::SingleWindow &parent, const Menu &menu,
   const auto &dialog_look = UIGlobals::GetDialogLook();
 
   TiledMenuDialog dialog(WidgetDialog::Full{}, parent, dialog_look, nullptr);
-  dialog.SetWidget(dialog, menu, title, menu_id, showing_hidden);
+  dialog.SetWidget(dialog, items, title, menu_id, showing_hidden, parent);
   dialog.PrepareWidget();
 
   auto &tiled_menu = dialog.GetWidget();
@@ -963,14 +1026,12 @@ ShowTiledMenuDialog(UI::SingleWindow &parent, const Menu &menu,
 }
 
 static void
-ShowTiledMenuAndRun(UI::SingleWindow &parent,
-                    std::initializer_list<const char *> modes,
-                    const char *title,
-                    const char *menu_id) noexcept
+ShowTiledMenuList(UI::SingleWindow &parent,
+                  const char *title,
+                  const char *menu_id,
+                  TiledMenuItemList items) noexcept
 {
-  Menu items;
-  CollectMenuItems(items, modes);
-  if (!items[0].IsDefined())
+  if (items.empty())
     return;
 
   for (;;) {
@@ -986,7 +1047,6 @@ ShowTiledMenuAndRun(UI::SingleWindow &parent,
         InputEvents::ProcessEvent(unsigned(hidden_event));
         return;
       }
-      /* Closed Hidden folder (or emptied it): refresh root menu. */
       continue;
     }
 
@@ -996,17 +1056,383 @@ ShowTiledMenuAndRun(UI::SingleWindow &parent,
   }
 }
 
+static void
+AppendPanelPages(TiledMenuItemList &out, const TabMenuPage *pages) noexcept
+{
+  for (const TabMenuPage *page = pages;
+       page != nullptr && page->menu_caption != nullptr; ++page) {
+    if (out.size() >= out.max_size())
+      return;
+
+    TiledMenuItem item;
+    item.id = page->menu_caption;
+    item.caption = gettext(page->menu_caption);
+    item.icon = ConfigMenuIconForLabel(page->menu_caption);
+    item.kind = TiledMenuItem::Kind::PANEL;
+    item.create_panel = page->Load;
+    out.push_back(std::move(item));
+  }
+}
+
+/* Keep in sync with map_pages / gauge_pages / computer_pages /
+   task_pages / look_pages in dlgConfiguration.cpp. */
+static constexpr TabMenuPage map_pages[] = {
+  { N_("Orientation"), CreateMapDisplayConfigPanel },
+  { N_("Elements"), CreateSymbolsConfigPanel },
+  { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
+  { N_("Terrain"), CreateTerrainDisplayConfigPanel },
+  { N_("Topology"), CreateTopographyDisplayConfigPanel },
+  { N_("Airspace"), CreateAirspaceConfigPanel },
+#ifdef HAVE_HTTP
+  { NC_("Setting", "NOTAM"), CreateNOTAMConfigPanel },
+#endif
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage gauge_pages[] = {
+  { N_("FLARM, Other"), CreateGaugesConfigPanel },
+  { N_("Vario"), CreateVarioConfigPanel },
+#ifdef HAVE_PCM_PLAYER
+  { N_("Audio Vario"), CreateAudioVarioConfigPanel },
+#endif
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage infoboxes_pages[] = {
+  { N_("Layout"), CreateInfoBoxLayoutConfigPanel },
+  { N_("InfoBox Sets"), CreateInfoBoxesConfigPanel },
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage computer_pages[] = {
+  { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
+  { N_("Glide Computer"), CreateGlideComputerConfigPanel },
+  { N_("Glide Cone"), CreateGlideConeConfigPanel },
+  { N_("Wind"), CreateWindConfigPanel },
+  { N_("Route"), CreateRouteConfigPanel },
+  { N_("Scoring"), CreateScoringConfigPanel },
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage task_defaults_pages[] = {
+  { N_("Task Rules"), CreateTaskRulesConfigPanel },
+  { N_("Turnpoint Types"), CreateTaskDefaultsConfigPanel },
+  { nullptr, nullptr }
+};
+
+static void
+ShowMapTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, map_pages);
+  ShowTiledMenuList(parent, N_("Map"), "Map", std::move(items));
+}
+
+static void
+ShowGaugesTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, gauge_pages);
+  ShowTiledMenuList(parent, N_("Gauges"), "Gauges", std::move(items));
+}
+
+static void
+ShowInfoBoxesTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, infoboxes_pages);
+  ShowTiledMenuList(parent, N_("InfoBoxes"), "InfoBoxes",
+                    std::move(items));
+}
+
+static void
+ShowDisplayTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+
+  {
+    TiledMenuItem item;
+    item.id = "Map";
+    item.caption = _("Map");
+    item.icon = ConfigMenuIconForLabel("Map");
+    item.kind = TiledMenuItem::Kind::NESTED;
+    item.show_nested = ShowMapTiledMenu;
+    items.push_back(std::move(item));
+  }
+
+  {
+    TiledMenuItem item;
+    item.id = "Gauges";
+    item.caption = _("Gauges");
+    item.icon = ConfigMenuIconForLabel("Gauges");
+    item.kind = TiledMenuItem::Kind::NESTED;
+    item.show_nested = ShowGaugesTiledMenu;
+    items.push_back(std::move(item));
+  }
+
+  {
+    TiledMenuItem item;
+    item.id = "InfoBoxes";
+    item.caption = _("InfoBoxes");
+    item.icon = ConfigMenuIconForLabel("InfoBoxes");
+    item.kind = TiledMenuItem::Kind::NESTED;
+    item.show_nested = ShowInfoBoxesTiledMenu;
+    items.push_back(std::move(item));
+  }
+
+  ShowTiledMenuList(parent, N_("Display"), "Display", std::move(items));
+}
+
+static void
+ShowGlideComputerTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, computer_pages);
+  ShowTiledMenuList(parent, N_("Glide Computer"), "Glide Computer",
+                    std::move(items));
+}
+
+static void
+ShowTaskDefaultsTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, task_defaults_pages);
+  ShowTiledMenuList(parent, N_("Task Defaults"), "Task Defaults",
+                    std::move(items));
+}
+
+static void
+ShowTaskTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+
+  {
+    TiledMenuItem item;
+    item.id = "Task Defaults";
+    item.caption = _("Task Defaults");
+    item.icon = ConfigMenuIconForLabel("Task Defaults");
+    item.kind = TiledMenuItem::Kind::NESTED;
+    item.show_nested = ShowTaskDefaultsTiledMenu;
+    items.push_back(std::move(item));
+  }
+
+  ShowTiledMenuList(parent, N_("Task"), "Task", std::move(items));
+}
+
+static void
+CollectXciItems(TiledMenuItemList &out,
+                std::initializer_list<const char *> modes) noexcept
+{
+  for (const char *mode : modes) {
+    const Menu *menu = InputEvents::GetMenu(mode);
+    if (menu == nullptr)
+      continue;
+
+    for (unsigned i = 0; i < Menu::MAX_ITEMS; ++i) {
+      const auto &menu_item = (*menu)[i];
+      if (!menu_item.IsDefined())
+        continue;
+      if (IsConfigPagerOrCancel(menu_item.label))
+        continue;
+      if (out.size() >= out.max_size())
+        return;
+
+      char buffer[100];
+      const auto expanded =
+        ButtonLabel::Expand(menu_item.label, std::span{buffer});
+      if (!expanded.visible)
+        continue;
+
+      TiledMenuItem item;
+      item.id = menu_item.label;
+      item.caption = expanded.text;
+      item.icon = ConfigMenuIconForLabel(menu_item.label);
+      item.enabled = expanded.enabled;
+      item.kind = TiledMenuItem::Kind::EVENT;
+      item.event = menu_item.event;
+      out.push_back(std::move(item));
+    }
+  }
+}
+
+/**
+ * Insert Data, Display, Glide Computer, and Task folder tiles
+ * immediately after Configuration (in that order).
+ */
+static void
+InsertFoldersAfterConfiguration(TiledMenuItemList &items) noexcept
+{
+  auto insert_after_configuration = [&items](TiledMenuItem &&tile) {
+    if (items.size() >= items.max_size())
+      return;
+
+    for (auto it = items.begin(); it != items.end(); ++it) {
+      if (StringIsEqual(it->id.c_str(), "Configuration")) {
+        items.insert(it + 1, std::move(tile));
+        return;
+      }
+    }
+
+    /* Configuration missing: still expose the folder at the front. */
+    items.insert(items.begin(), std::move(tile));
+  };
+
+  /* Insert in reverse so the final order is Data, Display,
+     Glide Computer, Task. */
+  {
+    TiledMenuItem task;
+    task.id = "Task";
+    task.caption = _("Task");
+    task.icon = ConfigMenuIconForLabel("Task");
+    task.kind = TiledMenuItem::Kind::NESTED;
+    task.show_nested = ShowTaskTiledMenu;
+    insert_after_configuration(std::move(task));
+  }
+
+  {
+    TiledMenuItem computer;
+    computer.id = "Glide Computer";
+    computer.caption = _("Glide Computer");
+    computer.icon = ConfigMenuIconForLabel("Glide Computer");
+    computer.kind = TiledMenuItem::Kind::NESTED;
+    computer.show_nested = ShowGlideComputerTiledMenu;
+    insert_after_configuration(std::move(computer));
+  }
+
+  {
+    TiledMenuItem display;
+    display.id = "Display";
+    display.caption = _("Display");
+    display.icon = ConfigMenuIconForLabel("Display");
+    display.kind = TiledMenuItem::Kind::NESTED;
+    display.show_nested = ShowDisplayTiledMenu;
+    insert_after_configuration(std::move(display));
+  }
+
+  {
+    TiledMenuItem data;
+    data.id = "Data";
+    data.caption = _("Data");
+    data.icon = ConfigMenuIconForLabel("Data");
+    data.kind = TiledMenuItem::Kind::NESTED;
+    data.show_nested = ShowDataTiledMenu;
+    insert_after_configuration(std::move(data));
+  }
+}
+
+static void
+ShowDataSiteFilesAction() noexcept
+{
+  ShowConfigPanel(_("Site Files"), CreateSiteConfigPanel);
+}
+
+static void
+ShowDataDownloadManagerAction() noexcept
+{
+  ShowFileManager();
+}
+
+static void
+ShowDataExportFlightsAction() noexcept
+{
+  ShowExportFlightsDialog();
+}
+
+static void
+ShowDataImportDataAction() noexcept
+{
+  ShowImportDataDialog();
+}
+
+static void
+ShowDataBackupManagerAction() noexcept
+{
+  ShowBackupManagerDialog();
+}
+
+static void
+ShowDataAdvancedFileExplorerAction() noexcept
+{
+  ShowAdvancedFileExplorerDialog();
+}
+
+static void
+AppendDataAction(TiledMenuItemList &out, const char *id,
+                 const char *caption,
+                 void (*show_action)() noexcept) noexcept
+{
+  if (out.size() >= out.max_size())
+    return;
+
+  TiledMenuItem item;
+  item.id = id;
+  item.caption = caption;
+  item.icon = ConfigMenuIconForLabel(id);
+  item.kind = TiledMenuItem::Kind::ACTION;
+  item.show_action = show_action;
+  out.push_back(std::move(item));
+}
+
+static void
+ShowDataTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendDataAction(items, "Navigation & Flight Resources",
+                   C_("Button", "Navigation & Flight Resources"),
+                   ShowDataSiteFilesAction);
+  AppendDataAction(items, "Download manager",
+                   C_("Button", "Download manager"),
+                   ShowDataDownloadManagerAction);
+  AppendDataAction(items, "Export flights",
+                   C_("Button", "Export flights"),
+                   ShowDataExportFlightsAction);
+  AppendDataAction(items, "Import data",
+                   C_("Button", "Import data"),
+                   ShowDataImportDataAction);
+  AppendDataAction(items, "Backup manager",
+                   C_("Button", "Backup manager"),
+                   ShowDataBackupManagerAction);
+  AppendDataAction(items, "Advanced File Explorer",
+                   C_("Button", "Advanced File Explorer"),
+                   ShowDataAdvancedFileExplorerAction);
+  ShowTiledMenuList(parent, N_("Data"), "Data", std::move(items));
+}
+
+static void
+ShowXciTiledMenuAndRun(UI::SingleWindow &parent,
+                       std::initializer_list<const char *> modes,
+                       const char *title,
+                       const char *menu_id,
+                       bool insert_folders) noexcept
+{
+  TiledMenuItemList items;
+  CollectXciItems(items, modes);
+  if (insert_folders)
+    InsertFoldersAfterConfiguration(items);
+  if (items.empty())
+    return;
+
+  ShowTiledMenuList(parent, title, menu_id, std::move(items));
+}
+
 } // namespace
 
 void
 dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept
 {
-  ShowTiledMenuAndRun(parent, {"Config1", "Config2", "Config3"},
-                      N_("Config"), "Config");
+  ShowXciTiledMenuAndRun(parent, {"Config1", "Config2", "Config3"},
+                         N_("Config"), "Config", true);
 }
 
 void
 dlgConfigToolsShowModal(UI::SingleWindow &parent) noexcept
 {
-  ShowTiledMenuAndRun(parent, {"ConfigTools"}, N_("Tools"), "Tools");
+  ShowXciTiledMenuAndRun(parent, {"ConfigTools"}, N_("Tools"), "Tools",
+                         false);
+}
+
+void
+dlgConfigDataShowModal(UI::SingleWindow &parent) noexcept
+{
+  ShowDataTiledMenu(parent);
 }

@@ -33,6 +33,14 @@ struct IconLook {
   MaskedIcon hBmpConfigLua;
   MaskedIcon hBmpConfigUpload;
   MaskedIcon hBmpConfigHidden;
+  MaskedIcon hBmpConfigDisplay;
+  MaskedIcon hBmpConfigMap;
+  MaskedIcon hBmpConfigGauges;
+  MaskedIcon hBmpConfigInfoBoxes;
+  MaskedIcon hBmpConfigOrientation;
+  MaskedIcon hBmpConfigWaypoints;
+  MaskedIcon hBmpConfigTerrain;
+  MaskedIcon hBmpConfigTopology;
 
   void Initialise();
 };
