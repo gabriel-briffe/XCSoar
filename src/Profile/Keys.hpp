@@ -143,6 +143,8 @@ constexpr std::string_view TransparentQuickMenuButton = "TransparentQuickMenuBut
 constexpr std::string_view TouchAreasTransparency = "TouchAreasTransparency";
 constexpr std::string_view CustomQuickMenu = "CustomQuickMenu";
 constexpr std::string_view CustomQuickMenuCount = "CustomQuickMenuCount";
+/** Pipe-separated raw tiled-menu labels; key suffix is the menu id. */
+constexpr std::string_view TiledMenuHiddenPrefix = "TiledMenuHidden.";
 constexpr std::string_view CursorSize = "CursorSize";
 constexpr std::string_view CursorColorsInverted = "CursorColorsInverted";
 constexpr std::string_view NoPositionTargetDistanceRing = "NoPositionTargetDistanceRing";

@@ -32,6 +32,7 @@ struct IconLook {
   MaskedIcon hBmpConfigLoggerStart;
   MaskedIcon hBmpConfigLua;
   MaskedIcon hBmpConfigUpload;
+  MaskedIcon hBmpConfigHidden;
 
   void Initialise();
 };

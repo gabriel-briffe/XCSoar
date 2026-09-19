@@ -27,4 +27,5 @@ IconLook::Initialise()
   hBmpConfigLoggerStart.LoadResource(IDB_LOGGER_START_ALL);
   hBmpConfigLua.LoadResource(IDB_LUA_ALL);
   hBmpConfigUpload.LoadResource(IDB_UPLOAD_ALL);
+  hBmpConfigHidden.LoadResource(IDB_HIDDEN_ALL);
 }

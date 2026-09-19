@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ui/window/PaintWindow.hpp"
+#include "ui/event/Timer.hpp"
 
 #include <functional>
 #include <memory>
@@ -26,6 +27,15 @@ public:
 
 private:
   Callback callback;
+  Callback long_press_callback;
+
+  /**
+   * True while a press may still become a long-press (timer armed and
+   * not yet fired).  Cleared on release or when the long-press fires.
+   */
+  bool long_press_pending = false;
+
+  UI::Timer long_press_timer{[this]{ OnLongPressTimer(); }};
 
   /**
    * This flag specifies whether the button is "selected".  The
@@ -78,6 +88,14 @@ public:
    */
   void SetCallback(Callback _callback) noexcept {
     callback = std::move(_callback);
+  }
+
+  /**
+   * Optional long-press handler (~1 s hold).  When set, a long press
+   * fires this callback instead of the click callback.
+   */
+  void SetLongPressCallback(Callback _callback) noexcept {
+    long_press_callback = std::move(_callback);
   }
 
   ButtonRenderer &GetRenderer() noexcept {
@@ -135,6 +153,8 @@ protected:
 
 private:
   void SetDown(bool _down);
+  void OnLongPressTimer() noexcept;
+  void CancelLongPress() noexcept;
 
   [[gnu::pure]]
   ButtonState GetState() const noexcept;

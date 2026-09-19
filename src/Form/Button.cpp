@@ -188,7 +188,10 @@ bool
 Button::OnMouseMove(PixelPoint p, unsigned keys) noexcept
 {
   if (dragging) {
-    SetDown(IsInside(p));
+    const bool inside = IsInside(p);
+    SetDown(inside);
+    if (!inside)
+      CancelLongPress();
     return true;
   } else
     return PaintWindow::OnMouseMove(p, keys);
@@ -203,14 +206,23 @@ Button::OnMouseDown([[maybe_unused]] PixelPoint p) noexcept
   SetDown(true);
   SetCapture();
   dragging = true;
+
+  if (long_press_callback) {
+    long_press_pending = true;
+    long_press_timer.Schedule(std::chrono::seconds(1));
+  }
+
   return true;
 }
 
 bool
 Button::OnMouseUp([[maybe_unused]] PixelPoint p) noexcept
 {
+  /* Long-press already cleared dragging and handled the gesture. */
   if (!dragging)
     return true;
+
+  CancelLongPress();
 
   dragging = false;
   ReleaseCapture();
@@ -220,6 +232,28 @@ Button::OnMouseUp([[maybe_unused]] PixelPoint p) noexcept
 
   Click();
   return true;
+}
+
+void
+Button::CancelLongPress() noexcept
+{
+  long_press_pending = false;
+  long_press_timer.Cancel();
+}
+
+void
+Button::OnLongPressTimer() noexcept
+{
+  if (!long_press_pending)
+    return;
+
+  long_press_pending = false;
+  dragging = false;
+  SetDown(false);
+  ReleaseCapture();
+
+  if (long_press_callback)
+    long_press_callback();
 }
 
 void
@@ -241,6 +275,7 @@ Button::OnKillFocus() noexcept
 void
 Button::OnCancelMode() noexcept
 {
+  CancelLongPress();
   dragging = false;
   SetDown(false);
 

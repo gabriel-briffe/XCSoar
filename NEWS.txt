@@ -4,6 +4,9 @@ Version 7.46 - not yet released
     grid (portrait 3×4, landscape 4×3) with page and Close buttons
   - add a Tools tile (wrench) at the end of Config with Data
     Management, Waypoint Editor, WeGlide Upload, and Replay
+  - tiled menus include a Hidden folder (own last page, bottom-right);
+    long-press a tile to hide or unhide it; the folder is omitted when
+    empty
 * map
   - add an experimental terrain-aware glide cone overlay: when enabled,
     performing a "Goto" to an airport triggers a GPU (OpenGL ES 3.1)

@@ -41,6 +41,10 @@ public:
     items.push_back(&w);
   }
 
+  void ClearItems() noexcept {
+    items.clear();
+  }
+
   unsigned GetColumnWidth() const {
     return column_width;
   }
