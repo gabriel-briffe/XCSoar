@@ -162,24 +162,15 @@ This page let you specify the favoured map orientation and view.
 
 
 %%%%%%%%%%%%%%%%%%
-\section{Map Display / Elements}\label{sec:map-elements}
+\section{Map Display / Aircraft}\label{sec:map-elements}
 
-This page provides options relating to screen elements overlayed to the map display.
+This page provides options relating to the ownship aircraft overlay on
+the map display.
 
 \begin{description}
 \item[Ground track]  Display the ground track (ground track projection) on the map.
   The setting ``Auto'' displays the ground track only if there is a significant
   difference to plane heading.
-\item[FLARM traffic]  \label{conf:flarm-on-map} This enables the display of FLARM 
-  traffic on the map.
-\item[Traffic symbol]  \label{conf:traffic-symbol} Determines how FLARM, ADS-B
-  and online traffic is drawn on the map and on the traffic radar. \\
-  {\bf Arrow}: All traffic is drawn as an arrow head pointing in the direction
-  of travel. \\
-  {\bf Aircraft type}: Traffic is drawn as a glider, powered aircraft,
-  helicopter, paraglider or other symbol according to the aircraft type
-  reported by the traffic source.  Targets of unknown type get a generic
-  chevron symbol.
 \item[Trail length*] \label{conf:snailtrail} Determines whether and how long a
   snail trail is drawn behind the glider. \\
 \sketch{figures/config-map_elements.png}
@@ -218,8 +209,32 @@ This page provides options relating to screen elements overlayed to the map disp
   {\bf Off}: No wind arrow is drawn. \\
   {\bf Arrow head}: Draws an arrow head only. \\
   {\bf Full arrow}: Draws an arrow head with a dashed arrow line.
-\item[FAI triangle areas] Whether to show FAI triangle areas on the map.
-  
+\item[Distance rings] Display distance rings around the aircraft on the map.
+\end{description}
+
+
+%%%%%%%%%%%%%%%%%%
+\section{Map Display / Traffic}\label{sec:map-traffic}
+
+This page provides options relating to other traffic overlayed on the
+map display.
+
+\begin{description}
+\item[FLARM traffic]  \label{conf:flarm-on-map} This enables the display of FLARM
+  traffic on the map.
+\item[Traffic symbol]  \label{conf:traffic-symbol} Determines how FLARM, ADS-B
+  and online traffic is drawn on the map and on the traffic radar. \\
+  {\bf Arrow}: All traffic is drawn as an arrow head pointing in the direction
+  of travel. \\
+  {\bf Aircraft type}: Traffic is drawn as a glider, powered aircraft,
+  helicopter, paraglider or other symbol according to the aircraft type
+  reported by the traffic source.  Targets of unknown type get a generic
+  chevron symbol.
+\item[Traffic symbol style] How aircraft-type traffic symbols are coloured
+  (halo and glyph).
+\item[Fade traffic] Keep showing traffic for a while after it has disappeared.
+\item[Online traffic on map] Show traffic from SkyLines and XCSoar Cloud on
+  the map.
 \end{description}
 
 

@@ -10,14 +10,9 @@
 #include "Widget/RowFormWidget.hpp"
 #include "UIGlobals.hpp"
 #include "MapSettings.hpp"
-#include "util/Macros.hpp"
 
 enum ControlIndex {
   DISPLAY_TRACK_BEARING,
-  ENABLE_FLARM_MAP,
-  TRAFFIC_SYMBOL,
-  TRAFFIC_SYMBOL_STYLE,
-  FADE_TRAFFIC,
   TRAIL_LENGTH,
   TRAIL_VBO,
   TRAIL_DRIFT,
@@ -26,7 +21,6 @@ enum ControlIndex {
   ENABLE_DETOUR_COST_MARKERS,
   AIRCRAFT_SYMBOL,
   WIND_ARROW_STYLE,
-  SKYLINES_TRAFFIC_MAP_MODE,
   DISTANCE_RINGS_ENABLED,
 };
 
@@ -36,16 +30,12 @@ public:
   SymbolsConfigPanel()
     :RowFormWidget(UIGlobals::GetDialogLook()) {}
 
-public:
   void ShowTrailControls(bool show);
-  void ShowTrafficSymbolStyle(bool show);
 
-  /* methods from Widget */
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
   bool Save(bool &changed) noexcept override;
 
 private:
-  /* methods from DataFieldListener */
   void OnModified(DataField &df) noexcept override;
 };
 
@@ -59,22 +49,12 @@ SymbolsConfigPanel::ShowTrailControls(bool show)
 }
 
 void
-SymbolsConfigPanel::ShowTrafficSymbolStyle(bool show)
-{
-  SetRowVisible(TRAFFIC_SYMBOL_STYLE, show);
-}
-
-void
 SymbolsConfigPanel::OnModified(DataField &df) noexcept
 {
   if (IsDataField(TRAIL_LENGTH, df)) {
     const DataFieldEnum &dfe = (const DataFieldEnum &)df;
     TrailSettings::Length trail_length = (TrailSettings::Length)dfe.GetValue();
     ShowTrailControls(trail_length != TrailSettings::Length::OFF);
-  } else if (IsDataField(TRAFFIC_SYMBOL, df)) {
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    ShowTrafficSymbolStyle(TrafficSymbol(dfe.GetValue()) ==
-                           TrafficSymbol::AIRCRAFT_TYPE);
   }
 }
 
@@ -128,47 +108,10 @@ static constexpr StaticEnumChoice  aircraft_symbol_list[] = {
   nullptr
 };
 
-static constexpr StaticEnumChoice traffic_symbol_list[] = {
-  { TrafficSymbol::ARROW, N_("Arrow"),
-    N_("All traffic is drawn as an arrow head pointing in the direction of travel.") },
-  { TrafficSymbol::AIRCRAFT_TYPE, N_("Aircraft type"),
-    N_("Traffic is drawn as a glider, powered aircraft, helicopter, paraglider "
-       "or other symbol according to the aircraft type reported by FLARM, ADS-B "
-       "or OGN. Targets of unknown type get a generic symbol.") },
-  nullptr
-};
-
-static_assert(ARRAY_SIZE(traffic_symbol_list) ==
-              unsigned(TrafficSymbol::COUNT) + 1);
-
-static constexpr StaticEnumChoice traffic_symbol_style_list[] = {
-  { AircraftTypeSymbolStyle::COLOURED_HALO, N_("Colored halo"),
-    N_("The silhouette is filled with the traffic colour; the glyph is black.") },
-  { AircraftTypeSymbolStyle::COLOURED_HALO_OUTLINED, N_("Colored halo with border"),
-    N_("Like Colored halo, plus a thin border around the silhouette.") },
-  { AircraftTypeSymbolStyle::WHITE_HALO, N_("White halo, colored glyph"),
-    N_("White silhouette with the traffic colour in the glyph. Calm on the map; "
-       "the halo vanishes on a white radar background.") },
-  { AircraftTypeSymbolStyle::BLACK_OUTLINE, N_("Black outline"),
-    N_("No halo; the glyph is filled with the traffic colour and outlined in black, "
-       "like the classic arrow head.") },
-  nullptr
-};
-
-static_assert(ARRAY_SIZE(traffic_symbol_style_list) ==
-              unsigned(AircraftTypeSymbolStyle::COUNT) + 1);
-
 static constexpr StaticEnumChoice wind_arrow_list[] = {
   { WindArrowStyle::NO_ARROW, N_("Off"), N_("No wind arrow is drawn.") },
   { WindArrowStyle::ARROW_HEAD, N_("Arrow head"), N_("Draws an arrow head only.") },
   { WindArrowStyle::FULL_ARROW, N_("Full arrow"), N_("Draws an arrow head with a dashed arrow line.") },
-  nullptr
-};
-
-static constexpr StaticEnumChoice online_traffic_map_mode_list[] = {
-  { DisplayOnlineTrafficMapMode::OFF, N_("Off"), N_("No online traffic is drawn.") },
-  { DisplayOnlineTrafficMapMode::SYMBOL, N_("Symbol"), N_("Draws the traffic symbol only.") },
-  { DisplayOnlineTrafficMapMode::SYMBOL_NAME, N_("Symbol and Name"), N_("Draws the traffic symbol with name.") },
   nullptr
 };
 
@@ -181,21 +124,6 @@ SymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
   AddEnum(_("Ground track"),
           _("Display the ground track as a grey line on the map."),
           ground_track_mode_list, (unsigned)settings_map.display_ground_track);
-
-  AddBoolean(_("FLARM Traffic"), _("This enables the display of FLARM traffic on the map window."),
-             settings_map.show_flarm_on_map);
-
-  AddEnum(_("Traffic symbol"),
-          _("Determines how FLARM, ADS-B and online traffic is drawn on the map and the traffic radar."),
-          traffic_symbol_list, (unsigned)settings_map.traffic_symbol, this);
-
-  AddEnum(_("Traffic symbol style"),
-          _("How aircraft-type traffic symbols are coloured (halo and glyph)."),
-          traffic_symbol_style_list,
-          (unsigned)settings_map.traffic_symbol_style);
-
-  AddBoolean(_("Fade traffic"), _("Keep showing traffic for a while after it has disappeared."),
-             settings_map.fade_traffic);
 
   AddEnum(_("Trail length"),
           _("Determines whether and how long a snail trail is drawn behind the glider."),
@@ -241,18 +169,11 @@ SymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
           wind_arrow_list, (unsigned)settings_map.wind_arrow_style);
   SetExpertRow(WIND_ARROW_STYLE);
 
-  AddEnum(C_("Setting", "Online traffic on map"),
-          _("Show traffic from SkyLines and XCSoar Cloud on the map."),
-          online_traffic_map_mode_list,
-          (unsigned)settings_map.online_traffic_map_mode);
-
   AddBoolean(C_("Setting", "Distance rings"),
              _("Display distance rings around the aircraft on the map."),
              settings_map.distance_rings_enabled);
 
   ShowTrailControls(settings_map.trail.length != TrailSettings::Length::OFF);
-  ShowTrafficSymbolStyle(settings_map.traffic_symbol ==
-                         TrafficSymbol::AIRCRAFT_TYPE);
 }
 
 bool
@@ -264,19 +185,6 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValueEnum(DISPLAY_TRACK_BEARING, ProfileKeys::DisplayTrackBearing,
                            settings_map.display_ground_track);
-
-  changed |= SaveValue(ENABLE_FLARM_MAP, ProfileKeys::EnableFLARMMap,
-                       settings_map.show_flarm_on_map);
-
-  changed |= SaveValueEnum(TRAFFIC_SYMBOL, ProfileKeys::TrafficSymbol,
-                           settings_map.traffic_symbol);
-
-  changed |= SaveValueEnum(TRAFFIC_SYMBOL_STYLE,
-                           ProfileKeys::TrafficSymbolStyle,
-                           settings_map.traffic_symbol_style);
-
-  changed |= SaveValue(FADE_TRAFFIC, ProfileKeys::FadeTraffic,
-                       settings_map.fade_traffic);
 
   changed |= SaveValueEnum(TRAIL_LENGTH, ProfileKeys::SnailTrail, settings_map.trail.length);
 
@@ -295,9 +203,6 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
   changed |= SaveValueEnum(AIRCRAFT_SYMBOL, ProfileKeys::AircraftSymbol, settings_map.aircraft_symbol);
 
   changed |= SaveValueEnum(WIND_ARROW_STYLE, ProfileKeys::WindArrowStyle, settings_map.wind_arrow_style);
-
-  changed |= SaveValueEnum(SKYLINES_TRAFFIC_MAP_MODE, ProfileKeys::OnlineTrafficMapMode,
-                           settings_map.online_traffic_map_mode);
 
   changed |= SaveValue(DISTANCE_RINGS_ENABLED, ProfileKeys::DistanceRingsEnabled,
                        settings_map.distance_rings_enabled);

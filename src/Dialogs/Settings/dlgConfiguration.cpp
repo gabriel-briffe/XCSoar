@@ -28,6 +28,7 @@
 #include "Panels/MapDisplayConfigPanel.hpp"
 #include "Panels/WaypointDisplayConfigPanel.hpp"
 #include "Panels/SymbolsConfigPanel.hpp"
+#include "Panels/TrafficSymbolsConfigPanel.hpp"
 #include "Panels/TerrainDisplayConfigPanel.hpp"
 #include "Panels/TopographyDisplayConfigPanel.hpp"
 #include "Panels/GlideComputerConfigPanel.hpp"
@@ -35,8 +36,12 @@
 #include "Panels/WindConfigPanel.hpp"
 #include "Panels/SafetyFactorsConfigPanel.hpp"
 #include "Panels/RouteConfigPanel.hpp"
-#include "Panels/InterfaceConfigPanel.hpp"
-#include "Panels/LayoutConfigPanel.hpp"
+#include "Panels/LanguageConfigPanel.hpp"
+#include "Panels/InputConfigPanel.hpp"
+#include "Panels/HapticsConfigPanel.hpp"
+#include "Panels/HardwareDisplayConfigPanel.hpp"
+#include "Panels/AppearanceConfigPanel.hpp"
+#include "Panels/OverlayControlsConfigPanel.hpp"
 #include "Panels/InfoBoxLayoutConfigPanel.hpp"
 #include "Panels/GaugesConfigPanel.hpp"
 #include "Panels/VarioConfigPanel.hpp"
@@ -105,7 +110,8 @@ static constexpr TabMenuPage files_pages[] = {
 
 static constexpr TabMenuPage map_pages[] = {
   { N_("Orientation"), CreateMapDisplayConfigPanel },
-  { N_("Elements"), CreateSymbolsConfigPanel },
+  { N_("Aircraft"), CreateSymbolsConfigPanel },
+  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
   { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
   { N_("Terrain"), CreateTerrainDisplayConfigPanel },
   { N_("Topology"), CreateTopographyDisplayConfigPanel },
@@ -141,17 +147,47 @@ static constexpr TabMenuPage task_pages[] = {
   { nullptr, nullptr }
 };
 
-static constexpr TabMenuPage look_pages[] = {
-  { N_("Language, Input"), CreateInterfaceConfigPanel },
-  { N_("Screen Layout"), CreateLayoutConfigPanel },
-  { N_("Pages"), CreatePagesConfigPanel },
-  { N_("InfoBox Layout"), CreateInfoBoxLayoutConfigPanel },
-  { N_("InfoBox Sets"), CreateInfoBoxesConfigPanel },
-  { N_("Quick Menu"), CreateQuickMenuConfigPanel },
+static constexpr TabMenuPage language_pages[] = {
+  { N_("Language"), CreateLanguageConfigPanel },
   { nullptr, nullptr }
 };
 
-static constexpr TabMenuPage weather_pages[] = {
+static constexpr TabMenuPage hardware_pages[] = {
+  { N_("Display"), CreateHardwareDisplayConfigPanel },
+  { N_("Haptics"), CreateHapticsConfigPanel },
+#ifdef HAVE_VOLUME_CONTROLLER
+  { N_("Audio"), CreateAudioConfigPanel },
+#endif
+  { N_("Network"), CreateNetworkConfigPanel },
+#if defined(__linux__) && !defined(__ANDROID__) && !defined(KOBO)
+  { N_("Services"), CreateSystemdConfigPanel },
+#endif
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage look_accessibility_pages[] = {
+  { N_("Input"), CreateInputConfigPanel },
+  { N_("Appearance"), CreateAppearanceConfigPanel },
+  { N_("Controls"), CreateOverlayControlsConfigPanel },
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage units_time_pages[] = {
+  { N_("Units"), CreateUnitsConfigPanel },
+  // Important: all pages after Units in this list must not have data fields that are
+  // unit-dependent because they will be saved after their units may have changed.
+  { NC_("Setting", "Time"), CreateTimeConfigPanel },
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage look_pages[] = {
+  { N_("Pages"), CreatePagesConfigPanel },
+  { N_("InfoBox Layout"), CreateInfoBoxLayoutConfigPanel },
+  { N_("InfoBox Sets"), CreateInfoBoxesConfigPanel },
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage accounts_pages[] = {
 #ifdef HAVE_HTTP
   { N_("Thermal Information Map"), CreateWeatherConfigPanel },
 #endif
@@ -166,29 +202,18 @@ static constexpr TabMenuPage weather_pages[] = {
   { "Rainbow", CreateRainbowConfigPanel },
   { "XC Therm", CreateXCThermConfigPanel },
 #endif
-  { N_("Controls"), CreateWeatherControlsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage setup_pages[] = {
-  { N_("Logger"), CreateLoggerConfigPanel },
-  { N_("Units"), CreateUnitsConfigPanel },
-  // Important: all pages after Units in this list must not have data fields that are
-  // unit-dependent because they will be saved after their units may have changed.
-  // ToDo: implement API that controls order in which pages are saved
-  { NC_("Setting", "Time"), CreateTimeConfigPanel },
+  { N_("Weather Controls"), CreateWeatherControlsConfigPanel },
 #ifdef HAVE_TRACKING
   { N_("Tracking"), CreateTrackingConfigPanel },
   { "XCSoar Cloud", CreateCloudConfigPanel },
 #endif
   { "WeGlide", CreateWeGlideConfigPanel },
-#ifdef HAVE_VOLUME_CONTROLLER
-  { N_("Audio"), CreateAudioConfigPanel },
-#endif
-  { N_("Network"), CreateNetworkConfigPanel },
-#if defined(__linux__) && !defined(__ANDROID__) && !defined(KOBO)
-  { N_("Services"), CreateSystemdConfigPanel },
-#endif
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage setup_pages[] = {
+  { N_("Quick Menu"), CreateQuickMenuConfigPanel },
+  { N_("Logger"), CreateLoggerConfigPanel },
   { nullptr, nullptr }
 };
 
@@ -198,9 +223,13 @@ static constexpr TabMenuGroup main_menu_captions[] = {
   { N_("Glide Computer"), computer_pages },
   { N_("Gauges"), gauge_pages },
   { N_("Task Defaults"), task_pages },
-  { N_("Look"), look_pages },
-  { N_("Weather"), weather_pages },
+  { N_("Language"), language_pages },
+  { N_("Hardware"), hardware_pages },
+  { N_("Look & Accessibility"), look_accessibility_pages },
+  { N_("Units & Time"), units_time_pages },
   { NC_("Menu", "Setup"), setup_pages },
+  { N_("Look"), look_pages },
+  { N_("Accounts & Services"), accounts_pages },
 };
 
 static void

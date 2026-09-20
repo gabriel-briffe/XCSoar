@@ -126,8 +126,12 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/InfoBoxesConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/InfoBoxLayoutConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/QuickMenuConfigPanel.cpp \
-	$(SRC)/Dialogs/Settings/Panels/InterfaceConfigPanel.cpp \
-	$(SRC)/Dialogs/Settings/Panels/LayoutConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/LanguageConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/InputConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/HapticsConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/HardwareDisplayConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/AppearanceConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/OverlayControlsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/LoggerConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/MapDisplayConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/NetworkConfigPanel.cpp \
@@ -138,6 +142,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/SafetyFactorsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/SiteConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/SymbolsConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/TrafficSymbolsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/TaskRulesConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/TaskDefaultsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/ScoringConfigPanel.cpp \

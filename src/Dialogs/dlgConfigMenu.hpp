@@ -9,8 +9,8 @@ namespace UI { class SingleWindow; }
  * Full-screen tiled menu for Config: flat list of Config1/2/3
  * actions in a Garmin-style tile grid (portrait 3×4, landscape 4×3)
  * with bottom page and Close buttons.  Includes a per-menu Hidden
- * folder (long-press tiles to hide/unhide), plus Data, Display, Glide
- * Computer, and Task folders after Configuration.
+ * folder (long-press tiles to hide/unhide), plus Data, Graphics, Glide
+ * Computer, Task, and System Setup folders.
  */
 void
 dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept;

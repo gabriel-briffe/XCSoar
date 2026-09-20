@@ -7,14 +7,12 @@ Version 7.46 - not yet released
   - tiled menus include a Hidden folder (own last page, bottom-right);
     long-press a tile to hide or unhide it; the folder is omitted when
     empty
-  - add Data, Display, Glide Computer, and Task folders after
-    Configuration; Data holds the former Data Management actions as
-    tiles (site files, download manager, export/import, backup, file
-    explorer); Display nests Map (Orientation to NOTAM), Gauges, and
-    InfoBoxes; Glide Computer nests Safety Factors through Scoring;
-    Task nests Task Defaults (Task Rules, Turnpoint Types); InfoBoxes
-    holds Layout (geometry, title size, colours, theme, border) and
-    InfoBox Sets; Screen Layout keeps the remaining display options
+  - add Data, Graphics, Glide Computer, Task, and System Setup folders;
+    System Setup starts with Language, then Hardware, Look &
+    Accessibility, Units & Time, Quick Menu, Logger, and Accounts &
+    Services (Weather, Tracking, Cloud, WeGlide); Graphics includes
+    Pages alongside Map, Gauges, and InfoBoxes
+  - split Graphics → Map → Elements into Aircraft and Traffic tiles
 * map
   - add an experimental terrain-aware glide cone overlay: when enabled,
     performing a "Goto" to an airport triggers a GPU (OpenGL ES 3.1)

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Concentric airspace arcs (user art). Used for the Map tiled-menu
+    Airspace tile.  Source art is 415.57x325.89; scaled and centred
+    into 24x24.  Stroke colour black for MaskedIcon.
+  -->
+  <g fill="none" stroke="#000" stroke-width="20" stroke-linecap="round"
+     stroke-linejoin="round"
+     transform="translate(0 2.59) scale(0.057752)">
+    <path d="m140.14,164.47 l114.85,-33.81 9.21,34.95 -114.27,33.38z"/>
+    <path d="m100.38,117.82 l177.47,-51.84c36.09,30.34 52.61,71.59 44.25,126.72L296.57,210.43 151.9,265.36C92.15,226.97 78.45,178.12 100.38,117.82Z"/>
+    <path d="M39.58,94.83 L302.14,16.26c53.25,26.38 106.6,74.34 83.26,194.64L314.41,247.87 168.49,297.31 92.91,308.8C22.42,254.39 8.01,156.57 39.58,94.83Z"/>
+  </g>
+</svg>
