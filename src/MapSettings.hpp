@@ -205,6 +205,9 @@ struct MapSettings {
   /** Display climb band on map */
   bool show_thermal_profile;
 
+  /** Display ownship thermal locator markers on the map */
+  bool show_thermal_marker;
+
   /** Display distance rings around the aircraft */
   bool distance_rings_enabled;
 

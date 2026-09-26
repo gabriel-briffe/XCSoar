@@ -122,6 +122,7 @@ Profile::Load(const ProfileMap &map, MapSettings &settings)
   map.Get(ProfileKeys::FadeTraffic, settings.fade_traffic);
 
   map.Get(ProfileKeys::EnableThermalProfile, settings.show_thermal_profile);
+  map.Get(ProfileKeys::EnableThermalMarker, settings.show_thermal_marker);
   map.Get(ProfileKeys::DistanceRingsEnabled, settings.distance_rings_enabled);
   map.Get(ProfileKeys::EnableFinalGlideBarMC0,
           settings.final_glide_bar_mc0_enabled);

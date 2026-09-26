@@ -18,6 +18,7 @@ enum ControlIndex {
   TRAIL_DRIFT,
   TRAIL_TYPE,
   TRAIL_WIDTH,
+  THERMAL_MARKER,
   ENABLE_DETOUR_COST_MARKERS,
   AIRCRAFT_SYMBOL,
   WIND_ARROW_STYLE,
@@ -154,6 +155,10 @@ SymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
              settings_map.trail.scaling_enabled);
   SetExpertRow(TRAIL_WIDTH);
 
+  AddBoolean(_("Thermal marker"),
+             _("Show thermal locator markers (spirals) for recent thermals on the map."),
+             settings_map.show_thermal_marker);
+
   AddBoolean(_("Detour cost markers"),
              _("If the aircraft heading deviates from the current waypoint, markers are displayed "
                  "at points ahead of the aircraft. The value of each marker is the extra distance "
@@ -196,6 +201,9 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
 
   changed |= SaveValue(TRAIL_WIDTH, ProfileKeys::SnailWidthScale,
                        settings_map.trail.scaling_enabled);
+
+  changed |= SaveValue(THERMAL_MARKER, ProfileKeys::EnableThermalMarker,
+                       settings_map.show_thermal_marker);
 
   changed |= SaveValue(ENABLE_DETOUR_COST_MARKERS, ProfileKeys::DetourCostMarker,
                        settings_map.detour_cost_markers_enabled);

@@ -67,7 +67,8 @@ GlueMapWindow::ShowMapItems(const GeoPoint &location,
                                calculated);
 
   if (visible_projection.GetMapScale() <= 4000) {
-    builder.AddThermals(calculated.thermal_locator, basic, calculated);
+    if (settings.show_thermal_marker)
+      builder.AddThermals(calculated.thermal_locator, basic, calculated);
 
 #ifdef HAVE_HTTP
     if (tim_glue != nullptr && computer_settings.weather.enable_tim) {

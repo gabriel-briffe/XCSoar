@@ -517,6 +517,12 @@ static void ShowTiledMenuList(UI::SingleWindow &parent,
                               const char *menu_id,
                               TiledMenuItemList items) noexcept;
 
+/** Nesting depth of ShowTiledMenuList (1 = root Config/Tools/Data). */
+static unsigned tiled_menu_depth = 0;
+
+/** When true, nested menus cancel themselves to return to the map. */
+static bool tiled_menu_exit_all = false;
+
 class TiledMenu final : public WindowWidget {
   WndForm &dialog;
   TiledMenuItemList &items;
@@ -736,8 +742,11 @@ TiledMenu::ActivateItem(const TiledMenuItem &item) noexcept
     break;
 
   case TiledMenuItem::Kind::NESTED:
-    if (item.show_nested != nullptr)
+    if (item.show_nested != nullptr) {
       item.show_nested(parent_window);
+      if (tiled_menu_exit_all)
+        dialog.SetModalResult(mrCancel);
+    }
     break;
 
   case TiledMenuItem::Kind::PANEL:
@@ -1071,7 +1080,16 @@ ShowTiledMenuDialog(UI::SingleWindow &parent, TiledMenuItemList &items,
   Button *next_button = dialog.AddSymbolButton(">", [&tiled_menu]() {
     tiled_menu.NavigatePage(GridView::Direction::RIGHT);
   });
-  dialog.AddButton(_("Close"), mrCancel);
+
+  /* Nested menus: Back returns one level.  Close always dismisses
+     the whole stack back to the map. */
+  if (tiled_menu_depth > 1)
+    dialog.AddButton(_("Back"), mrCancel);
+
+  dialog.AddButton(_("Close"), [&dialog]() {
+    tiled_menu_exit_all = true;
+    dialog.SetModalResult(mrCancel);
+  });
 
   tiled_menu.SetNavigationButtons(prev_button, next_button);
   tiled_menu.UpdateCaption();
@@ -1096,17 +1114,28 @@ ShowTiledMenuList(UI::SingleWindow &parent,
   if (items.empty())
     return;
 
+  ++tiled_menu_depth;
+
   for (;;) {
+    if (tiled_menu_exit_all)
+      break;
+
     bool open_hidden = false;
     const int event = ShowTiledMenuDialog(parent, items, title, menu_id,
                                           false, open_hidden);
+    if (tiled_menu_exit_all)
+      break;
+
     if (open_hidden) {
       bool unused = false;
       const int hidden_event =
         ShowTiledMenuDialog(parent, items, N_("Hidden"), menu_id,
                             true, unused);
+      if (tiled_menu_exit_all)
+        break;
       if (hidden_event >= 0) {
         InputEvents::ProcessEvent(unsigned(hidden_event));
+        --tiled_menu_depth;
         return;
       }
       continue;
@@ -1114,8 +1143,10 @@ ShowTiledMenuList(UI::SingleWindow &parent,
 
     if (event >= 0)
       InputEvents::ProcessEvent(unsigned(event));
-    return;
+    break;
   }
+
+  --tiled_menu_depth;
 }
 
 static void
@@ -1748,6 +1779,8 @@ ShowXciTiledMenuAndRun(UI::SingleWindow &parent,
 void
 dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept
 {
+  tiled_menu_exit_all = false;
+  tiled_menu_depth = 0;
   ShowXciTiledMenuAndRun(parent, {"Config1", "Config2", "Config3"},
                          N_("Config"), "Config", true);
 }
@@ -1755,6 +1788,8 @@ dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept
 void
 dlgConfigToolsShowModal(UI::SingleWindow &parent) noexcept
 {
+  tiled_menu_exit_all = false;
+  tiled_menu_depth = 0;
   ShowXciTiledMenuAndRun(parent, {"ConfigTools"}, N_("Tools"), "Tools",
                          false);
 }
@@ -1762,5 +1797,7 @@ dlgConfigToolsShowModal(UI::SingleWindow &parent) noexcept
 void
 dlgConfigDataShowModal(UI::SingleWindow &parent) noexcept
 {
+  tiled_menu_exit_all = false;
+  tiled_menu_depth = 0;
   ShowDataTiledMenu(parent);
 }

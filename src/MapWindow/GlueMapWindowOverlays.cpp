@@ -438,6 +438,12 @@ GlueMapWindow::DrawMapScale(Canvas &canvas, const PixelRect &rc,
 void
 GlueMapWindow::DrawThermalEstimate(Canvas &canvas) const noexcept
 {
+  if (!GetMapSettings().show_thermal_marker) {
+    /* Ownship markers off; still draw Cloud / TIM via the base path. */
+    MapWindow::DrawThermalEstimate(canvas);
+    return;
+  }
+
   if (InCirclingMode() && IsNearSelf()) {
     // in circling mode, draw thermal at actual estimated location
     const MapWindowProjection &projection = render_projection;

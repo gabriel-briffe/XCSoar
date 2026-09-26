@@ -46,6 +46,7 @@ MapSettings::SetDefaults() noexcept
   show_flarm_alarm_level = true;
   fade_traffic = true;
   show_thermal_profile = true;
+  show_thermal_marker = true;
   distance_rings_enabled = false;
   final_glide_bar_mc0_enabled = true;
   final_glide_bar_display_mode = FinalGlideBarDisplayMode::ON;

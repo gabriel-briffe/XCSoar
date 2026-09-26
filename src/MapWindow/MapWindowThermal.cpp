@@ -48,10 +48,11 @@ MapWindow::DrawThermalEstimate(Canvas &canvas) const noexcept
 
   // draw only at close map scales in non-circling mode
 
-  DrawThermalSources(canvas, look.thermal_source_icon, render_projection,
-                     thermal_locator.sources, basic.nav_altitude,
-                     calculated.wind_available
-                     ? calculated.wind : SpeedVector::Zero());
+  if (GetMapSettings().show_thermal_marker)
+    DrawThermalSources(canvas, look.thermal_source_icon, render_projection,
+                       thermal_locator.sources, basic.nav_altitude,
+                       calculated.wind_available
+                       ? calculated.wind : SpeedVector::Zero());
 
 #ifdef HAVE_SKYLINES_TRACKING
   const auto &cloud_settings = GetComputerSettings().tracking.cloud;

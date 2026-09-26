@@ -168,6 +168,7 @@ constexpr std::string_view AutoCloseFlarmDialog = "AutoCloseFlarmDialog";
 constexpr std::string_view EnableTAGauge = "EnableTAGauge";
 constexpr std::string_view TAPosition = "TAPosition";
 constexpr std::string_view EnableThermalProfile = "EnableThermalProfile";
+constexpr std::string_view EnableThermalMarker = "EnableThermalMarker";
 constexpr std::string_view DistanceRingsEnabled = "DistanceRingsEnabled";
 constexpr std::string_view GliderScreenPosition = "GliderScreenPosition";
 constexpr std::string_view SetSystemTimeFromGPS = "SetSystemTimeFromGPS";
