@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Overlapping pages (SVG Repo). Flight Display tiled-menu Pages tile.
+  -->
+  <g fill="none" fill-rule="evenodd" stroke="#000" stroke-width="1"
+     stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(1.5 1.5) scale(1.0)">
+    <g transform="translate(4 3)">
+      <path d="m11.5.5h-7c-1.1045695 0-2 .8954305-2 2v9c0 1.1045695.8954305 2 2 2h7c1.1045695 0 2-.8954305 2-2v-9c0-1.1045695-.8954305-2-2-2z"/>
+      <path d="m2.5 2.5c-1.1045695 0-2 .8954305-2 2v8c0 1.6568542 1.34314575 3 3 3h6c1.1045695 0 2-.8954305 2-2"/>
+    </g>
+  </g>
+</svg>

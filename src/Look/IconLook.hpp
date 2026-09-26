@@ -34,6 +34,7 @@ struct IconLook {
   MaskedIcon hBmpConfigUpload;
   MaskedIcon hBmpConfigHidden;
   MaskedIcon hBmpConfigFlightDisplay;
+  MaskedIcon hBmpConfigPages;
   MaskedIcon hBmpConfigDisplay;
   MaskedIcon hBmpConfigMap;
   MaskedIcon hBmpConfigGauges;
