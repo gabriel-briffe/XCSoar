@@ -1224,7 +1224,7 @@ static constexpr MetaData meta_data[] = {
   {
     NC_("InfoBox", "Glide Cone Distance"),
     NC_("Abbreviation", "GC Dist"),
-    N_("Euclidean ground distance along the terrain-aware glide cone relay path from the aircraft to the Goto airport (or nearest landable, in combined mode). Requires the glide cone feature (GPU/OpenGL ES 3.1)."),
+    N_("Euclidean ground distance along the terrain-aware glide cone relay path from the aircraft to the Goto airport (or the landable the path leads to, in combined mode). The bottom line shows that destination using the Waypoints label format. Requires the glide cone feature (GPU/OpenGL ES 3.1)."),
     IBFHelper<InfoBoxContentGlideConeDist>::Create,
   },
 

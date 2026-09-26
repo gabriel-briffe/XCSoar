@@ -134,4 +134,11 @@ struct GlideConeField {
    * path exists.
    */
   std::optional<double> PathDistance(GeoPoint from) const noexcept;
+
+  /**
+   * Waypoint id of the landable at the end of the relay path from
+   * @p from (0 if unknown / no path).
+   */
+  [[gnu::pure]]
+  unsigned PathDestinationWaypointId(GeoPoint from) const noexcept;
 };

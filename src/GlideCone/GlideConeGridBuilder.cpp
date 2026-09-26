@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 bool
 BuildGlideConeGrid(const GlideConeGridRequest &request,
@@ -105,21 +106,30 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   grid.iteration_cap = request.iteration_cap;
   grid.elevation.resize(std::size_t(dim_x) * dim_y);
 
-  std::vector<GeoPoint> seeds = request.seeds;
+  std::vector<std::pair<GeoPoint, unsigned>> seeds;
   if (request.combined) {
-    seeds.clear();
     if (waypoints != nullptr)
       waypoints->VisitWithinRange(request.center, radius_m,
         [&seeds, &request](const WaypointPtr &wp) {
           if (wp->IsLandable() &&
               request.waypoint_settings.IsWaypointDisplayed(*wp))
-            seeds.push_back(wp->location);
+            seeds.emplace_back(wp->location, wp->id);
         });
     if (seeds.empty()) {
       return false;
     }
-  } else if (seeds.empty()) {
+  } else if (request.seeds.empty()) {
     return false;
+  } else {
+    for (const GeoPoint &seed : request.seeds) {
+      unsigned waypoint_id = 0;
+      if (waypoints != nullptr) {
+        const auto wp = waypoints->LookupLocation(seed, 100);
+        if (wp != nullptr)
+          waypoint_id = wp->id;
+      }
+      seeds.emplace_back(seed, waypoint_id);
+    }
   }
 
   map.MaxPoolElevation(origin, pool, dim_x, dim_y,
@@ -128,7 +138,7 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
     if (e < invalid_elevation)
       e += float(request.clearance);
 
-  for (const GeoPoint &seed : seeds) {
+  for (const auto &[seed, waypoint_id] : seeds) {
     const auto sp = proj.ProjectCoarse(seed);
     const int sx = (sp.x - origin.x) / int(pool);
     const int sy = (sp.y - origin.y) / int(pool);
@@ -137,7 +147,9 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
       continue;
 
     const double seed_terrain = map.GetHeight(seed).ToDouble(0.0, 0.0);
-    grid.seeds.push_back({sx, sy, float(seed_terrain + request.arrival)});
+    grid.seeds.push_back({sx, sy,
+                          float(seed_terrain + request.arrival),
+                          waypoint_id});
   }
 
   if (grid.seeds.empty()) {

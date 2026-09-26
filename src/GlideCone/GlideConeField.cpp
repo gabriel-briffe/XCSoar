@@ -39,6 +39,26 @@ IsGroundCell(const GlideConeResult &r, std::size_t index) noexcept
 }
 
 [[gnu::pure]]
+bool
+IsSeedCell(const GlideConeField &field, int x, int y) noexcept
+{
+  for (const auto &s : field.seeds)
+    if (s.x == x && s.y == y)
+      return true;
+  return false;
+}
+
+[[gnu::pure]]
+unsigned
+SeedWaypointId(const GlideConeField &field, int x, int y) noexcept
+{
+  for (const auto &s : field.seeds)
+    if (s.x == x && s.y == y)
+      return s.waypoint_id;
+  return 0;
+}
+
+[[gnu::pure]]
 float
 SeedArrivalAltitude(const GlideConeField &field, int x, int y) noexcept
 {
@@ -143,7 +163,8 @@ GlideConeField::Trace(GeoPoint from) const noexcept
 
     path.push_back({x, y});
 
-    if (x == home_x && y == home_y)
+    /* Stop at any seed (combined mode has many; home is one of them). */
+    if (IsSeedCell(*this, x, y))
       break;
 
     const std::int32_t nx = result.origin_x[index];
@@ -178,6 +199,17 @@ GlideConeField::PathDistance(GeoPoint from) const noexcept
   }
 
   return distance_m;
+}
+
+unsigned
+GlideConeField::PathDestinationWaypointId(GeoPoint from) const noexcept
+{
+  const auto path = Trace(from);
+  if (path.empty())
+    return 0;
+
+  const auto &last = path.back();
+  return SeedWaypointId(*this, last.x, last.y);
 }
 
 bool

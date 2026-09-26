@@ -12,6 +12,12 @@
 struct GlideConeSeed {
   int x, y;
   float alt;
+
+  /**
+   * Waypoint id of the landable that spawned this seed (0 if unknown).
+   * Used in combined mode to name the destination of a relay path.
+   */
+  unsigned waypoint_id = 0;
 };
 
 /**

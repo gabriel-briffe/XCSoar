@@ -16,7 +16,9 @@ GlideConeStatus::Set(const Snapshot &snapshot) noexcept
   if (current.valid == snapshot.valid &&
       (!snapshot.valid ||
        (current.required_altitude == snapshot.required_altitude &&
-        current.path_distance == snapshot.path_distance)))
+        current.path_distance == snapshot.path_distance &&
+        current.destination_waypoint_id ==
+          snapshot.destination_waypoint_id)))
     return;
   current = snapshot;
 }

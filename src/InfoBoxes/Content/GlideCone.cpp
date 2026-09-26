@@ -11,7 +11,15 @@
 #include "GlideCone/GlideConeStatus.hpp"
 #include "Formatter/UserUnits.hpp"
 #include "Language/Language.hpp"
+#include "Components.hpp"
+#include "DataComponents.hpp"
+#include "Engine/Waypoint/Waypoints.hpp"
+#include "Engine/Waypoint/Waypoint.hpp"
+#include "Renderer/WaypointRendererSettings.hpp"
 #include "util/StaticString.hxx"
+#include "util/TruncateString.hpp"
+
+#include <cstring>
 
 /*
  * Title: "GC L/D <ratio>".  Main value: altitude margin (glider altitude
@@ -32,6 +40,53 @@ static constexpr InfoBoxPanel panels[] = {
   { NC_("Menu", "Contours"), LoadGlideConeContoursPanel },
   { nullptr, nullptr },
 };
+
+/**
+ * Format a waypoint label using the map Waypoints "Label format"
+ * setting (#WaypointRendererSettings::display_text_type).
+ */
+static void
+FormatWaypointLabel(char *buffer, std::size_t buffer_size,
+                    const Waypoint &waypoint,
+                    WaypointRendererSettings::DisplayTextType type) noexcept
+{
+  buffer[0] = '\0';
+
+  switch (type) {
+  case WaypointRendererSettings::DisplayTextType::NAME:
+    CopyTruncateString(buffer, buffer_size, waypoint.name.c_str());
+    break;
+
+  case WaypointRendererSettings::DisplayTextType::FIRST_FIVE:
+    CopyTruncateString(buffer, buffer_size, waypoint.name.c_str(), 5);
+    break;
+
+  case WaypointRendererSettings::DisplayTextType::FIRST_THREE:
+    CopyTruncateString(buffer, buffer_size, waypoint.name.c_str(), 3);
+    break;
+
+  case WaypointRendererSettings::DisplayTextType::NONE:
+    break;
+
+  case WaypointRendererSettings::DisplayTextType::FIRST_WORD:
+    CopyTruncateString(buffer, buffer_size, waypoint.name.c_str());
+    if (char *tmp = strstr(buffer, " "); tmp != nullptr)
+      *tmp = '\0';
+    break;
+
+  case WaypointRendererSettings::DisplayTextType::SHORT_NAME:
+    if (!waypoint.shortname.empty())
+      CopyTruncateString(buffer, buffer_size, waypoint.shortname.c_str());
+    else
+      CopyTruncateString(buffer, buffer_size, waypoint.name.c_str(), 5);
+    break;
+
+  case WaypointRendererSettings::DisplayTextType::OBSOLETE_DONT_USE_NUMBER:
+  case WaypointRendererSettings::DisplayTextType::OBSOLETE_DONT_USE_NAMEIFINTASK:
+    CopyTruncateString(buffer, buffer_size, waypoint.name.c_str());
+    break;
+  }
+}
 
 const InfoBoxPanel *
 InfoBoxContentGlideCone::GetDialogContent() noexcept
@@ -81,9 +136,32 @@ InfoBoxContentGlideConeDist::Update(InfoBoxData &data) noexcept
 
   const auto status = GlideConeStatus::Get();
   if (!status.valid || status.path_distance <= 0) {
-    data.SetValueInvalid();
+    data.SetInvalid();
     return;
   }
 
   data.SetValueFromDistance(status.path_distance);
+
+  if (status.destination_waypoint_id == 0 ||
+      data_components == nullptr ||
+      data_components->waypoints == nullptr) {
+    data.SetCommentInvalid();
+    return;
+  }
+
+  const auto wp =
+    data_components->waypoints->LookupId(status.destination_waypoint_id);
+  if (wp == nullptr) {
+    data.SetCommentInvalid();
+    return;
+  }
+
+  const auto text_type =
+    CommonInterface::GetMapSettings().waypoint.display_text_type;
+  char label[32];
+  FormatWaypointLabel(label, sizeof(label), *wp, text_type);
+  if (label[0] == '\0')
+    data.SetCommentInvalid();
+  else
+    data.SetComment(label);
 }

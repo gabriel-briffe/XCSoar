@@ -22,6 +22,12 @@ struct Snapshot {
    * aircraft to the seed.  Zero when unknown.
    */
   double path_distance = 0;
+
+  /**
+   * Waypoint id of the landable at the end of the relay path
+   * (0 if unknown).
+   */
+  unsigned destination_waypoint_id = 0;
 };
 
 void Set(const Snapshot &snapshot) noexcept;

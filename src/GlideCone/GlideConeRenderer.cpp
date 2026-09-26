@@ -88,9 +88,27 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   if (aircraft_valid) {
     const auto required = field.RequiredAltitude(aircraft);
     if (required) {
-      const auto path_distance = field.PathDistance(aircraft);
-      GlideConeStatus::Set({true, *required,
-                            path_distance ? *path_distance : 0.});
+      const auto path = field.Trace(aircraft);
+      double path_distance = 0;
+      unsigned destination_id = 0;
+      if (path.size() >= 2) {
+        for (std::size_t i = 1; i < path.size(); ++i) {
+          const GeoPoint a = field.CellToGeo(path[i - 1].x, path[i - 1].y);
+          const GeoPoint b = field.CellToGeo(path[i].x, path[i].y);
+          if (!a.IsValid() || !b.IsValid()) {
+            path_distance = 0;
+            break;
+          }
+          path_distance += a.DistanceS(b);
+        }
+        const auto &last = path.back();
+        for (const auto &s : field.seeds)
+          if (s.x == last.x && s.y == last.y) {
+            destination_id = s.waypoint_id;
+            break;
+          }
+      }
+      GlideConeStatus::Set({true, *required, path_distance, destination_id});
     } else {
       GlideConeStatus::SetInvalid();
     }
