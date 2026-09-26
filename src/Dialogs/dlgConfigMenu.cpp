@@ -37,6 +37,7 @@
 #include "Dialogs/Settings/Panels/TimeConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/QuickMenuConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/LoggerConfigPanel.hpp"
+#include "Dialogs/Settings/Panels/SoundsConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/NetworkConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/WeGlideConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/RaspConfigPanel.hpp"
@@ -1531,6 +1532,15 @@ ShowSystemSetupTiledMenu(UI::SingleWindow &parent) noexcept
     item.caption = _("Quick Menu");
     item.kind = TiledMenuItem::Kind::PANEL;
     item.create_panel = CreateQuickMenuConfigPanel;
+    items.push_back(std::move(item));
+  }
+
+  {
+    TiledMenuItem item;
+    item.id = "Sounds";
+    item.caption = _("Sounds");
+    item.kind = TiledMenuItem::Kind::PANEL;
+    item.create_panel = CreateSoundsConfigPanel;
     items.push_back(std::move(item));
   }
 

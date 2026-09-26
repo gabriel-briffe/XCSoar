@@ -18,7 +18,7 @@
 #include "Protection.hpp"
 #include "UtilsSettings.hpp"
 #include "Task/ProtectedTaskManager.hpp"
-#include "Audio/VarioGlue.hpp"
+#include "Audio/Sound.hpp"
 #include "system/Path.hpp"
 #include "util/StringCompare.hxx"
 #include "util/StaticString.hxx"
@@ -58,7 +58,7 @@ InputEvents::eventSounds(const char *misc)
     return;
   }
 
-  AudioVarioGlue::Configure(settings.vario);
+  ApplySoundSettings(settings);
   Profile::Set(ProfileKeys::SoundAudioVario, settings.vario.enabled);
 }
 
@@ -203,7 +203,7 @@ InputEvents::eventVarioVolume(const char *misc)
   if (settings.volume > 0)
     last_unmuted_vario_volume = settings.volume;
 
-  AudioVarioGlue::Configure(settings);
+  ApplySoundSettings(CommonInterface::GetUISettings().sound);
   Profile::Set(ProfileKeys::SoundVolume, settings.volume);
 }
 
@@ -234,7 +234,7 @@ InputEvents::eventVarioAudioMode(const char *misc)
     return;
   }
 
-  AudioVarioGlue::Configure(settings);
+  ApplySoundSettings(CommonInterface::GetUISettings().sound);
   Profile::Set(ProfileKeys::VarioSoundSwitchingMode,
                (unsigned)settings.switching_mode);
 }

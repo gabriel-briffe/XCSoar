@@ -94,6 +94,7 @@ Profile::Load(const ProfileMap &map, VarioSoundSettings &settings)
 void
 Profile::Load(const ProfileMap &map, SoundSettings &settings)
 {
+  map.Get(ProfileKeys::Sounds, settings.enabled);
   map.Get(ProfileKeys::SoundTask, settings.sound_task_enabled);
   map.Get(ProfileKeys::SoundModes, settings.sound_modes_enabled);
   map.Get(ProfileKeys::SoundDeadband, settings.sound_deadband);

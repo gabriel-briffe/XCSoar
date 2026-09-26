@@ -3,6 +3,9 @@
 
 #include "Audio/Features.hpp"
 #include "Audio/Sound.hpp"
+#include "Audio/Settings.hpp"
+#include "Audio/VarioGlue.hpp"
+#include "Audio/VarioSettings.hpp"
 
 #ifdef ANDROID
 #include "Android/Main.hpp"
@@ -26,9 +29,34 @@
 #include <mmsystem.h>
 #endif
 
+#include <atomic>
+#include <cstring>
+
+static std::atomic_bool sound_enabled{true};
+
+void
+ApplySoundSettings(const SoundSettings &settings) noexcept
+{
+  sound_enabled.store(settings.enabled, std::memory_order_relaxed);
+
+  VarioSoundSettings vario = settings.vario;
+  if (!settings.enabled)
+    vario.enabled = false;
+  AudioVarioGlue::Configure(vario);
+}
+
+bool
+IsSoundEnabled() noexcept
+{
+  return sound_enabled.load(std::memory_order_relaxed);
+}
+
 bool
 PlayResource(const char *resource_name)
 {
+  if (!IsSoundEnabled())
+    return false;
+
 #ifdef ANDROID
 
   if (strstr(resource_name, ".wav"))

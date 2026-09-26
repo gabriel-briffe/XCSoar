@@ -49,6 +49,7 @@
 #include "Topography/TopographyGlue.hpp"
 #include "Audio/Features.hpp"
 #include "Audio/GlobalVolumeController.hpp"
+#include "Audio/Sound.hpp"
 #include "Audio/VarioGlue.hpp"
 #include "Audio/VolumeController.hpp"
 #include "CommandLine.hpp"
@@ -646,7 +647,7 @@ Startup(UI::Display &display)
 #endif
 
   AudioVarioGlue::Initialise();
-  AudioVarioGlue::Configure(ui_settings.sound.vario);
+  ApplySoundSettings(ui_settings.sound);
 
   // Start the device thread(s)
   if (backend_components->devices != nullptr) {

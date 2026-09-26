@@ -36,7 +36,7 @@
 #include "InfoBoxes/InfoBoxManager.hpp"
 #include "Audio/Features.hpp"
 #include "Audio/GlobalVolumeController.hpp"
-#include "Audio/VarioGlue.hpp"
+#include "Audio/Sound.hpp"
 #include "Audio/VolumeController.hpp"
 #include "PageActions.hpp"
 #include "FLARM/Glue.hpp"
@@ -234,7 +234,7 @@ SettingsLeave(const UISettings &old_ui_settings)
   volume_controller->SetVolume(ui_settings.sound.master_volume);
 #endif
 
-  AudioVarioGlue::Configure(CommonInterface::GetUISettings().sound.vario);
+  ApplySoundSettings(ui_settings.sound);
 
   operation.Hide();
   InfoBoxManager::SetDirty();

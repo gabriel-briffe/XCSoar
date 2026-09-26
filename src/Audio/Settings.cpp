@@ -6,6 +6,7 @@
 void
 SoundSettings::SetDefaults()
 {
+  enabled = true;
   sound_task_enabled = true;
   sound_modes_enabled = true;
   sound_deadband = 5;

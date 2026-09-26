@@ -9,6 +9,9 @@
 #include <type_traits>
 
 struct SoundSettings {
+  /** Master switch: when false, no WAV resources or audio vario. */
+  bool enabled;
+
   // sound stuff not used?
   bool sound_task_enabled;
   bool sound_modes_enabled;

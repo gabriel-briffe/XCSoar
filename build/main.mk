@@ -133,6 +133,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/AppearanceConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/OverlayControlsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/LoggerConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/SoundsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/MapDisplayConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/NetworkConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/PagesConfigPanel.cpp \

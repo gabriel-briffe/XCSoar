@@ -24,6 +24,7 @@
 #include "Panels/UnitsConfigPanel.hpp"
 #include "Panels/TimeConfigPanel.hpp"
 #include "Panels/LoggerConfigPanel.hpp"
+#include "Panels/SoundsConfigPanel.hpp"
 #include "Panels/AirspaceConfigPanel.hpp"
 #include "Panels/SiteConfigPanel.hpp"
 #include "Panels/MapDisplayConfigPanel.hpp"
@@ -218,6 +219,7 @@ static constexpr TabMenuPage accounts_pages[] = {
 
 static constexpr TabMenuPage setup_pages[] = {
   { N_("Quick Menu"), CreateQuickMenuConfigPanel },
+  { N_("Sounds"), CreateSoundsConfigPanel },
   { N_("Logger"), CreateLoggerConfigPanel },
   { nullptr, nullptr }
 };

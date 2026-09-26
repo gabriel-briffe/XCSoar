@@ -104,6 +104,7 @@ constexpr std::string_view LoggerShort = "LoggerShortName";
 constexpr std::string_view SoundVolume = "SoundVolume";
 constexpr std::string_view SoundDeadband = "SoundDeadband";
 constexpr std::string_view SoundAudioVario = "AudioVario2";
+constexpr std::string_view Sounds = "Sounds";
 constexpr std::string_view SoundTask = "SoundTask";
 constexpr std::string_view SoundModes = "SoundModes";
 constexpr std::string_view NettoSpeed = "NettoSpeed";
