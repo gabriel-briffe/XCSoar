@@ -33,7 +33,8 @@ struct IconLook {
   MaskedIcon hBmpConfigLua;
   MaskedIcon hBmpConfigUpload;
   MaskedIcon hBmpConfigHidden;
-  MaskedIcon hBmpConfigGraphics;
+  MaskedIcon hBmpConfigFlightDisplay;
+  MaskedIcon hBmpConfigDisplay;
   MaskedIcon hBmpConfigMap;
   MaskedIcon hBmpConfigGauges;
   MaskedIcon hBmpConfigGlideComputer;
@@ -42,6 +43,7 @@ struct IconLook {
   MaskedIcon hBmpConfigWaypoints;
   MaskedIcon hBmpConfigAirspace;
   MaskedIcon hBmpConfigAircraft;
+  MaskedIcon hBmpConfigAircrafts;
   MaskedIcon hBmpConfigTraffic;
   MaskedIcon hBmpConfigTerrain;
   MaskedIcon hBmpConfigTopology;

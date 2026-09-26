@@ -110,8 +110,6 @@ static constexpr TabMenuPage files_pages[] = {
 
 static constexpr TabMenuPage map_pages[] = {
   { N_("Orientation"), CreateMapDisplayConfigPanel },
-  { N_("Aircraft"), CreateSymbolsConfigPanel },
-  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
   { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
   { N_("Terrain"), CreateTerrainDisplayConfigPanel },
   { N_("Topology"), CreateTopographyDisplayConfigPanel },
@@ -119,6 +117,12 @@ static constexpr TabMenuPage map_pages[] = {
 #ifdef HAVE_HTTP
   { NC_("Setting", "NOTAM"), CreateNOTAMConfigPanel },
 #endif
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage aircrafts_pages[] = {
+  { N_("Aircraft"), CreateSymbolsConfigPanel },
+  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
   { nullptr, nullptr }
 };
 
@@ -220,6 +224,7 @@ static constexpr TabMenuPage setup_pages[] = {
 static constexpr TabMenuGroup main_menu_captions[] = {
   { N_("Site Files"), files_pages },
   { N_("Map Display"), map_pages },
+  { N_("Aircrafts"), aircrafts_pages },
   { N_("Glide Computer"), computer_pages },
   { N_("Gauges"), gauge_pages },
   { N_("Task Defaults"), task_pages },

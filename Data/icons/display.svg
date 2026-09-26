@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Hardware Display tile: phone frame, map screen with ownship
+    glider + small vario gauge, bottom row of three InfoBoxes.
+  -->
+
+  <!-- Phone outer frame -->
+  <rect x="5" y="1.2" width="14" height="21.6" rx="2.2" ry="2.2"
+        fill="none" stroke="#000" stroke-width="1.6"/>
+
+  <!-- Bottom InfoBox row (3 cells) -->
+  <g fill="none" stroke="#000" stroke-width="1.1" stroke-linejoin="round">
+    <rect x="6.4" y="17.6" width="3.4" height="3.8" rx="0.35"/>
+    <rect x="10.3" y="17.6" width="3.4" height="3.8" rx="0.35"/>
+    <rect x="14.2" y="17.6" width="3.4" height="3.8" rx="0.35"/>
+  </g>
+
+  <!-- Ownship glider (aircraft.svg), left-centre of the map area -->
+  <g fill="#000"
+     transform="translate(9.8 10.4) scale(0.30) translate(-14 -14)">
+    <g transform="matrix(.81 0 0 .81 189.71 -241.68)">
+      <path
+            d="m-216.93 305.1a2.2547 2.2547 0 0 0-2.2553 2.2553v3.7149h-11.915a2.2547 2.2547 0 0 0-2.2553 2.2522 2.2547 2.2547 0 0 0 2.2553 2.2553h11.915v6.1212h-1.0538a2.2547 2.2547 0 0 0-2.2554 2.2553 2.2547 2.2547 0 0 0 2.2554 2.2522h6.6182a2.2547 2.2547 0 0 0 2.2553-2.2522 2.2547 2.2547 0 0 0-2.2553-2.2553h-1.0537v-6.1212h11.918a2.2547 2.2547 0 0 0 2.2522-2.2553 2.2547 2.2547 0 0 0-2.2522-2.2522h-11.918v-3.7149a2.2547 2.2547 0 0 0-2.2554-2.2553z"/>
+    </g>
+  </g>
+
+  <!-- Small vario gauge (from gauges.svg), upper-right of the screen -->
+  <g fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"
+     stroke-linejoin="round"
+     transform="translate(13.8 3.2) scale(0.30)">
+    <path d="M12 15l3.5-3.5"/>
+    <path d="M20.3 18c.4-1 .7-2.2.7-3.4C21 9.8 17 6 12 6s-9 3.8-9 8.6c0 1.2.3 2.4.7 3.4"/>
+  </g>
+</svg>

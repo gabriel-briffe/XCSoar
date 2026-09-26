@@ -7,12 +7,14 @@ Version 7.46 - not yet released
   - tiled menus include a Hidden folder (own last page, bottom-right);
     long-press a tile to hide or unhide it; the folder is omitted when
     empty
-  - add Data, Graphics, Glide Computer, Task, and System Setup folders;
-    System Setup starts with Language, then Hardware, Look &
+  - add Data, Flight Display, Glide Computer, Task, and System Setup
+    folders; System Setup starts with Language, then Hardware, Look &
     Accessibility, Units & Time, Quick Menu, Logger, and Accounts &
-    Services (Weather, Tracking, Cloud, WeGlide); Graphics includes
-    Pages alongside Map, Gauges, and InfoBoxes
-  - split Graphics → Map → Elements into Aircraft and Traffic tiles
+    Services (Weather, Tracking, Cloud, WeGlide); Flight Display
+    includes Map, Aircrafts (Aircraft, Traffic), Gauges, InfoBoxes,
+    and Pages
+  - split Flight Display → Map → Elements into Aircraft and Traffic
+    under Flight Display → Aircrafts
 * map
   - add an experimental terrain-aware glide cone overlay: when enabled,
     performing a "Goto" to an airport triggers a GPU (OpenGL ES 3.1)

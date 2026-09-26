@@ -382,8 +382,10 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpConfigPlanes;
   if (StringIsEqual(label, "Configuration"))
     return &icons.hBmpTabSettings;
-  if (StringIsEqual(label, "Graphics"))
-    return &icons.hBmpConfigGraphics;
+  if (StringIsEqual(label, "Flight Display"))
+    return &icons.hBmpConfigFlightDisplay;
+  if (StringIsEqual(label, "Display"))
+    return &icons.hBmpConfigDisplay;
   if (StringIsEqual(label, "System Setup"))
     return &icons.hBmpTabSettings;
   if (StringIsEqual(label, "Glide Computer"))
@@ -406,6 +408,8 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpConfigAirspace;
   if (StringIsEqual(label, "Aircraft"))
     return &icons.hBmpConfigAircraft;
+  if (StringIsEqual(label, "Aircrafts"))
+    return &icons.hBmpConfigAircrafts;
   if (StringIsEqual(label, "Traffic"))
     return &icons.hBmpConfigTraffic;
   if (StringIsEqual(label, "Terrain"))
@@ -491,8 +495,9 @@ struct TiledMenuItem {
 using TiledMenuItemList =
   boost::container::static_vector<TiledMenuItem, GridView::MAX_ITEMS>;
 
-static void ShowGraphicsTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowFlightDisplayTiledMenu(UI::SingleWindow &parent) noexcept;
 static void ShowMapTiledMenu(UI::SingleWindow &parent) noexcept;
+static void ShowAircraftsTiledMenu(UI::SingleWindow &parent) noexcept;
 static void ShowGaugesTiledMenu(UI::SingleWindow &parent) noexcept;
 static void ShowInfoBoxesTiledMenu(UI::SingleWindow &parent) noexcept;
 static void ShowGlideComputerTiledMenu(UI::SingleWindow &parent) noexcept;
@@ -1129,12 +1134,10 @@ AppendPanelPages(TiledMenuItemList &out, const TabMenuPage *pages) noexcept
   }
 }
 
-/* Keep in sync with map_pages / gauge_pages / computer_pages /
-   task_pages / look_pages in dlgConfiguration.cpp. */
+/* Keep in sync with map_pages / aircrafts_pages / gauge_pages /
+   computer_pages / task_pages / look_pages in dlgConfiguration.cpp. */
 static constexpr TabMenuPage map_pages[] = {
   { N_("Orientation"), CreateMapDisplayConfigPanel },
-  { N_("Aircraft"), CreateSymbolsConfigPanel },
-  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
   { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
   { N_("Terrain"), CreateTerrainDisplayConfigPanel },
   { N_("Topology"), CreateTopographyDisplayConfigPanel },
@@ -1142,6 +1145,12 @@ static constexpr TabMenuPage map_pages[] = {
 #ifdef HAVE_HTTP
   { NC_("Setting", "NOTAM"), CreateNOTAMConfigPanel },
 #endif
+  { nullptr, nullptr }
+};
+
+static constexpr TabMenuPage aircrafts_pages[] = {
+  { N_("Aircraft"), CreateSymbolsConfigPanel },
+  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
   { nullptr, nullptr }
 };
 
@@ -1185,6 +1194,15 @@ ShowMapTiledMenu(UI::SingleWindow &parent) noexcept
 }
 
 static void
+ShowAircraftsTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, aircrafts_pages);
+  ShowTiledMenuList(parent, N_("Aircrafts"), "Aircrafts",
+                    std::move(items));
+}
+
+static void
 ShowGaugesTiledMenu(UI::SingleWindow &parent) noexcept
 {
   TiledMenuItemList items;
@@ -1202,7 +1220,7 @@ ShowInfoBoxesTiledMenu(UI::SingleWindow &parent) noexcept
 }
 
 static void
-ShowGraphicsTiledMenu(UI::SingleWindow &parent) noexcept
+ShowFlightDisplayTiledMenu(UI::SingleWindow &parent) noexcept
 {
   TiledMenuItemList items;
 
@@ -1213,6 +1231,16 @@ ShowGraphicsTiledMenu(UI::SingleWindow &parent) noexcept
     item.icon = ConfigMenuIconForLabel("Map");
     item.kind = TiledMenuItem::Kind::NESTED;
     item.show_nested = ShowMapTiledMenu;
+    items.push_back(std::move(item));
+  }
+
+  {
+    TiledMenuItem item;
+    item.id = "Aircrafts";
+    item.caption = _("Aircrafts");
+    item.icon = ConfigMenuIconForLabel("Aircrafts");
+    item.kind = TiledMenuItem::Kind::NESTED;
+    item.show_nested = ShowAircraftsTiledMenu;
     items.push_back(std::move(item));
   }
 
@@ -1246,7 +1274,8 @@ ShowGraphicsTiledMenu(UI::SingleWindow &parent) noexcept
     items.push_back(std::move(item));
   }
 
-  ShowTiledMenuList(parent, N_("Graphics"), "Graphics", std::move(items));
+  ShowTiledMenuList(parent, N_("Flight Display"), "Flight Display",
+                    std::move(items));
 }
 
 static void
@@ -1525,7 +1554,7 @@ CollectXciItems(TiledMenuItemList &out,
 }
 
 /**
- * Insert Data, Graphics, Glide Computer, and Task folder tiles
+ * Insert Data, Flight Display, Glide Computer, and Task folder tiles
  * immediately after Configuration (in that order).
  */
 static void
@@ -1546,7 +1575,7 @@ InsertFoldersAfterConfiguration(TiledMenuItemList &items) noexcept
     items.insert(items.begin(), std::move(tile));
   };
 
-  /* Insert in reverse so the final order is Data, Graphics,
+  /* Insert in reverse so the final order is Data, Flight Display,
      Glide Computer, Task. */
   {
     TiledMenuItem task;
@@ -1569,13 +1598,13 @@ InsertFoldersAfterConfiguration(TiledMenuItemList &items) noexcept
   }
 
   {
-    TiledMenuItem graphics;
-    graphics.id = "Graphics";
-    graphics.caption = _("Graphics");
-    graphics.icon = ConfigMenuIconForLabel("Graphics");
-    graphics.kind = TiledMenuItem::Kind::NESTED;
-    graphics.show_nested = ShowGraphicsTiledMenu;
-    insert_after_configuration(std::move(graphics));
+    TiledMenuItem flight_display;
+    flight_display.id = "Flight Display";
+    flight_display.caption = _("Flight Display");
+    flight_display.icon = ConfigMenuIconForLabel("Flight Display");
+    flight_display.kind = TiledMenuItem::Kind::NESTED;
+    flight_display.show_nested = ShowFlightDisplayTiledMenu;
+    insert_after_configuration(std::move(flight_display));
   }
 
   {
