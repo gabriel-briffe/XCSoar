@@ -5,6 +5,8 @@
 
 namespace UI { class SingleWindow; }
 
+class Menu;
+
 /**
  * Full-screen tiled menu for Config: flat list of Config1/2/3
  * actions in a Garmin-style tile grid (portrait 3×4, landscape 4×3)
@@ -29,3 +31,20 @@ dlgConfigDataShowModal(UI::SingleWindow &parent) noexcept;
  */
 void
 dlgConfigToolsShowModal(UI::SingleWindow &parent) noexcept;
+
+/**
+ * Show a full-screen Garmin-style tiled menu built from an InputEvents
+ * #Menu (same chrome as Config: pages, Close, Hidden folder).
+ */
+void
+ShowTiledMenuFromMenu(UI::SingleWindow &parent,
+                      const char *title,
+                      const char *menu_id,
+                      const Menu &menu) noexcept;
+
+/**
+ * Ask nested tiled menus to dismiss all the way back to the map.
+ * Used by settings-panel Close when opened from a tiled menu.
+ */
+void
+RequestTiledMenuCloseAll() noexcept;

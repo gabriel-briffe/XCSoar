@@ -4,6 +4,7 @@
 #include "Dialogs/Dialogs.h"
 #include "Dialogs/InternalLink.hpp"
 #include "Dialogs/Message.hpp"
+#include "Dialogs/dlgConfigMenu.hpp"
 #include "Widget/ArrowPagerWidget.hpp"
 #include "Widget/CreateWindowWidget.hpp"
 #include "Widget/Widget.hpp"
@@ -383,8 +384,8 @@ OnUserLevel(bool expert) noexcept
 }
 
 /**
- * Close on the menu page commits (mrOK).  On a settings page, return
- * to the menu (Back).
+ * Back on the menu page commits (mrOK).  On a settings page, return
+ * to the menu.  Close (exit button) always commits.
  */
 static void
 OnCloseClicked(WidgetDialog &dialog)
@@ -405,10 +406,6 @@ OnPageFlipped(WidgetDialog &dialog, TabMenuDisplay &menu)
   if (caption == nullptr)
     caption = _("Configuration");
   dialog.SetCaption(caption);
-
-  pager->SetCloseButtonCaption(pager->GetCurrentIndex() == 0
-                               ? _("Close")
-                               : _("Back"));
 }
 
 void dlgConfigurationShowModal()
@@ -420,7 +417,8 @@ void dlgConfigurationShowModal()
 
   pager = new ArrowPagerWidget(look.button,
                                [&dialog](){ OnCloseClicked(dialog); },
-                               std::make_unique<ConfigurationExtraButtons>(look));
+                               std::make_unique<ConfigurationExtraButtons>(look),
+                               [&dialog](){ dialog.SetModalResult(mrOK); });
 
   auto _menu = std::make_unique<TabMenuDisplay>(*pager, look);
   auto &menu = *_menu;
@@ -502,10 +500,16 @@ ShowConfigPanel(const char *title,
                         look, title);
 
     /* Same host as dlgConfigurationShowModal so panels that call
-       ConfigPanel::BorrowExtraButton (Filter, Colours, …) work. */
+       ConfigPanel::BorrowExtraButton (Filter, Colours, …) work.
+       Back returns to the parent (tiled) menu; Close dismisses the
+       whole stack back to the map. */
     pager = new ArrowPagerWidget(look.button,
                                  [&dialog](){ dialog.SetModalResult(mrOK); },
-                                 std::make_unique<ConfigurationExtraButtons>(look));
+                                 std::make_unique<ConfigurationExtraButtons>(look),
+                                 [&dialog](){
+                                   RequestTiledMenuCloseAll();
+                                   dialog.SetModalResult(mrOK);
+                                 });
     pager->Add(create_panel());
     dialog.FinishPreliminary(pager);
     dialog.ShowModal();

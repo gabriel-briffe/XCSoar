@@ -750,13 +750,19 @@ TiledMenu::ActivateItem(const TiledMenuItem &item) noexcept
     break;
 
   case TiledMenuItem::Kind::PANEL:
-    if (item.create_panel != nullptr)
+    if (item.create_panel != nullptr) {
       ShowConfigPanel(item.caption.c_str(), item.create_panel);
+      if (tiled_menu_exit_all)
+        dialog.SetModalResult(mrCancel);
+    }
     break;
 
   case TiledMenuItem::Kind::ACTION:
-    if (item.show_action != nullptr)
+    if (item.show_action != nullptr) {
       item.show_action();
+      if (tiled_menu_exit_all)
+        dialog.SetModalResult(mrCancel);
+    }
     break;
   }
 }
@@ -1551,6 +1557,35 @@ ShowSystemSetupTiledMenu(UI::SingleWindow &parent) noexcept
 }
 
 static void
+AppendItemsFromMenu(TiledMenuItemList &out, const Menu &menu) noexcept
+{
+  for (unsigned i = 0; i < Menu::MAX_ITEMS; ++i) {
+    const auto &menu_item = menu[i];
+    if (!menu_item.IsDefined())
+      continue;
+    if (IsConfigPagerOrCancel(menu_item.label))
+      continue;
+    if (out.size() >= out.max_size())
+      return;
+
+    char buffer[100];
+    const auto expanded =
+      ButtonLabel::Expand(menu_item.label, std::span{buffer});
+    if (!expanded.visible)
+      continue;
+
+    TiledMenuItem item;
+    item.id = menu_item.label;
+    item.caption = expanded.text;
+    item.icon = ConfigMenuIconForLabel(menu_item.label);
+    item.enabled = expanded.enabled;
+    item.kind = TiledMenuItem::Kind::EVENT;
+    item.event = menu_item.event;
+    out.push_back(std::move(item));
+  }
+}
+
+static void
 CollectXciItems(TiledMenuItemList &out,
                 std::initializer_list<const char *> modes) noexcept
 {
@@ -1559,30 +1594,7 @@ CollectXciItems(TiledMenuItemList &out,
     if (menu == nullptr)
       continue;
 
-    for (unsigned i = 0; i < Menu::MAX_ITEMS; ++i) {
-      const auto &menu_item = (*menu)[i];
-      if (!menu_item.IsDefined())
-        continue;
-      if (IsConfigPagerOrCancel(menu_item.label))
-        continue;
-      if (out.size() >= out.max_size())
-        return;
-
-      char buffer[100];
-      const auto expanded =
-        ButtonLabel::Expand(menu_item.label, std::span{buffer});
-      if (!expanded.visible)
-        continue;
-
-      TiledMenuItem item;
-      item.id = menu_item.label;
-      item.caption = expanded.text;
-      item.icon = ConfigMenuIconForLabel(menu_item.label);
-      item.enabled = expanded.enabled;
-      item.kind = TiledMenuItem::Kind::EVENT;
-      item.event = menu_item.event;
-      out.push_back(std::move(item));
-    }
+    AppendItemsFromMenu(out, *menu);
   }
 }
 
@@ -1800,4 +1812,27 @@ dlgConfigDataShowModal(UI::SingleWindow &parent) noexcept
   tiled_menu_exit_all = false;
   tiled_menu_depth = 0;
   ShowDataTiledMenu(parent);
+}
+
+void
+ShowTiledMenuFromMenu(UI::SingleWindow &parent,
+                      const char *title,
+                      const char *menu_id,
+                      const Menu &menu) noexcept
+{
+  tiled_menu_exit_all = false;
+  tiled_menu_depth = 0;
+
+  TiledMenuItemList items;
+  AppendItemsFromMenu(items, menu);
+  if (items.empty())
+    return;
+
+  ShowTiledMenuList(parent, title, menu_id, std::move(items));
+}
+
+void
+RequestTiledMenuCloseAll() noexcept
+{
+  tiled_menu_exit_all = true;
 }

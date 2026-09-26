@@ -17,7 +17,8 @@
 #include <algorithm>
 
 ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
-                                 const Widget *extra_widget) noexcept
+                                 const Widget *extra_widget,
+                                 bool with_exit) noexcept
   :main(rc)
 {
   const unsigned width = rc.GetWidth(), height = rc.GetHeight();
@@ -28,13 +29,18 @@ ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
 
     /* Size for Close or Back so a caller can swap the caption without
        clipping. */
-    const unsigned close_button_width =
+    const unsigned back_button_width =
       std::max(TextButtonRenderer::GetMinimumButtonWidth(look, _("Close")),
                TextButtonRenderer::GetMinimumButtonWidth(look, _("Back")));
+    const unsigned exit_button_width =
+      TextButtonRenderer::GetMinimumButtonWidth(look, _("Close"));
+    const unsigned chrome_buttons_width = with_exit
+      ? back_button_width + exit_button_width
+      : back_button_width;
     const unsigned arrow_buttons_width =
       2 * ::Layout::GetMaximumControlHeight();
 
-    unsigned left_column_width = std::max(close_button_width,
+    unsigned left_column_width = std::max(chrome_buttons_width,
                                           arrow_buttons_width);
     if (extra_widget != nullptr) {
       const auto max_size = extra_widget->GetMaximumSize();
@@ -44,9 +50,13 @@ ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
 
     auto left_column_rect = main.CutLeftSafe(left_column_width);
 
-    /* close button on the bottom left */
+    /* Back (and optional Close) on the bottom left */
 
-    close_button = left_column_rect.CutBottomSafe(button_height);
+    auto bottom = left_column_rect.CutBottomSafe(button_height);
+    if (with_exit)
+      std::tie(close_button, exit_button) = bottom.VerticalSplit();
+    else
+      close_button = bottom;
 
     /* previous/next buttons above the close button */
 
@@ -67,7 +77,10 @@ ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
     const auto [a, b] = bottom_row_rect.VerticalSplit();
 
     std::tie(previous_button, next_button) = a.VerticalSplit();
-    close_button = b;
+    if (with_exit)
+      std::tie(close_button, exit_button) = b.VerticalSplit();
+    else
+      close_button = b;
 
     /* "extra" gets another row */
 
@@ -110,7 +123,7 @@ void
 ArrowPagerWidget::Prepare(ContainerWindow &parent,
                           const PixelRect &rc) noexcept
 {
-  const Layout layout(look, rc, extra.get());
+  const Layout layout(look, rc, extra.get(), HasExitButton());
   PagerWidget::Prepare(parent, layout.main);
 
   if (extra != nullptr)
@@ -129,12 +142,19 @@ ArrowPagerWidget::Prepare(ContainerWindow &parent,
                        if (HasNextPage() && CanAdvance())
                          Next(false);
                      });
+
+  const char *default_close_caption =
+    HasExitButton() ? _("Back") : _("Close");
   close_button.Create(parent, look,
                       pending_close_caption ? pending_close_caption
-                                            : _("Close"),
+                                            : default_close_caption,
                       layout.close_button,
                       style, close_callback);
   pending_close_caption = nullptr;
+
+  if (HasExitButton())
+    exit_button.Create(parent, look, _("Close"),
+                       layout.exit_button, style, exit_callback);
 
   WireHorizontalSwipeToPages();
 }
@@ -159,12 +179,14 @@ ArrowPagerWidget::WireHorizontalSwipeToPages() noexcept
 void
 ArrowPagerWidget::Show(const PixelRect &rc) noexcept
 {
-  const Layout layout(look, rc, extra.get());
+  const Layout layout(look, rc, extra.get(), HasExitButton());
   PagerWidget::Show(layout.main);
 
   previous_button.MoveAndShow(layout.previous_button);
   next_button.MoveAndShow(layout.next_button);
   close_button.MoveAndShow(layout.close_button);
+  if (HasExitButton())
+    exit_button.MoveAndShow(layout.exit_button);
 
   if (extra != nullptr)
     extra->Show(layout.extra);
@@ -180,6 +202,8 @@ ArrowPagerWidget::Hide() noexcept
   previous_button.Hide();
   next_button.Hide();
   close_button.Hide();
+  if (exit_button.IsDefined())
+    exit_button.Hide();
 
   if (extra != nullptr)
     extra->Hide();
@@ -188,12 +212,14 @@ ArrowPagerWidget::Hide() noexcept
 void
 ArrowPagerWidget::Move(const PixelRect &rc) noexcept
 {
-  const Layout layout(look, rc, extra.get());
+  const Layout layout(look, rc, extra.get(), HasExitButton());
   PagerWidget::Move(layout.main);
 
   previous_button.Move(layout.previous_button);
   next_button.Move(layout.next_button);
   close_button.Move(layout.close_button);
+  if (exit_button.IsDefined())
+    exit_button.Move(layout.exit_button);
 
   if (extra != nullptr)
     extra->Move(layout.extra);
@@ -215,6 +241,7 @@ ArrowPagerWidget::HasFocus() const noexcept
     previous_button.HasFocus() ||
     next_button.HasFocus() ||
     close_button.HasFocus() ||
+    (exit_button.IsDefined() && exit_button.HasFocus()) ||
     (extra != nullptr && extra->HasFocus());
 }
 
@@ -274,8 +301,13 @@ ArrowPagerWidget::FocusPageStart() noexcept
 bool
 ArrowPagerWidget::MoveChromeFocusUp() noexcept
 {
-  /* Portrait chrome order: prev | next | Close.  Up walks toward the
-     page: Close → next → prev → page bottom. */
+  /* Portrait chrome order: prev | next | Back [| Close].  Up walks
+     toward the page: Close → Back → next → prev → page bottom. */
+  if (exit_button.IsDefined() && exit_button.HasFocus()) {
+    close_button.SetFocus();
+    return true;
+  }
+
   if (close_button.HasFocus()) {
     if (next_button.IsEnabled()) {
       next_button.SetFocus();
@@ -333,9 +365,19 @@ ArrowPagerWidget::PageHandsOffToChrome(bool key_up) const noexcept
 bool
 ArrowPagerWidget::MoveChromeFocusDown() noexcept
 {
-  if (close_button.HasFocus()) {
+  if (exit_button.IsDefined() && exit_button.HasFocus()) {
     /* Wrap back into reserved-scrollbar rich text (Checklist,
        Credits).  Other pages stay on Close. */
+    if (PageHandsOffToChrome(false))
+      return FocusPageStart();
+    return true;
+  }
+
+  if (close_button.HasFocus()) {
+    if (exit_button.IsDefined()) {
+      exit_button.SetFocus();
+      return true;
+    }
     if (PageHandsOffToChrome(false))
       return FocusPageStart();
     return true;
@@ -363,7 +405,8 @@ ArrowPagerWidget::KeyPress(unsigned key_code) noexcept
   const bool chrome_focused =
     previous_button.HasFocus() ||
     next_button.HasFocus() ||
-    close_button.HasFocus();
+    close_button.HasFocus() ||
+    (exit_button.IsDefined() && exit_button.HasFocus());
 
   /* When chrome has focus, do not forward to the page.  Unfocused
      rich text would treat Down as "no current item -> first link"
@@ -382,7 +425,10 @@ ArrowPagerWidget::KeyPress(unsigned key_code) noexcept
     /* Content at top declined Up; rich-text OnKeyCheck would
        otherwise swallow further Ups. */
     if (PageHandsOffToChrome(true)) {
-      close_button.SetFocus();
+      if (exit_button.IsDefined())
+        exit_button.SetFocus();
+      else
+        close_button.SetFocus();
       return true;
     }
     return false;

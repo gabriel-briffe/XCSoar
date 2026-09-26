@@ -19,6 +19,9 @@ struct ButtonLook;
  * Supports an optional page-advance guard: if set, forward navigation
  * (next button, RIGHT key, swipe) is blocked unless the callback
  * returns true for the current page.
+ *
+ * When an exit callback is provided, the primary chrome button is
+ * labelled "Back" and a second "Close" button is shown after it.
  */
 class ArrowPagerWidget : public PagerWidget {
 public:
@@ -37,15 +40,22 @@ private:
   struct Layout {
     PixelRect previous_button, next_button;
     PixelRect close_button;
+    PixelRect exit_button;
     PixelRect main;
     PixelRect extra;
 
     Layout(const ButtonLook &look, PixelRect rc,
-           const Widget *extra) noexcept;
+           const Widget *extra, bool with_exit) noexcept;
   };
 
   const ButtonLook &look;
   const std::function<void()> close_callback;
+
+  /**
+   * Optional second chrome button after Back (labelled "Close").
+   * When set, the primary button defaults to "Back".
+   */
+  const std::function<void()> exit_callback;
 
   /**
    * An optional #Widget that is shown in the remaining area in the
@@ -55,8 +65,9 @@ private:
 
   Button previous_button, next_button;
   Button close_button;
+  Button exit_button;
 
-  /** Caption for the close button, applied during Prepare(). */
+  /** Caption for the close/back button, applied during Prepare(). */
   const char *pending_close_caption = nullptr;
 
   /** Optional guard that blocks forward page navigation */
@@ -67,12 +78,19 @@ private:
     return GetCurrentIndex() + 1 < GetSize();
   }
 
+  [[gnu::pure]]
+  bool HasExitButton() const noexcept {
+    return bool(exit_callback);
+  }
+
 public:
   ArrowPagerWidget(const ButtonLook &_look,
                    std::function<void()> _close_callback,
-                   std::unique_ptr<Widget> _extra=nullptr) noexcept
+                   std::unique_ptr<Widget> _extra=nullptr,
+                   std::function<void()> _exit_callback={}) noexcept
     :look(_look),
      close_callback(std::move(_close_callback)),
+     exit_callback(std::move(_exit_callback)),
      extra(std::move(_extra)) {}
 
   Widget &GetExtra() noexcept {
@@ -121,7 +139,7 @@ public:
   void UpdateNextButtonState() noexcept;
 
   /**
-   * Change the label of the close button.  If the button has not
+   * Change the label of the close/back button.  If the button has not
    * been created yet, the caption is stored and applied during
    * Prepare().
    */
@@ -153,11 +171,11 @@ private:
    */
   bool FocusPageStart() noexcept;
 
-  /** Up/Down among prev / next / Close (and into the page). */
+  /** Up/Down among prev / next / Back [/ Close] (and into the page). */
   bool MoveChromeFocusUp() noexcept;
   bool MoveChromeFocusDown() noexcept;
 
-  /** Focus prev, else next, else Close. */
+  /** Focus prev, else next, else Back. */
   bool FocusChromeStart() noexcept;
 
   /**
