@@ -31,6 +31,8 @@ IconLook::Initialise()
   hBmpConfigFlightDisplay.LoadResource(IDB_FLIGHT_DISPLAY_ALL);
   hBmpConfigPages.LoadResource(IDB_PAGES_ALL);
   hBmpConfigDisplay.LoadResource(IDB_DISPLAY_ALL);
+  hBmpConfigSounds.LoadResource(IDB_SOUNDS_ALL);
+  hBmpConfigLanguage.LoadResource(IDB_LANGUAGE_ALL);
   hBmpConfigMap.LoadResource(IDB_MAP_ALL);
   hBmpConfigGauges.LoadResource(IDB_GAUGES_ALL);
   hBmpConfigGlideComputer.LoadResource(IDB_GLIDE_COMPUTER_ALL);

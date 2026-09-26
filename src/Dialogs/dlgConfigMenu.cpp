@@ -389,6 +389,10 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpConfigPages;
   if (StringIsEqual(label, "Display"))
     return &icons.hBmpConfigDisplay;
+  if (StringIsEqual(label, "Sounds"))
+    return &icons.hBmpConfigSounds;
+  if (StringIsEqual(label, "Language"))
+    return &icons.hBmpConfigLanguage;
   if (StringIsEqual(label, "System Setup"))
     return &icons.hBmpTabSettings;
   if (StringIsEqual(label, "Glide Computer"))
@@ -1494,6 +1498,7 @@ ShowSystemSetupTiledMenu(UI::SingleWindow &parent) noexcept
     TiledMenuItem item;
     item.id = "Language";
     item.caption = _("Language");
+    item.icon = ConfigMenuIconForLabel("Language");
     item.kind = TiledMenuItem::Kind::PANEL;
     item.create_panel = CreateLanguageConfigPanel;
     items.push_back(std::move(item));
@@ -1539,6 +1544,7 @@ ShowSystemSetupTiledMenu(UI::SingleWindow &parent) noexcept
     TiledMenuItem item;
     item.id = "Sounds";
     item.caption = _("Sounds");
+    item.icon = ConfigMenuIconForLabel("Sounds");
     item.kind = TiledMenuItem::Kind::PANEL;
     item.create_panel = CreateSoundsConfigPanel;
     items.push_back(std::move(item));
