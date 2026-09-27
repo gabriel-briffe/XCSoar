@@ -111,7 +111,8 @@ InfoBoxManager::DisplayInfoBox() noexcept
     // Do not put calculations here!
 
     InfoBoxFactory::Type DisplayType = settings.contents[i];
-    if ((unsigned)DisplayType > (unsigned)InfoBoxFactory::MAX_TYPE_VAL)
+    if ((unsigned)DisplayType > (unsigned)InfoBoxFactory::MAX_TYPE_VAL ||
+        !InfoBoxFactory::IsAvailable(DisplayType))
       DisplayType = InfoBoxFactory::NavAltitude;
 
     const bool needupdate = ((DisplayType != DisplayTypeLast[i]) || first);

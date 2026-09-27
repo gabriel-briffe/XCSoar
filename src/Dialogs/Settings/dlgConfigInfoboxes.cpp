@@ -134,6 +134,17 @@ InfoBoxesConfigWidget::Prepare(ContainerWindow &parent,
 {
   UpdateLayout(rc);
 
+  /* Drop types this device cannot provide (e.g. GlideCone without
+     OpenGL ES 3.1) so they never appear in Arrange or get pasted. */
+  for (unsigned i = 0; i < InfoBoxSettings::Panel::MAX_CONTENTS; ++i) {
+    const auto type = data.contents[i];
+    if (type >= InfoBoxFactory::NUM_TYPES ||
+        !InfoBoxFactory::IsAvailable(type)) {
+      data.contents[i] = InfoBoxFactory::NavAltitude;
+      changed = true;
+    }
+  }
+
   arrange.SetExtraHelp(_("Copy remembers all InfoBoxes of this set, Paste "
                          "replaces the InfoBoxes of another set with "
                          "them."));
@@ -183,6 +194,8 @@ InfoBoxesConfigWidget::OnPaste() noexcept
   for (unsigned item = 0; item < clipboard_size; item++) {
     InfoBoxFactory::Type content = clipboard.contents[item];
     if (content >= InfoBoxFactory::NUM_TYPES)
+      continue;
+    if (!InfoBoxFactory::IsAvailable(content))
       continue;
 
     data.contents[item] = content;
