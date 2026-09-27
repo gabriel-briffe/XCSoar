@@ -45,14 +45,8 @@ public:
   /** Iterations between abort checks on the compute thread. */
   static constexpr unsigned BATCH = 64;
 
-  [[gnu::const]]
-  static constexpr bool Available() noexcept {
-#ifdef HAVE_GLES_COMPUTE
-    return true;
-#else
-    return false;
-#endif
-  }
+  [[gnu::pure]]
+  static bool Available() noexcept;
 
   [[gnu::pure]]
   bool IsActive() const noexcept {

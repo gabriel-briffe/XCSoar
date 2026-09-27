@@ -24,6 +24,8 @@
 #include "InfoBoxes/Content/Radio.hpp"
 #include "InfoBoxes/Content/Engine.hpp"
 #include "InfoBoxes/Content/GlideCone.hpp"
+#include "GlideCone/GlideConeCompute.hpp"
+#include "InfoBoxes/Content/Type.hpp"
 
 #include "util/Macros.hpp"
 #include "Language/Language.hpp"
@@ -1261,6 +1263,20 @@ InfoBoxFactory::GetDescription(Type type) noexcept
   assert(type < NUM_TYPES);
 
   return meta_data[type].description;
+}
+
+bool
+InfoBoxFactory::IsAvailable(Type type) noexcept
+{
+  assert(type < NUM_TYPES);
+
+  switch (type) {
+  case e_GlideCone:
+  case e_GlideConeDist:
+    return GlideConeGpuSession::Available();
+  default:
+    return true;
+  }
 }
 
 std::unique_ptr<InfoBoxContent>

@@ -6,7 +6,30 @@
 #include "lib/fmt/RuntimeError.hxx"
 #include "LogFile.hpp"
 
+#ifdef HAVE_GLES_COMPUTE
+#include "ui/opengl/GLESCompute.hpp"
+#include <atomic>
+#endif
+
 #include <cassert>
+
+#ifdef HAVE_GLES_COMPUTE
+namespace {
+std::atomic_bool gles31_compute_available{false};
+}
+
+void
+SetGLES31ComputeAvailable(bool available) noexcept
+{
+  gles31_compute_available.store(available, std::memory_order_relaxed);
+}
+
+bool
+HaveGLES31Compute() noexcept
+{
+  return gles31_compute_available.load(std::memory_order_relaxed);
+}
+#endif
 
 namespace EGL {
 
@@ -84,11 +107,12 @@ Display::CreateContext()
     EGL_NONE
   };
 
-#ifdef ANDROID
+#ifdef HAVE_GLES_COMPUTE
   /* Try to create an OpenGL ES 3.1 context so the glide cone GPU compute
      feature can use compute shaders; fall back to ES 2.0 when the device
      does not support it.  All existing rendering uses ES2-style shaders,
-     which remain valid under an ES3.x context. */
+     which remain valid under an ES3.x context.  The result is cached for
+     HaveGLES31Compute() / GlideConeGpuSession::Available(). */
   static constexpr EGLint es31_context_attributes[] = {
     EGL_CONTEXT_MAJOR_VERSION, 3,
     EGL_CONTEXT_MINOR_VERSION, 1,
@@ -99,8 +123,12 @@ Display::CreateContext()
                              EGL_NO_CONTEXT, es31_context_attributes);
   if (context == EGL_NO_CONTEXT) {
     LogFormat("EGL: no OpenGL ES 3.1 context, falling back to ES 2.0");
+    SetGLES31ComputeAvailable(false);
     context = eglCreateContext(display, chosen_config,
                                EGL_NO_CONTEXT, context_attributes);
+  } else {
+    LogFormat("EGL: OpenGL ES 3.1 context");
+    SetGLES31ComputeAvailable(true);
   }
 #else
   context = eglCreateContext(display, chosen_config,

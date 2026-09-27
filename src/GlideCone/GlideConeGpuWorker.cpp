@@ -8,6 +8,7 @@
 
 #ifdef HAVE_GLES_COMPUTE
 #include "ui/egl/System.hpp"
+#include "ui/opengl/GLESCompute.hpp"
 #endif
 
 #include <atomic>
@@ -105,6 +106,9 @@ private:
 
     compute_ctx = eglCreateContext(dpy, config, ui_ctx, es31_attrs);
     if (compute_ctx == EGL_NO_CONTEXT) {
+      /* UI probe said ES 3.1 was available, but the shared compute
+         context failed — never retry. */
+      SetGLES31ComputeAvailable(false);
       return false;
     }
 

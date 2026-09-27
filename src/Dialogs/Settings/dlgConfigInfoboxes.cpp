@@ -234,8 +234,12 @@ InfoBoxesConfigWidget::Prepare(ContainerWindow &parent,
 
   dfe = new DataFieldEnum(this);
   for (unsigned i = InfoBoxFactory::MIN_TYPE_VAL; i < InfoBoxFactory::NUM_TYPES; i++) {
-    const char *name = InfoBoxFactory::GetName((InfoBoxFactory::Type) i);
-    const char *desc = InfoBoxFactory::GetDescription((InfoBoxFactory::Type) i);
+    const auto type = (InfoBoxFactory::Type)i;
+    if (!InfoBoxFactory::IsAvailable(type))
+      continue;
+
+    const char *name = InfoBoxFactory::GetName(type);
+    const char *desc = InfoBoxFactory::GetDescription(type);
     if (name != NULL)
       dfe->addEnumText(gettext(name), i, desc != NULL ? gettext(desc) : NULL);
   }

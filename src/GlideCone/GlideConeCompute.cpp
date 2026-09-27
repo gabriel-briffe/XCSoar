@@ -2,6 +2,13 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeCompute.hpp"
+#include "ui/opengl/GLESCompute.hpp"
+
+bool
+GlideConeGpuSession::Available() noexcept
+{
+  return HaveGLES31Compute();
+}
 
 #ifdef HAVE_GLES_COMPUTE
 

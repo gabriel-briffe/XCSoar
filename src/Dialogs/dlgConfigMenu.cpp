@@ -11,6 +11,7 @@
 #include "Dialogs/Settings/Panels/GaugesConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/GlideComputerConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/GlideConeConfigPanel.hpp"
+#include "GlideCone/GlideConeCompute.hpp"
 #include "Dialogs/Settings/Panels/InfoBoxLayoutConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/InfoBoxesConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/MapDisplayConfigPanel.hpp"
@@ -1175,6 +1176,8 @@ AppendPanelPages(TiledMenuItemList &out, const TabMenuPage *pages) noexcept
 {
   for (const TabMenuPage *page = pages;
        page != nullptr && page->menu_caption != nullptr; ++page) {
+    if (page->available != nullptr && !page->available())
+      continue;
     if (out.size() >= out.max_size())
       return;
 
@@ -1226,7 +1229,8 @@ static constexpr TabMenuPage infoboxes_pages[] = {
 static constexpr TabMenuPage computer_pages[] = {
   { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
   { N_("Glide Computer"), CreateGlideComputerConfigPanel },
-  { N_("Glide Cone"), CreateGlideConeConfigPanel },
+  { N_("Glide Cone"), CreateGlideConeConfigPanel,
+    GlideConeGpuSession::Available },
   { N_("Wind"), CreateWindConfigPanel },
   { N_("Route"), CreateRouteConfigPanel },
   { N_("Scoring"), CreateScoringConfigPanel },

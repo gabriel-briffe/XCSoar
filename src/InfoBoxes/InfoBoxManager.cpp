@@ -247,9 +247,13 @@ InfoBoxManager::ShowInfoBoxPicker(const int i) noexcept
 
   ComboList list;
   for (unsigned j = InfoBoxFactory::MIN_TYPE_VAL; j < InfoBoxFactory::NUM_TYPES; j++) {
-    const char *desc = InfoBoxFactory::GetDescription((InfoBoxFactory::Type)j);
-    list.Append(j, gettext(InfoBoxFactory::GetName((InfoBoxFactory::Type)j)),
-                gettext(InfoBoxFactory::GetName((InfoBoxFactory::Type)j)),
+    const auto type = (InfoBoxFactory::Type)j;
+    if (!InfoBoxFactory::IsAvailable(type))
+      continue;
+
+    const char *desc = InfoBoxFactory::GetDescription(type);
+    list.Append(j, gettext(InfoBoxFactory::GetName(type)),
+                gettext(InfoBoxFactory::GetName(type)),
                 desc != NULL ? gettext(desc) : NULL);
   }
 

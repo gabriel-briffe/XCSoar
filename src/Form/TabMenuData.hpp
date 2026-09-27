@@ -11,6 +11,12 @@ struct TabMenuPage {
   const char *menu_caption;
 
   std::unique_ptr<Widget> (*Load)();
+
+  /**
+   * Optional gate: when non-null, the page is omitted unless this
+   * returns true (e.g. Glide Cone needs GLES 3.1 compute).
+   */
+  bool (*available)() noexcept = nullptr;
 };
 
 struct TabMenuGroup {

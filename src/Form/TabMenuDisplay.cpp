@@ -38,6 +38,9 @@ TabMenuDisplay::InitMenu(const TabMenuGroup groups[],
     mb.first_page_index = buttons.size();
 
     for (auto p = g.pages; p->Load != nullptr; ++p) {
+      if (p->available != nullptr && !p->available())
+        continue;
+
       auto &page_button = buttons.append();
       page_button.main_menu_index = i;
       page_button.caption = gettext(p->menu_caption);
