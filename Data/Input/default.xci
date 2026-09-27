@@ -589,7 +589,7 @@ event=Analysis
 mode=default
 type=gesture
 data=LDR
-event=Checklist
+event=ConfigMenu
 
 mode=default
 type=gesture
