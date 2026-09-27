@@ -12,17 +12,13 @@ class Canvas;
 struct ChartLook;
 struct CrossSectionLook;
 class FlightStatistics;
-struct FlyingState;
 struct NMEAInfo;
 struct DerivedInfo;
 class ProtectedTaskManager;
 class TaskManager;
 
 void
-BarographCaption(char *buffer, size_t buffer_size,
-                 const FlightStatistics &fs,
-                 const FlyingState &flight,
-                 RoughTimeDelta utc_offset) noexcept;
+BarographCaption(char *buffer, size_t buffer_size, const FlightStatistics &fs);
 
 void
 RenderBarographSpark(Canvas &canvas, const PixelRect rc,
