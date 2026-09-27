@@ -22,18 +22,18 @@ OPENGL ?= y
 else ifeq ($(TARGET_IS_CUBIE),y)
 OPENGL ?= y
 
-# UNIX/Linux defaults to OpenGL
+# UNIX/Linux defaults to OpenGL ES
 else ifeq ($(TARGET),UNIX)
 OPENGL ?= y
 
 else
-# Windows defaults to GDI (no OpenGL)
+# OpenGL Windows flavors set OPENGL=y in targets.mk first.
+# Bare TARGET=PC leaves OpenGL off and is rejected later.
 OPENGL ?= n
 endif
 
-GLES2 ?= $(OPENGL)
-
 ifeq ($(OPENGL),y)
+# OpenGL is always OpenGL ES 2.0 (Mesa, ANGLE, or native ES).
 OPENGL_CPPFLAGS = -DENABLE_OPENGL
 
 OPENGL_CPPFLAGS += -DHAVE_GLES -DHAVE_GLES2
@@ -43,6 +43,7 @@ OPENGL_CPPFLAGS += -DHAVE_GLES -DHAVE_GLES2
 ifeq ($(TARGET),ANDROID)
 OPENGL_CPPFLAGS += -DHAVE_GLES_COMPUTE
 endif
+
 
 ifeq ($(TARGET_IS_DARWIN),y)
 # Use ANGLE on macOS (not iOS)
@@ -56,12 +57,11 @@ OPENGL_LDLIBS = $(ANGLE_LDLIBS)
 endif
 else ifeq ($(HAVE_WIN32),y)
 ifeq ($(USE_ANGLE),y)
-# Use ANGLE on Windows with SDL
+# Include ANGLE configuration
 include $(topdir)/build/angle.mk
 OPENGL_CPPFLAGS += $(ANGLE_CPPFLAGS)
 OPENGL_LDLIBS = $(ANGLE_LDLIBS)
 else
-# Fallback for Windows without ANGLE (not yet fully supported)
 OPENGL_LDLIBS = -lGLESv2
 endif
 else ifeq ($(TARGET),ANDROID)

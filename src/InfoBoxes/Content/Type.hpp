@@ -157,6 +157,7 @@ namespace InfoBoxFactory
     e_PreviousWaypoint, /* Previous waypoint infobox: shows the task waypoint before the active leg (start when on the first leg) with arrival altitude diff and distance; selection is informational only and never advances the task or sets a Goto */
     e_GlideCone, /* Glide cone: altitude margin (glider altitude minus required altitude from the glide cone computation) to reach the Goto airport; bottom line shows the required altitude at the glider position */
     e_GlideConeDist, /* Glide cone: Euclidean ground distance along the relay path from the aircraft to the seed */
+    e_BloodOxygen, /* Blood oxygen saturation (SpO2) from a BLE pulse oximeter */
     e_NUM_TYPES /* Last item */
   };
 

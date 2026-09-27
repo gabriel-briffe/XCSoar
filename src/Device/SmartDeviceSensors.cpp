@@ -70,21 +70,32 @@ DeviceDescriptor::OnLocationSensor(std::chrono::system_clock::time_point time,
   basic.time_available.Update(basic.clock);
   basic.date_time_utc = date_time;
 
-  basic.gps.satellites_used = n_satellites;
-  basic.gps.satellites_used_available.Update(basic.clock);
+  if (n_satellites >= 0) {
+    basic.gps.satellites_used = n_satellites;
+    basic.gps.satellites_used_available.Update(basic.clock);
+  } else
+    basic.gps.satellites_used_available.Clear();
   basic.gps.real = true;
   basic.gps.nonexpiring_internal_gps = true;
   basic.location = location;
   basic.location_available.Update(basic.clock);
 
   if (hasAltitude) {
-    auto GeoidSeparation = geoid_altitude
-      ? 0.
-      : EGM96::LookupSeparation(basic.location);
-    basic.gps_altitude = altitude - GeoidSeparation;
+    if (geoid_altitude) {   // sensor reports AMSL altitude
+      basic.gps_altitude = altitude;
+      basic.gps_ellipsoid_altitude_available.Clear();
+      // - will be computed before writing B-record in IGC file
+    } else {                // assume it is WGS84 ellipsoid altitude
+      auto GeoidSeparation = EGM96::LookupSeparation(location);
+      basic.gps_altitude = altitude - GeoidSeparation;
+      basic.gps_ellipsoid_altitude = altitude;
+      basic.gps_ellipsoid_altitude_available.Update(basic.clock);
+    }
     basic.gps_altitude_available.Update(basic.clock);
-  } else
+  } else {
     basic.gps_altitude_available.Clear();
+    basic.gps_ellipsoid_altitude_available.Clear();
+  }
 
   if (hasBearing) {
     basic.track = Angle::Degrees(bearing);

@@ -25,6 +25,18 @@ struct GestureLook;
 class TopographyThread;
 class TerrainThread;
 
+/**
+ * Debug aid for HUD layout work: draw every map overlay at once with
+ * placeholder data, ignoring the conditions that normally make them
+ * mutually exclusive — the GPS status only appears without a fix, the
+ * pan info only while panning, the final glide bar only with a valid
+ * task, and so on.  Enable with:
+ *   make DEBUG_ALL_MAP_OVERLAYS=y …
+ */
+#ifndef DEBUG_ALL_MAP_OVERLAYS
+#define DEBUG_ALL_MAP_OVERLAYS 0
+#endif
+
 class OffsetHistory
 {
   unsigned int pos = 0;
@@ -92,6 +104,20 @@ class GlueMapWindow : public MapWindow {
 #endif
   }
 
+public:
+  /**
+   * Is a gesture trail currently visible?  Under OpenGL, it may
+   * extend beyond this window, because the pointer is captured while
+   * the gesture is drawn.
+   *
+   * @see MainWindow::OnPaint()
+   */
+  [[gnu::pure]]
+  bool HasGestureTrail() const noexcept {
+    return gestures.HasPoints();
+  }
+
+private:
   /**
    * Should pan chrome (crosshair, pan info) be drawn?  Hidden during
    * an early multi-touch gesture that has not yet committed pan UI,

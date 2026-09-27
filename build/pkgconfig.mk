@@ -7,7 +7,7 @@ ifeq ($(USE_THIRDPARTY_LIBS),y)
     PKG_CONFIG := PKG_CONFIG_PATH=$(THIRDPARTY_LIBS_ROOT)/lib/pkgconfig $(PKG_CONFIG) --static
   else
     # Cross builds must not fall back to host pkg-config metadata.
-    PKG_CONFIG := PKG_CONFIG_LIBDIR=$(THIRDPARTY_LIBS_ROOT)/lib/pkgconfig $(PKG_CONFIG) --static
+    PKG_CONFIG := PKG_CONFIG_PATH= PKG_CONFIG_LIBDIR=$(THIRDPARTY_LIBS_ROOT)/lib/pkgconfig $(PKG_CONFIG) --static
   endif
 endif
 
@@ -17,10 +17,6 @@ ifeq ($(TARGET_IS_DARWIN),y)
   else
     PKG_CONFIG := PKG_CONFIG_LIBDIR=$(DARWIN_LIBS)/lib/pkgconfig $(PKG_CONFIG) --static --define-variable=prefix=$(DARWIN_LIBS)
   endif
-endif
-
-ifeq ($(HOST_IS_WIN32)$(HAVE_WIN32)$(HAVE_CE),nyn)
-  PKG_CONFIG := PKG_CONFIG_LIBDIR=/usr/local/i686-w64-mingw32/lib/pkgconfig $(PKG_CONFIG)
 endif
 
 ifeq ($(HOST_IS_PI)$(TARGET_IS_PI),ny)

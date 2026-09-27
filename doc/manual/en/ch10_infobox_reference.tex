@@ -73,6 +73,11 @@ adjusts the track.}
 intelligent vario.}
 \ibi{G load}{G}{Magnitude of G loading reported by a supported external
 intelligent vario. This value is negative for pitch-down manoeuvres.}
+\ibi{Blood Oxygen}{SpO2}{Blood oxygen saturation in percent from a Bluetooth
+pulse oximeter on Android. At 90\% and above the value uses the normal text
+colour, from 85\% to 89\% it is amber, and below 85\% it is red. After 30
+seconds the comment line shows the age of the reading. The value is cleared
+after three minutes.}
 \ibi{Bearing Difference}{Brng. D}{Difference between the glider's track
 bearing, to the bearing of the next waypoint, or for AAT tasks, to the bearing
 to the target within the AAT sector. GPS navigation is based on the track
@@ -201,8 +206,12 @@ maintaining altitude. In final glide mode, this speed-to-fly is calculated for
 descent. In climb mode, this switches to the speed for minimum sink at the
 current load factor (if an accelerometer is connected). When `Block' mode speed to
 fly is selected, this InfoBox displays the MacCready speed.}
-\ibi{Thermal next leg equivalent}{T Next Leg}{Thermal rate of climb on next 
-leg which is equivalent to a thermal equal to the MacCready setting on current leg.}
+\ibi{Thermal next leg equivalent}{T Next Leg}{Climb on the next task
+leg that gives the same average cross-country speed as flying the
+current leg at the MacCready setting, using the polar and the headwind
+on each track.  The box is invalid when there is no next leg, wind, or
+polar.  The comment shows ``no wind'' when wind is not available.
+See Section~\ref{sec:t-next-leg}.}
 \ibi{Task cruise efficiency}{Cruise Eff}{Efficiency of cruise. 100 indicates perfect 
 MacCready performance. This value estimates your cruise efficiency according to the 
 current flight history with the set MC value.  Calculation begins after task is started.}
@@ -346,7 +355,6 @@ reported team code.}
 \ibi{Battery voltage/percent}{Battery}{Percentage of device battery remaining
 (where applicable) and status/voltage of external power supply.}
 \ibi{CPU load}{CPU}{CPU load consumed by XCSoar averaged over 5 seconds.}
-\ibi{Free RAM}{Free RAM}{Free RAM as reported by the operating system.}
 
 %%%%%%%%%%%
 \section{Alternates}

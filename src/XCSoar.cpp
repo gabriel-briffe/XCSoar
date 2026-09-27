@@ -15,8 +15,8 @@
 #include "Interface.hpp"
 #include "Look/GlobalFonts.hpp"
 #include "ui/window/Init.hpp"
+#include "ui/event/Queue.hpp"
 #include "net/http/Init.hpp"
-#include "ResourceLoader.hpp"
 #include "Language/Language.hpp"
 #include "Language/LanguageGlue.hpp"
 #include "Simulator.hpp"
@@ -28,6 +28,10 @@
 #include "io/async/GlobalAsioThread.hpp"
 #include "io/async/AsioThread.hpp"
 #include "util/PrintException.hxx"
+#include "UIActions.hpp"
+#include "Hardware/SystemPower.hpp"
+
+#include <cstdio>
 
 #ifdef ENABLE_SDL
 #ifdef SDL_MAIN_HANDLED
@@ -45,7 +49,7 @@
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #if !TARGET_OS_IPHONE
-#import <AppKit/AppKit.h>
+#include "Apple/MacOSMainMenu.hpp"
 #endif
 #endif
 
@@ -54,12 +58,11 @@
 static int
 Main()
 {
-  ScreenGlobalInit screen_init;
+  /* must happen before any other thread is created; see
+     UI::BlockSignals() */
+  UI::BlockSignals();
 
-#if defined(__APPLE__) && !TARGET_OS_IPHONE
-  // We do not want the ugly non-localized main menu which SDL creates
-  [NSApp setMainMenu: [[NSMenu alloc] init]];
-#endif
+  ScreenGlobalInit screen_init;
 
 #ifdef _WIN32
   /* try to make the UI most responsive */
@@ -68,6 +71,10 @@ Main()
 
   AllowLanguage();
   InitLanguage();
+
+#if defined(__APPLE__) && !TARGET_OS_IPHONE
+  InitialiseMacOSMainMenu();
+#endif
 
   ScopeGlobalAsioThread global_asio_thread;
   const Net::ScopeInit net_init(asio_thread->GetEventLoop());
@@ -80,6 +87,10 @@ Main()
   int ret = EXIT_FAILURE;
   if (Startup(screen_init.GetDisplay()))
     ret = CommonInterface::main_window->RunEventLoop();
+  else if (WasStartupCancelledByUser())
+    /* quitting from the startup dialogs is a deliberate user action,
+       not an error */
+    ret = EXIT_SUCCESS;
 
   /* The export-flight cache owns an InjectTask on the Asio event loop. */
   ShutdownExportFlightsPanel();
@@ -111,10 +122,6 @@ try {
   SDL_SetMainReady();
 #endif
 
-#ifdef USE_WIN32_RESOURCES
-  ResourceLoader::Init(hInstance);
-#endif
-
   // Read options from the command line
   {
 #ifdef _WIN32
@@ -132,6 +139,24 @@ try {
   LogFormat("Starting %s", XCSoar_ProductToken);
 
   int ret = Main();
+
+  bool power_action_succeeded = true;
+  switch (UIActions::GetExitAction()) {
+  case UIActions::ExitAction::REBOOT:
+    power_action_succeeded = SystemPower::Reboot();
+    break;
+
+  case UIActions::ExitAction::POWER_OFF:
+    power_action_succeeded = SystemPower::PowerOff();
+    break;
+
+  case UIActions::ExitAction::NONE:
+  case UIActions::ExitAction::QUIT:
+    break;
+  }
+
+  if (!power_action_succeeded)
+    std::fprintf(stderr, "Failed to execute system power action\n");
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE
   /* For some reason, the app process does not exit on iOS, but a black

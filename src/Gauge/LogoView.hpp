@@ -15,10 +15,8 @@ class LogoView {
   Bitmap title_rgba, big_title_rgba, huge_title_rgba;
   Bitmap white_title, huge_white_title;
 
-#ifndef USE_GDI
   Font font;
   Font info_font;
-#endif
 
 public:
   LogoView() noexcept;

@@ -30,24 +30,19 @@ target:
 
 - **Unix/Linux**: ``output/UNIX/bin/`` (default, and for flavors like WAYLAND, FUZZER)
 - **Unix/Linux (optimized)**: ``output/OPT/bin/`` (``TARGET=OPT`` convenience target)
-- **Windows (OpenGL, recommended)**: ``output/WIN64OPENGL/bin/`` or
-  ``output/WIN32OPENGL/bin/``
-- **Windows (legacy GDI, deprecated)**: ``output/PC/bin/`` (32-bit) or
-  ``output/WIN64/bin/`` (64-bit flavor)
-- **macOS**: ``output/OSX64/bin/`` or ``output/MACOS/bin/`` (default)
+- **Windows**: ``output/WIN64OPENGL/bin/`` or ``output/WIN32OPENGL/bin/``
+- **macOS**: ``output/MACOS/bin/`` (default)
 
 **Important**: Many build "targets" are actually flavors that override the base
 target internally. For example, ``TARGET=WAYLAND`` builds as ``UNIX`` with
 output under ``output/UNIX/bin/``, while ``TARGET=OPT`` also builds as ``UNIX``
 but uses a separate output directory (``output/OPT/bin/``).
-OpenGL Windows flavors (``WIN64OPENGL``, ``WIN32OPENGL``) compile as ``PC`` but
-keep their own output directory (``output/WIN64OPENGL/``, etc.). Legacy
-``WIN64`` is a flavor of ``PC`` with the same split: built as ``PC``, output
-under ``output/WIN64/``.
+Windows OpenGL builds (``WIN64OPENGL``, ``WIN32OPENGL``) keep their own output
+directory (``output/WIN64OPENGL/``, etc.).
 
 **Note**: In the examples below, ``output/UNIX/bin/`` is used (typical for Linux
 development). Replace ``UNIX`` with your flavor output directory if different
-(e.g. ``WIN64OPENGL`` for Windows OpenGL development, ``OSX64`` for macOS). To
+(e.g. ``WIN64OPENGL`` for Windows OpenGL development, ``MACOS`` for macOS). To
 find your output directory, check what was created in the ``output/`` folder
 after building.
 
@@ -56,7 +51,8 @@ Building Run* Utilities
 
 These utilities are **not** built by plain ``make``; use the ``debug`` target
 (see :ref:`development-workflow` in :doc:`build`). They are defined in
-:file:`build/test.mk` and compiled as the ``debug`` make target.
+:file:`build/test.mk` and compiled as the ``debug`` make target. Before a
+pull request, build them with ``everything`` so they compile.
 
 To build all Run* utilities:
 
@@ -816,6 +812,94 @@ This will:
 **Note**: Requires Debian/Ubuntu package ``socat``. The device port must be
 available (not in use by XCSoar) when monitoring directly.
 
+RunLXNAVPolarEcho
+~~~~~~~~~~~~~~~~~
+
+Hardware check for LXNAV ``PLXV0,POLAR`` coefficient conversion and
+safe full-POLAR rewrites (#2397).  Use with a V7, S80, S10, or compatible
+vario on a free serial/USB port (XCSoar must not hold the port).
+
+**Build**::
+
+   make -j$(nproc) TARGET=UNIX USE_CCACHE=y output/UNIX/bin/RunLXNAVPolarEcho
+   make -j$(nproc) TARGET=WIN64OPENGL USE_CCACHE=y output/WIN64OPENGL/bin/RunLXNAVPolarEcho.exe
+
+**Usage**::
+
+   ./output/UNIX/bin/RunLXNAVPolarEcho /dev/ttyUSB0 115200
+   ./output/UNIX/bin/RunLXNAVPolarEcho /dev/ttyUSB0 115200 --read-only
+   ./output/UNIX/bin/RunLXNAVPolarEcho /dev/ttyUSB0 115200 --preserve-crew
+   ./output/WIN64OPENGL/bin/RunLXNAVPolarEcho.exe COM3 115200
+
+**Modes**:
+
+- default: write a known Hornet sample polar, read it back, verify SI
+  round-trip of a,b,c
+- ``--read-only``: only ``PLXV0,POLAR,R``; print LX and SI coefficients
+  (non-destructive snapshot of the vario polar)
+- ``--preserve-crew``: after a successful read, rewrite a *full* POLAR
+  sentence with pilot weight 95 kg and check that a,b,c, max weight and
+  name are unchanged (guards against empty-field polar wipes)
+
+**Exit status**: ``0`` on success, non-zero on timeout or mismatch.
+
+LXNAV polar sync — manual XCSoar checklist (#2397)
+--------------------------------------------------
+
+Automated unit tests cover conversion and write shaping.  Confirm on a
+real S10/S80 (or V7) with XCSoar before merging polar-sync changes.
+
+Prerequisites
+^^^^^^^^^^^^^
+
+- LXNAV driver selected; note baud rate and ``Sync from/to device``
+- Plane profile: reference mass, empty mass, pilot weight, and max
+  ballast match the vario (or use polar sync Receive to import them)
+- Enable NMEA logger on the device port if you need a recording
+
+A. Coefficient harness (no full UI)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. Quit XCSoar so the serial port is free.
+2. Run ``RunLXNAVPolarEcho PORT BAUD`` then
+   ``RunLXNAVPolarEcho PORT BAUD --preserve-crew``.
+3. Expect ``Round-trip vs sent SI: OK`` and
+   ``Preserve coefficients after crew rewrite: OK``.
+
+B. Polar sync Receive (ballast kg)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. Device dialog: **Polar sync = Receive from device**.
+2. Connect; wait for “Polar received from device” (or confirm masses
+   updated in Basic settings / plane).
+3. On the vario set MacCready and water ballast to a known full value
+   (e.g. 180 kg).
+4. XCSoar ballast litres / kg should match within a few kg (same
+   reference, empty, and pilot masses).
+5. Change MC on the vario; XCSoar MC should follow.
+
+C. Polar sync Send (must not corrupt vario)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. Note the vario’s polar name, MC speed-to-fly at a fixed MC (e.g. 1.2),
+   and ballast display **before** connecting.
+2. Device dialog: **Polar sync = Send to device**; plane polar in XCSoar
+   must be the intended glider polar.
+3. Connect and wait for polar send.
+4. On the vario, MC speeds and polar must remain plausible (not
+   ±10 m/s nonsense, not 180 km/h at MC 1.2 with no water on a Ventus).
+5. Optional: ``RunLXNAVPolarEcho PORT BAUD --read-only`` afterwards and
+   confirm a,b,c are still non-tiny LX values (order ~1, not ~0.002).
+
+D. Crew / empty mass without wiping polar
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. Polar sync Off or Receive; connect so XCSoar has seen a POLAR reply.
+2. Change pilot weight in XCSoar Basic settings (sync to device on).
+3. Vario polar and STF must stay sane; pilot weight updates.
+4. Optional NMEA log: outgoing ``PLXV0,POLAR,W`` must include non-empty
+   a,b,c (not ``PLXV0,POLAR,W,,,,,,,,``).
+
 CAI302Tool
 ~~~~~~~~~~
 
@@ -1106,4 +1190,3 @@ Additional Resources
 - ``test/src/DebugPort.hpp``: Device port utilities
 - ``test/data/``: Sample flight data files for testing
 - ``build/test.mk``: Build system definitions for all utilities
-

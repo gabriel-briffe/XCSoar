@@ -533,6 +533,26 @@ type=key
 data=RIGHT
 event=ScreenModes next
 
+mode=default
+type=key
+data=N
+event=DarkMode toggle
+
+mode=default
+type=key
+data=L
+event=InfoBoxGeometry next
+
+mode=default
+type=key
+data=T
+event=TextSize up
+
+mode=default
+type=key
+data=S
+event=TextSize down
+
 # Gestures
 
 mode=default
@@ -1751,8 +1771,18 @@ type=key
 data=0
 event=OrientationToggle show
 event=OrientationToggle toggle
-label=Orientation\n$(OrientationToggleActionName)
+label=Orientation
+$(OrientationToggleActionName)
 location=49
+
+mode=RemoteStick
+type=key
+data=0
+event=ArrangeInfoBoxes
+event=Mode default
+label=Arrange
+InfoBoxes
+location=50
 
 # -------------
 # Define gesture to open Quickmenu without keyboard or remote

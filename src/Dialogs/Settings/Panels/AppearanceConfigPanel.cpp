@@ -76,7 +76,9 @@ AppearanceConfigPanel::Prepare(ContainerWindow &parent,
 
   AddInteger(_("Text size"),
              nullptr,
-             "%d %%", "%d", 75, 200, 5,
+             "%d %%", "%d",
+             UISettings::SCALE_MIN, UISettings::SCALE_MAX,
+             UISettings::SCALE_STEP,
              ui_settings.scale);
 
 #ifndef KOBO

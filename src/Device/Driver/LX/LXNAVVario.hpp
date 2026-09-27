@@ -60,6 +60,17 @@ namespace LXNAVVario {
   }
 
   /**
+   * Stop the periodic sentences configured by SetupNMEA().
+   * PLXVC request/response (flight download) still works.  Call
+   * SetupNMEA() afterwards to restore the normal rates.
+   */
+  static inline void
+  SilenceNMEA(Port &port, OperationEnvironment &env)
+  {
+    PortWriteNMEA(port, "PLXV0,NMEARATE,W,0,0,0,0,0,0,0", env);
+  }
+
+  /**
    * Set the MC setting of the vario
    * @param mc in m/s (clamped to [0.0, 5.0] per S80 firmware limits)
    */
@@ -146,7 +157,11 @@ namespace LXNAVVario {
   }
 
   /**
-   * Set only the pilot weight in POLAR command, leaving all other fields empty
+   * Set only the pilot weight in POLAR command, leaving all other fields empty.
+   *
+   * Do not use on LXNAV S-series: empty a,b,c fields zero the device
+   * polar (#2397). Prefer a full POLAR write via PutCrewMass().
+   *
    * @param pilot_weight crew mass (kg)
    */
   static inline void
@@ -163,7 +178,11 @@ namespace LXNAVVario {
   }
 
   /**
-   * Set only the empty weight in POLAR command, leaving all other fields empty
+   * Set only the empty weight in POLAR command, leaving all other fields empty.
+   *
+   * Do not use on LXNAV S-series: empty a,b,c fields zero the device
+   * polar (#2397). Prefer a full POLAR write via PutEmptyMass().
+   *
    * @param empty_weight empty mass (kg)
    */
   static inline void

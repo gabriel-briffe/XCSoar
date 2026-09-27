@@ -51,7 +51,21 @@ TopWindow::~TopWindow() noexcept
 #endif
 
   delete screen;
+  screen = nullptr;
+#ifdef USE_WAYLAND
+  DestroyNative();
+#endif
 }
+
+#ifdef ENABLE_OPENGL
+unsigned
+TopWindow::GetPresentationBufferCount() const noexcept
+{
+  return screen != nullptr
+    ? screen->GetPresentationBufferCount()
+    : 4;
+}
+#endif
 
 void
 TopWindow::Create([[maybe_unused]] const char *text, PixelSize size,
@@ -68,8 +82,6 @@ TopWindow::Create([[maybe_unused]] const char *text, PixelSize size,
 
 #ifdef ENABLE_SDL
   screen = new TopCanvas(display, window);
-#elif defined(USE_GLX)
-  screen = new TopCanvas(display, x_window);
 #elif defined(USE_X11)
   screen = new TopCanvas(display, x_window);
 #elif defined(USE_WAYLAND)
@@ -104,6 +116,10 @@ TopWindow::Create([[maybe_unused]] const char *text, PixelSize size,
   if (native_size.width > 0 && native_size.height > 0)
     size = native_size;
   // else keep the original size (which should be from SystemWindowSize() with fallback)
+#endif
+
+#ifdef USE_WAYLAND
+  size = screen->GetSize();
 #endif
   ContainerWindow::Create(nullptr, PixelRect{size}, style);
 }
@@ -230,6 +246,8 @@ TopWindow::DrawRedrawCounter(Canvas &canvas) noexcept
 
 #endif
 
+/** \brief Draw the entire scene onto the screen canvas.
+ */
 void
 TopWindow::Expose() noexcept
 {
@@ -262,7 +280,7 @@ TopWindow::Expose() noexcept
 #if defined(ENABLE_OPENGL) && defined(GL_EXT_discard_framebuffer) && \
   (defined(ANDROID) || defined(MESA_KMS))
   /* On mobile/KMS style backends, discarding the previous window
-     contents can save bandwidth.  Desktop EGL/GLX compositors may
+     contents can save bandwidth.  Desktop EGL compositors may
      still read from the just-swapped window surface, so avoid this
      optimisation there. */
   if (GLExt::discard_framebuffer != nullptr) {
@@ -285,6 +303,14 @@ TopWindow::Refresh() noexcept
     /* the application is paused/suspended, and we don't have an
        OpenGL surface - ignore all drawing requests */
     return;
+	
+#ifdef MESA_KMS
+  if (!screen->CheckAndFinishPendingFlip()) {
+    /* A buffer flip is ongoing. Refrain from rendering now.*/
+    return;
+  }
+#endif
+
 
 #if defined(USE_X11) || defined(USE_WAYLAND)
   if (!IsVisible())

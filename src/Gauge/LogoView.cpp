@@ -31,12 +31,10 @@ LogoView::LogoView() noexcept try
   white_title.Load(IDB_TITLE_HD_WHITE);
   huge_white_title.Load(IDB_TITLE_UHD_WHITE);
 #endif
-#ifndef USE_GDI
   font.Load(FontDescription(Layout::FontScale(10)));
   FontDescription info_desc(Layout::FontScale(16));
   info_desc.SetBold(true);
   info_font.Load(info_desc);
-#endif
 } catch (...) {
   /* ignore Bitmap/Font loader exceptions */
 }
@@ -231,23 +229,19 @@ LogoView::draw(Canvas &canvas, const PixelRect &rc,
 
   // Draw full XCSoar version number
 
-#ifndef USE_GDI
   if (!font.IsDefined())
     return;
 
   canvas.Select(font);
-#endif
 
   canvas.SetTextColor(dark_mode ? COLOR_WHITE : COLOR_BLACK);
   canvas.SetBackgroundTransparent();
   canvas.DrawText({2, 2}, XCSoar_ProductToken);
 
   /* Build flavour label below the logo (info, not a warning). */
-#ifndef USE_GDI
   if (!info_font.IsDefined())
     return;
   canvas.Select(info_font);
-#endif
 
   const char *info_text = "Rainbow";
   const auto text_size = canvas.CalcTextSize(info_text);

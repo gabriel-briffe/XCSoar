@@ -73,8 +73,7 @@ extern GLint hillshade_projection, hillshade_translate,
   hillshade_height_tex, hillshade_ramp_tex,
   hillshade_texel_step, hillshade_sun, hillshade_contrast,
   hillshade_height_slope_factor, hillshade_height_div,
-  hillshade_q, hillshade_do_shading, hillshade_contour_div,
-  hillshade_height_texel;
+  hillshade_height_offset;
 
 /**
  * Copy a DEM height tile into an FBO (LA → RGBA as L,0,0,A),
@@ -83,6 +82,22 @@ extern GLint hillshade_projection, hillshade_translate,
 extern GLProgram *height_blit_shader;
 extern GLint height_blit_projection, height_blit_translate,
   height_blit_texture, height_blit_texel;
+
+/**
+ * A shader that draws a line with round ends and a smooth edge.  Each
+ * segment is a quad around it; the #TEXCOORD attribute holds the
+ * segment's two end points (x1, y1, x2, y2), and every fragment
+ * within the #RADIUS attribute of the segment gets
+ * #round_line_color.  The edge fades out over #round_line_softness
+ * pixels.  A segment whose ends are the same point draws a dot.
+ *
+ * Fragments covered less than #round_line_min_coverage are
+ * discarded; see #RoundLines for how this keeps overlapping
+ * translucent segments from blending twice.
+ */
+extern GLProgram *round_line_shader;
+extern GLint round_line_projection, round_line_translate,
+  round_line_softness, round_line_min_coverage, round_line_color;
 
 /**
  * Throws on error.

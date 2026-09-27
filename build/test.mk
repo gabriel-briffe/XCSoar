@@ -2,7 +2,6 @@ name-to-bin = $(patsubst %,$(TARGET_BIN_DIR)/%$(TARGET_EXEEXT),$(1))
 
 MORE_SCREEN_SOURCES = \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
-	$(SRC)/Look/FontDescription.cpp \
 	$(SRC)/Screen/Layout.cpp \
 	$(SRC)/Hardware/DisplayDPI.cpp \
 	$(SRC)/Hardware/CPU.cpp
@@ -62,9 +61,10 @@ $(1)_SOURCES = \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
 	$(SRC)/Formatter/AirspaceFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/$(1).cpp
 $(1)_DEPENDS = $(TEST1_DEPENDS)
 $$(eval $$(call link-program,$(1),$(1)))
@@ -80,6 +80,7 @@ TEST_NAMES = \
 	TestInputTransformMode \
 	TestOverwritingRingBuffer \
 	TestDateTime TestISO8601 TestRoughTime TestRoughSpeed TestWrapClock \
+	TestPosixTimeZone \
 	TestPolylineDecoder \
 	TestTransponderCode \
 	TestMath \
@@ -88,15 +89,17 @@ TEST_NAMES = \
 	TestGrahamScan \
 	TestUnits TestEarth TestSunEphemeris \
 	TestValidity TestUTM \
+	TestWaypointReachability TestBackupPaths \
 	TestAllocatedGrid \
 	TestRadixTree TestGeoBounds TestGeoClip TestGlideConeField \
-	TestLogger TestGRecord TestClimbAvCalc TestCirclingWind \
+	TestLogger TestGPSDeviceName TestGRecord TestClimbAvCalc TestCirclingWind \
 	TestFilteredVarioComputer \
 	TestVarioSynthesiser TestAudioVario \
 	TestWaypointReader TestThermalBase \
-	TestFlarmNet TestFlarmMessaging \
+	TestFlarmNet TestFlarmMessaging TestFlarmBinaryProtocol \
 	TestColorRamp TestXCThermBandQuery TestGeoPoint TestDiffFilter \
-	TestFileUtil TestRepository TestFileType TestPath TestPolars TestCSVLine TestGlidePolar \
+	TestFileUtil TestRepository TestFileType TestMarkdownCheckbox TestPath TestPolars TestCSVLine TestGlidePolar \
+	TestLXNAVPolarConversion \
 	test_replay_task TestProjection TestFlatPoint TestFlatLine TestFlatGeoPoint \
 	TestMacCready TestOrderedTask TestAATPoint TestTaskSave \
 	TestTaskFileSeeYouParsing \
@@ -107,11 +110,12 @@ TEST_NAMES = \
 	TestZeroFinder \
 	TestAirspaceWarningManager \
 	TestAirspaceParser \
+	TestAirspaceLabelPlacement \
 	TestOGNAprsParser \
 	TestMETARParser \
-	TestIGCParser \
+	TestIGCParser TestIGCFlightTimes \
 	TestTraceBounds \
-	TestStrings TestUnescapeCString TestUTF8 TestWrapText \
+	TestStrings TestUnescapeCString TestUTF8 TestWrapText TestLayout \
 	TestInputConfig \
 	TestCRC16 TestCRC8 \
 	TestUnitsFormatter \
@@ -122,6 +126,7 @@ TEST_NAMES = \
 	TestFileMetadataFormatter \
 	TestIGCFilenameFormatter \
 	TestNMEAFormatter \
+	TestNMEAChecksum \
 	TestGDL90 \
 	TestGDL90Driver \
 	TestLXNToIGC \
@@ -130,6 +135,7 @@ TEST_NAMES = \
 	TestUriUtil \
 	TestThermalBand \
 	TestPackedFloat \
+	TestWaylandScale \
 	TestVersionNumber \
 	TestSlowCPU \
 	TestWeglideScoring \
@@ -176,6 +182,17 @@ TEST_CRC16_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestCRC16.cpp
 $(eval $(call link-program,TestCRC16,TEST_CRC16))
+
+TEST_FLARM_BINARY_PROTOCOL_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestFlarmBinaryProtocol.cpp
+$(eval $(call link-program,TestFlarmBinaryProtocol,TEST_FLARM_BINARY_PROTOCOL))
+
+TEST_NMEA_CHECKSUM_SOURCES = \
+	$(SRC)/NMEA/Checksum.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestNMEAChecksum.cpp
+$(eval $(call link-program,TestNMEAChecksum,TEST_NMEA_CHECKSUM))
 
 TEST_CRC8_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \
@@ -224,10 +241,29 @@ $(eval $(call link-program,TestOverwritingRingBuffer,TEST_OVERWRITING_RING_BUFFE
 
 TEST_IGC_PARSER_SOURCES = \
 	$(SRC)/IGC/IGCParser.cpp \
+	$(TEST_SRC_DIR)/FakeGeoidNonZero.cpp \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestIGCParser.cpp
 TEST_IGC_PARSER_DEPENDS = MATH UTIL
 $(eval $(call link-program,TestIGCParser,TEST_IGC_PARSER))
+
+TEST_IGC_FLIGHT_TIMES_SOURCES = \
+	$(SRC)/IGC/FlightTimes.cpp \
+	$(SRC)/IGC/IGCParser.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
+	$(SRC)/Computer/FlyingComputer.cpp \
+	$(SRC)/Atmosphere/AirDensity.cpp \
+	$(SRC)/Engine/GlideSolvers/GlidePolar.cpp \
+	$(SRC)/Engine/Navigation/TraceHistory.cpp \
+	$(SRC)/Engine/Task/Stats/CommonStats.cpp \
+	$(SRC)/Engine/Task/Stats/ElementStat.cpp \
+	$(SRC)/Engine/Task/Stats/TaskStats.cpp \
+	$(SRC)/Engine/ThermalBand/ThermalBand.cpp \
+	$(SRC)/Engine/ThermalBand/ThermalSlice.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestIGCFlightTimes.cpp
+TEST_IGC_FLIGHT_TIMES_DEPENDS = LIBNMEA OPERATION IO OS THREAD GEO MATH UTIL TIME UNITS
+$(eval $(call link-program,TestIGCFlightTimes,TEST_IGC_FLIGHT_TIMES))
 
 TEST_METAR_PARSER_SOURCES = \
 	$(SRC)/Weather/METARParser.cpp \
@@ -319,6 +355,10 @@ TEST_NOTAM_SOURCES = \
 	$(SRC)/NOTAM/Delta.cpp \
 	$(SRC)/NOTAM/NOTAMCache.cpp \
 	$(SRC)/NOTAM/Filter.cpp \
+	$(SRC)/Profile/Map.cpp \
+	$(SRC)/Profile/NotamConfig.cpp \
+	$(SRC)/Profile/NumericValue.cpp \
+	$(SRC)/Profile/StringValue.cpp \
 	$(SRC)/Repository/FileType.cpp \
 	$(TEST_SRC_DIR)/FakeLocalPath.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
@@ -331,8 +371,8 @@ endif
 TEST_AIRSPACE_PARSER_SOURCES = \
 	$(SRC)/Airspace/AirspaceParser.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/RadioFrequency.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/FakeDialogs.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
@@ -341,6 +381,16 @@ TEST_AIRSPACE_PARSER_SOURCES = \
 TEST_AIRSPACE_PARSER_LDADD = $(FAKE_LIBS)
 TEST_AIRSPACE_PARSER_DEPENDS = IO OS AIRSPACE UNITS ZZIP GEO MATH UTIL UNITS
 $(eval $(call link-program,TestAirspaceParser,TEST_AIRSPACE_PARSER))
+
+TEST_AIRSPACE_LABEL_PLACEMENT_SOURCES = \
+	$(SRC)/Engine/Airspace/AirspaceWarningConfig.cpp \
+	$(SRC)/Renderer/AirspaceLabelList.cpp \
+	$(SRC)/Renderer/AirspaceLabelPlacement.cpp \
+	$(SRC)/Renderer/LabelBlock.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestAirspaceLabelPlacement.cpp
+TEST_AIRSPACE_LABEL_PLACEMENT_DEPENDS = MATH
+$(eval $(call link-program,TestAirspaceLabelPlacement,TEST_AIRSPACE_LABEL_PLACEMENT))
 
 TEST_AIRSPACE_WARNING_MANAGER_SOURCES = \
 	$(SRC)/Atmosphere/Pressure.cpp \
@@ -380,7 +430,7 @@ TEST_POLYLINE_DECODER_DEPENDS = GEO UTIL
 $(eval $(call link-program,TestPolylineDecoder,TEST_POLYLINE_DECODER))
 
 TEST_TRANSPONDER_CODE_SOURCES = \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestTransponderCode.cpp
 TEST_TRANSPONDER_CODE_DEPENDS = MATH
@@ -391,6 +441,12 @@ TEST_ROUGH_TIME_SOURCES = \
 	$(TEST_SRC_DIR)/TestRoughTime.cpp
 TEST_ROUGH_TIME_DEPENDS = MATH TIME
 $(eval $(call link-program,TestRoughTime,TEST_ROUGH_TIME))
+
+TEST_POSIX_TIME_ZONE_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestPosixTimeZone.cpp
+TEST_POSIX_TIME_ZONE_DEPENDS = MATH TIME
+$(eval $(call link-program,TestPosixTimeZone,TEST_POSIX_TIME_ZONE))
 
 TEST_ROUGH_SPEED_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \
@@ -462,9 +518,10 @@ TEST_TASKFILE_SEEYOU_PARSING_SOURCES = \
 	$(SRC)/XML/Node.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestTaskFileSeeYouParsing.cpp
 TEST_TASKFILE_SEEYOU_PARSING_OBJS = $(call SRC_TO_OBJ,$(TEST_TASKFILE_SEEYOU_PARSING_SOURCES))
@@ -529,7 +586,7 @@ TEST_ROUTE_SOURCES = \
 	$(SRC)/Engine/Util/Gradient.cpp \
 	$(SRC)/NMEA/FlyingState.cpp \
 	$(SRC)/Formatter/AirspaceFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
 	$(TEST_SRC_DIR)/Printing.cpp \
@@ -550,6 +607,7 @@ TEST_REPLAY_TASK_SOURCES = \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/Replay/IgcReplay.cpp \
 	$(SRC)/Replay/TaskAutoPilot.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/Printing.cpp \
 	$(TEST_SRC_DIR)/TaskPrinting.cpp \
@@ -616,7 +674,7 @@ $(eval $(call link-program,TestGlideConeField,TEST_GLIDE_CONE_FIELD))
 TEST_FLARM_NET_SOURCES = \
 	$(SRC)/FLARM/FlarmNetReader.cpp \
 	$(SRC)/FLARM/Id.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/FLARM/FlarmNetRecord.cpp \
 	$(SRC)/FLARM/FlarmNetDatabase.cpp \
 	$(TEST_SRC_DIR)/tap.c \
@@ -742,7 +800,7 @@ $(eval $(call link-program,TestIGCFilenameFormatter,TEST_IGC_FILENAME_FORMATTER)
 
 TEST_NMEA_FORMATTER_SOURCES = \
 	$(SRC)/Atmosphere/AirDensity.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Device/Parser.cpp \
 	$(SRC)/Device/Driver/FLARM/StaticParser.cpp \
 	$(SRC)/FLARM/Error.cpp \
@@ -785,6 +843,16 @@ TEST_WRAP_TEXT_SOURCES = \
 	$(TEST_SRC_DIR)/TestWrapText.cpp
 TEST_WRAP_TEXT_DEPENDS = SCREEN EVENT ASYNC OS IO THREAD MATH UTIL
 $(eval $(call link-program,TestWrapText,TEST_WRAP_TEXT))
+
+TEST_LAYOUT_SOURCES = \
+	$(SRC)/Screen/Layout.cpp \
+	$(SRC)/Hardware/DisplayDPI.cpp \
+	$(TEST_SRC_DIR)/FakeAsset.cpp \
+	$(TEST_SRC_DIR)/FakeLogFile.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestLayout.cpp
+TEST_LAYOUT_DEPENDS = SCREEN EVENT ASYNC OS IO THREAD MATH UTIL
+$(eval $(call link-program,TestLayout,TEST_LAYOUT))
 
 ifeq ($(HAVE_WIN32),y)
 TEST_UTF8WIN_SOURCES = \
@@ -833,6 +901,12 @@ TEST_GLIDE_POLAR_SOURCES = \
 TEST_GLIDE_POLAR_DEPENDS = GEO MATH IO UNITS
 $(eval $(call link-program,TestGlidePolar,TEST_GLIDE_POLAR))
 
+TEST_LXNAV_POLAR_CONVERSION_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestLXNAVPolarConversion.cpp
+TEST_LXNAV_POLAR_CONVERSION_DEPENDS = MATH UTIL GLIDE
+$(eval $(call link-program,TestLXNAVPolarConversion,TEST_LXNAV_POLAR_CONVERSION))
+
 TEST_FILE_UTIL_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestFileUtil.cpp
@@ -845,6 +919,14 @@ TEST_PATH_SOURCES = \
 	$(TEST_SRC_DIR)/TestPath.cpp
 TEST_PATH_DEPENDS = UTIL
 $(eval $(call link-program,TestPath,TEST_PATH))
+
+TEST_BACKUP_PATHS_SOURCES = \
+	$(SRC)/io/BackupPaths.cpp \
+	$(SRC)/system/Path.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestBackupPaths.cpp
+TEST_BACKUP_PATHS_DEPENDS = OS UTIL
+$(eval $(call link-program,TestBackupPaths,TEST_BACKUP_PATHS))
 
 TEST_REPOSITORY_SOURCES = \
 	$(SRC)/Repository/Parser.cpp \
@@ -863,6 +945,14 @@ TEST_FILE_TYPE_SOURCES = \
 	$(TEST_SRC_DIR)/TestFileType.cpp
 TEST_FILE_TYPE_DEPENDS = UTIL
 $(eval $(call link-program,TestFileType,TEST_FILE_TYPE))
+
+TEST_MARKDOWN_CHECKBOX_SOURCES = \
+	$(SRC)/util/MarkdownParser.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestMarkdownCheckbox.cpp
+TEST_MARKDOWN_CHECKBOX_DEPENDS = UTIL
+$(eval $(call link-program,TestMarkdownCheckbox,TEST_MARKDOWN_CHECKBOX))
 
 TEST_DATA_LAYOUT_MIGRATION_SOURCES = \
 	$(SRC)/DataFileLayout.cpp \
@@ -985,6 +1075,11 @@ TEST_VALIDITY_SOURCES = \
 	$(TEST_SRC_DIR)/TestValidity.cpp
 $(eval $(call link-program,TestValidity,TEST_VALIDITY))
 
+TEST_WAYPOINT_REACHABILITY_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestWaypointReachability.cpp
+$(eval $(call link-program,TestWaypointReachability,TEST_WAYPOINT_REACHABILITY))
+
 TEST_VARIO_SYNTHESISER_SOURCES = \
 	$(SRC)/Audio/ToneSynthesiser.cpp \
 	$(SRC)/Audio/VarioSynthesiser.cpp \
@@ -1029,10 +1124,17 @@ TEST_LOGGER_SOURCES = \
 	$(SRC)/util/MD5.cpp \
 	$(SRC)/Version.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestLogger.cpp
 TEST_LOGGER_DEPENDS = IO OS GEO MATH UTIL UNITS
 $(eval $(call link-program,TestLogger,TEST_LOGGER))
+
+TEST_GPS_DEVICE_NAME_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestGPSDeviceName.cpp
+TEST_GPS_DEVICE_NAME_DEPENDS = UTIL
+$(eval $(call link-program,TestGPSDeviceName,TEST_GPS_DEVICE_NAME))
 
 TEST_GRECORD_SOURCES = \
 	$(SRC)/Logger/GRecord.cpp \
@@ -1070,9 +1172,9 @@ TEST_DRIVER_SOURCES = \
 	$(SRC)/Computer/ClimbAverageCalculator.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
-	$(SRC)/RadioFrequency.cpp \
-	$(SRC)/TransponderCode.cpp \
-	$(SRC)/TransponderMode.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderMode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/Repository/FileType.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
@@ -1091,7 +1193,7 @@ $(eval $(call link-program,TestDriver,TEST_DRIVER))
 TEST_WAY_POINT_FILE_SOURCES = \
 	$(SRC)/Waypoint/CupWriter.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestWaypointReader.cpp
@@ -1104,6 +1206,7 @@ TEST_TRACE_SOURCES = \
 	$(SRC)/Engine/Trace/Trace.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/Printing.cpp \
 	$(TEST_SRC_DIR)/TestTrace.cpp
 TEST_TRACE_DEPENDS = IO OS GEO MATH UTIL
@@ -1120,6 +1223,7 @@ $(eval $(call link-program,TestTraceBounds,TEST_TRACE_BOUNDS))
 FLIGHT_TABLE_SOURCES = \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/Repository/FileType.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/FlightTable.cpp
 FLIGHT_TABLE_DEPENDS = GEO MATH IO OS UTIL
 $(eval $(call link-program,FlightTable,FLIGHT_TABLE))
@@ -1176,7 +1280,7 @@ DEBUG_PROGRAM_NAMES += \
 	FlightPath \
 	ReadProfileString ReadProfileInt \
 	KeyCodeDumper \
-	ReadPort RunPortHandler LogPort \
+	ReadPort RunPortHandler LogPort RunLXNAVPolarEcho \
 	SplicePorts \
 	RunDeviceDriver RunDeclare RunFlightList RunDownloadFlight \
 	RunEnableNMEA \
@@ -1267,7 +1371,7 @@ DEBUG_REPLAY_SOURCES = \
 	$(SRC)/Device/Util/NMEAWriter.cpp \
 	$(SRC)/Device/Util/NMEAReader.cpp \
 	$(SRC)/Device/Config.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/IGC/Generator.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
@@ -1421,7 +1525,7 @@ RUN_SL_TRACKING_SOURCES = \
 	$(SRC)/Tracking/SkyLines/Client.cpp \
 	$(SRC)/Tracking/SkyLines/Assemble.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/RunSkyLinesTracking.cpp
 RUN_SL_TRACKING_DEPENDS = $(DEBUG_REPLAY_DEPENDS)
 $(eval $(call link-program,RunSkyLinesTracking,RUN_SL_TRACKING))
@@ -1437,7 +1541,7 @@ RUN_LIVETRACK24_SOURCES = \
 	$(SRC)/Units/Descriptor.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/RunLiveTrack24.cpp
 RUN_LIVETRACK24_DEPENDS = LIBHTTP $(DEBUG_REPLAY_DEPENDS) CO ASYNC LIBNET OS IO THREAD GEO MATH UTIL
 $(eval $(call link-program,RunLiveTrack24,RUN_LIVETRACK24))
@@ -1578,7 +1682,7 @@ $(eval $(call link-program,RunInputParser,RUN_INPUT_PARSER))
 RUN_WAY_POINT_PARSER_SOURCES = \
 	$(SRC)/Waypoint/Factory.cpp \
 	$(SRC)/Compatibility/fmode.c \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
 	$(TEST_SRC_DIR)/RunWaypointParser.cpp
@@ -1589,7 +1693,7 @@ $(eval $(call link-program,RunWaypointParser,RUN_WAY_POINT_PARSER))
 NEAREST_WAYPOINTS_SOURCES = \
 	$(SRC)/Waypoint/Factory.cpp \
 	$(SRC)/Compatibility/fmode.c \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
 	$(TEST_SRC_DIR)/NearestWaypoints.cpp
@@ -1607,8 +1711,8 @@ $(eval $(call link-program,RunFlightParser,RUN_FLIGHT_PARSER))
 RUN_AIRSPACE_PARSER_SOURCES = \
 	$(SRC)/Airspace/AirspaceParser.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/RadioFrequency.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
 	$(TEST_SRC_DIR)/RunAirspaceParser.cpp
@@ -1658,6 +1762,21 @@ LOG_PORT_SOURCES = \
 LOG_PORT_DEPENDS = PORT ASYNC LIBNET OPERATION IO OS THREAD TIME UTIL
 $(eval $(call link-program,LogPort,LOG_PORT))
 
+RUN_LXNAV_POLAR_ECHO_SOURCES = \
+	$(SRC)/Device/Port/ConfiguredPort.cpp \
+	$(TEST_SRC_DIR)/FakeSpectateFilePort.cpp \
+	$(SRC)/Device/Config.cpp \
+	$(SRC)/Device/Util/NMEAWriter.cpp \
+	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
+	$(SRC)/Version.cpp \
+	$(SRC)/system/StandardVersion.cpp \
+	$(TEST_SRC_DIR)/FakeLogFile.cpp \
+	$(TEST_SRC_DIR)/FakeLanguage.cpp \
+	$(TEST_SRC_DIR)/DebugPort.cpp \
+	$(TEST_SRC_DIR)/RunLXNAVPolarEcho.cpp
+RUN_LXNAV_POLAR_ECHO_DEPENDS = PORT ASYNC LIBNET OPERATION IO OS THREAD TIME UTIL MATH GLIDE EVENT
+$(eval $(call link-program,RunLXNAVPolarEcho,RUN_LXNAV_POLAR_ECHO))
+
 SPLICE_PORTS_SOURCES = \
 	$(SRC)/Device/Port/ConfiguredPort.cpp \
 	$(TEST_SRC_DIR)/FakeSpectateFilePort.cpp \
@@ -1679,7 +1798,7 @@ RUN_DEVICE_DRIVER_SOURCES = \
 	$(SRC)/Device/Util/NMEAWriter.cpp \
 	$(SRC)/Device/Util/NMEAReader.cpp \
 	$(SRC)/Device/Config.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/FLARM/Error.cpp \
 	$(SRC)/FLARM/Traffic.cpp \
 	$(SRC)/FLARM/List.cpp \
@@ -1689,7 +1808,7 @@ RUN_DEVICE_DRIVER_SOURCES = \
 	$(SRC)/Computer/ClimbAverageCalculator.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
 	$(TEST_SRC_DIR)/FakeMessage.cpp \
@@ -1706,13 +1825,13 @@ RUN_DECLARE_SOURCES = \
 	$(SRC)/Device/Util/NMEAReader.cpp \
 	$(SRC)/Device/Declaration.cpp \
 	$(SRC)/Device/Config.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/IGC/Generator.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
@@ -1731,13 +1850,13 @@ RUN_ENABLE_NMEA_SOURCES = \
 	$(SRC)/Device/Util/NMEAReader.cpp \
 	$(SRC)/Device/Declaration.cpp \
 	$(SRC)/Device/Config.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/IGC/Generator.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
@@ -1799,13 +1918,13 @@ RUN_FLIGHT_LIST_SOURCES = \
 	$(SRC)/Device/Util/NMEAReader.cpp \
 	$(SRC)/Device/Declaration.cpp \
 	$(SRC)/Device/Config.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/IGC/Generator.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
 	$(TEST_SRC_DIR)/FakeMessage.cpp \
@@ -1823,13 +1942,13 @@ RUN_DOWNLOAD_FLIGHT_SOURCES = \
 	$(SRC)/Device/Util/NMEAReader.cpp \
 	$(SRC)/Device/Declaration.cpp \
 	$(SRC)/Device/Config.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/IGC/Generator.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
 	$(TEST_SRC_DIR)/FakeMessage.cpp \
@@ -1883,7 +2002,7 @@ RUN_IGC_WRITER_SOURCES = \
 	$(SRC)/Logger/GRecord.cpp \
 	$(SRC)/Logger/LoggerEPE.cpp \
 	$(SRC)/util/MD5.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/RunIGCWriter.cpp
 RUN_IGC_WRITER_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL
@@ -1894,7 +2013,7 @@ RUN_FLIGHT_LOGGER_SOURCES = \
 	$(SRC)/Computer/CirclingComputer.cpp \
 	$(SRC)/Logger/FlightLogger.cpp \
 	$(SRC)/FLARM/Error.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/RunFlightLogger.cpp
 RUN_FLIGHT_LOGGER_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL TIME
@@ -1908,7 +2027,7 @@ RUN_FLYING_COMPUTER_SOURCES = \
 	$(SRC)/Polar/Shape.cpp \
 	$(SRC)/Polar/Polar.cpp \
 	$(SRC)/Polar/PolarStore.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Version.cpp \
 	$(SRC)/system/StandardVersion.cpp \
 	$(TEST_SRC_DIR)/RunFlyingComputer.cpp
@@ -1937,7 +2056,7 @@ RUN_CIRCLING_WIND_SOURCES = \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/Computer/CirclingComputer.cpp \
 	$(SRC)/Computer/Wind/CirclingWind.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(TEST_SRC_DIR)/RunCirclingWind.cpp
 RUN_CIRCLING_WIND_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL
@@ -1950,7 +2069,7 @@ RUN_WIND_EKF_SOURCES = \
 	$(SRC)/Computer/Wind/WindEKFGlue.cpp \
 	$(SRC)/Formatter/TimeFormatter.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/RunWindEKF.cpp
 RUN_WIND_EKF_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL TIME
 $(eval $(call link-program,RunWindEKF,RUN_WIND_EKF))
@@ -1967,7 +2086,7 @@ RUN_WIND_COMPUTER_SOURCES = \
 	$(SRC)/Computer/Wind/Store.cpp \
 	$(SRC)/Formatter/TimeFormatter.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/RunWindComputer.cpp
 RUN_WIND_COMPUTER_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL TIME
 $(eval $(call link-program,RunWindComputer,RUN_WIND_COMPUTER))
@@ -1976,7 +2095,7 @@ RUN_EXTERNAL_WIND_SOURCES = \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(SRC)/Formatter/TimeFormatter.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/RunExternalWind.cpp
 RUN_EXTERNAL_WIND_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL TIME
 $(eval $(call link-program,RunExternalWind,RUN_EXTERNAL_WIND))
@@ -1986,8 +2105,8 @@ RUN_TASK_SOURCES = \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/NMEA/Aircraft.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
-	$(SRC)/RadioFrequency.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Engine/Util/Gradient.cpp \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
@@ -2006,7 +2125,7 @@ RUN_TRAIL_RENDERER_STRESS_SOURCES = \
 	$(SRC)/Math/Screen.cpp \
 	$(SRC)/Look/TrailLook.cpp \
 	$(SRC)/Renderer/TrailRenderer.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Version.cpp \
 	$(SRC)/system/StandardVersion.cpp \
 	$(MORE_SCREEN_SOURCES) \
@@ -2020,7 +2139,7 @@ $(eval $(call link-program,RunTrailRendererStress,RUN_TRAIL_RENDERER_STRESS))
 RUN_TRACE_SOURCES = \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(SRC)/IGC/IGCParser.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/FLARM/Error.cpp \
 	$(ENGINE_SRC_DIR)/GlideSolvers/GlideSettings.cpp \
@@ -2034,7 +2153,7 @@ $(eval $(call link-program,RunTrace,RUN_TRACE))
 RUN_CONTEST_SOURCES = \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(SRC)/IGC/IGCParser.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/FLARM/Error.cpp \
 	$(ENGINE_SRC_DIR)/Trace/Point.cpp \
@@ -2051,7 +2170,7 @@ RUN_WAVE_COMPUTER_SOURCES = \
 	$(SRC)/Computer/WaveComputer.cpp \
 	$(SRC)/Formatter/TimeFormatter.cpp \
 	$(SRC)/Formatter/GeoPointFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/FLARM/Error.cpp \
 	$(ENGINE_SRC_DIR)/Trace/Point.cpp \
@@ -2066,7 +2185,7 @@ ANALYSE_FLIGHT_SOURCES = \
 	$(SRC)/Formatter/TimeFormatter.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
 	$(SRC)/Computer/CirclingComputer.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(ENGINE_SRC_DIR)/Trace/Point.cpp \
 	$(ENGINE_SRC_DIR)/Trace/Trace.cpp \
 	$(ENGINE_SRC_DIR)/ThermalBand/ThermalBand.cpp \
@@ -2084,7 +2203,7 @@ $(eval $(call link-program,AnalyseFlight,ANALYSE_FLIGHT))
 
 FLIGHT_PATH_SOURCES = \
 	$(DEBUG_REPLAY_SOURCES) \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/NMEA/Aircraft.cpp \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
@@ -2140,7 +2259,7 @@ RUN_RICH_TEXT_RENDERER_SOURCES = \
 	$(SRC)/util/MarkdownParser.cpp \
 	$(SRC)/ResourceLookup.cpp \
 	$(SRC)/system/OpenLink.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Version.cpp \
 	$(SRC)/system/StandardVersion.cpp \
 	$(MORE_SCREEN_SOURCES) \
@@ -2209,6 +2328,7 @@ RUN_MAP_WINDOW_SOURCES = \
 	$(SRC)/Renderer/AirspaceRenderer.cpp \
 	$(SRC)/Renderer/AirspaceRendererGL.cpp \
 	$(SRC)/Renderer/AirspaceRendererOther.cpp \
+	$(SRC)/Renderer/AirspaceLabelPlacement.cpp \
 	$(SRC)/Renderer/AirspaceLabelList.cpp \
 	$(SRC)/Renderer/AirspaceLabelRenderer.cpp \
 	$(SRC)/Renderer/BestCruiseArrowRenderer.cpp \
@@ -2246,6 +2366,7 @@ RUN_MAP_WINDOW_SOURCES = \
 	$(SRC)/TeamCode/Settings.cpp \
 	$(SRC)/Logger/Settings.cpp \
 	$(SRC)/Computer/TraceComputer.cpp \
+	$(SRC)/Computer/WaypointReach.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/Task/ProtectedRoutePlanner.cpp \
 	$(SRC)/Task/RoutePlannerGlue.cpp \
@@ -2274,16 +2395,17 @@ RUN_MAP_WINDOW_SOURCES = \
 	$(SRC)/Waypoint/WaypointGlue.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
 	$(SRC)/Compatibility/fmode.c \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Atmosphere/Pressure.cpp \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/Fonts.cpp \
 	$(TEST_SRC_DIR)/FakeAsset.cpp \
 	$(TEST_SRC_DIR)/FakeDialogs.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/RunMapWindow.cpp
 
 ifeq ($(HAVE_HTTP),y)
@@ -2567,6 +2689,7 @@ $(eval $(call link-program,RunFlightListRenderer,RUN_FLIGHT_LIST_RENDERER))
 RUN_PROGRESS_WINDOW_SOURCES = \
 	$(SRC)/Version.cpp \
 	$(MORE_SCREEN_SOURCES) \
+	$(SRC)/Formatter/ByteSizeFormatter.cpp \
 	$(SRC)/ProgressWindow.cpp \
 	$(SRC)/Gauge/LogoView.cpp \
 	$(TEST_SRC_DIR)/FakeAsset.cpp \
@@ -2579,6 +2702,7 @@ RUN_JOB_DIALOG_SOURCES = \
 	$(SRC)/Version.cpp \
 	$(SRC)/Job/Thread.cpp \
 	$(MORE_SCREEN_SOURCES) \
+	$(SRC)/Formatter/ByteSizeFormatter.cpp \
 	$(SRC)/ProgressWindow.cpp \
 	$(SRC)/Look/DialogLook.cpp \
 	$(SRC)/Look/ButtonLook.cpp \
@@ -2607,7 +2731,8 @@ RUN_ANALYSIS_SOURCES = \
 	$(SRC)/Task/ProtectedRoutePlanner.cpp \
 	$(SRC)/Task/RoutePlannerGlue.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Waypoint/LastUsed.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Math/Screen.cpp \
 	$(SRC)/Atmosphere/CuSonde.cpp \
 	$(SRC)/Computer/Wind/CirclingWind.cpp \
@@ -2698,13 +2823,14 @@ RUN_ANALYSIS_SOURCES = \
 	$(IO_SRC_DIR)/MapFile.cpp \
 	$(SRC)/io/ConfiguredFile.cpp \
 	$(SRC)/Operation/ConsoleOperationEnvironment.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/FakeAsset.cpp \
 	$(TEST_SRC_DIR)/FakeDialogs.cpp \
 	$(TEST_SRC_DIR)/FakeListPicker.cpp \
 	$(TEST_SRC_DIR)/FakeHelpDialog.cpp \
 	$(TEST_SRC_DIR)/FakeLanguage.cpp \
 	$(TEST_SRC_DIR)/FakeLogFile.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/Fonts.cpp \
 	$(TEST_SRC_DIR)/RunAnalysis.cpp
 RUN_ANALYSIS_DEPENDS = \
@@ -2762,11 +2888,11 @@ RUN_AIRSPACE_WARNING_DIALOG_SOURCES = \
 	$(SRC)/Repository/FileType.cpp \
 	$(SRC)/Airspace/AirspaceParser.cpp \
 	$(SRC)/Airspace/AirspaceGlue.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(SRC)/Audio/Sound.cpp \
 	$(MORE_SCREEN_SOURCES) \
 	$(SRC)/Atmosphere/Pressure.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(IO_SRC_DIR)/MapFile.cpp \
 	$(IO_SRC_DIR)/ConfiguredFile.cpp \
 	$(TEST_SRC_DIR)/FakeAsset.cpp \
@@ -2821,7 +2947,7 @@ $(eval $(call link-program,PlayTone,PLAY_TONE))
 PLAY_VARIO_SOURCES = \
 	$(MORE_SCREEN_SOURCES) \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(TEST_SRC_DIR)/PlayVario.cpp
 PLAY_VARIO_LDADD = $(AUDIO_LDADD) $(SCREEN_LDADD) $(EVENT_LDADD)
@@ -2830,45 +2956,11 @@ $(eval $(call link-program,PlayVario,PLAY_VARIO))
 
 DUMP_VARIO_SOURCES = \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(TEST_SRC_DIR)/DumpVario.cpp
 DUMP_VARIO_DEPENDS = $(DEBUG_REPLAY_DEPENDS) AUDIO GEO MATH SCREEN EVENT UTIL OS TIME
 $(eval $(call link-program,DumpVario,DUMP_VARIO))
-
-RUN_TASK_EDITOR_DIALOG_SOURCES = \
-	$(SRC)/Airspace/ProtectedAirspaceWarningManager.cpp \
-	$(SRC)/Dialogs/Inflate.cpp \
-	$(SRC)/Dialogs/ComboPicker.cpp \
-	$(SRC)/Dialogs/HelpDialog.cpp \
-	$(SRC)/Dialogs/dlgTaskOverview.cpp \
-	$(SRC)/Dialogs/WaypointList.cpp \
-	$(SRC)/Dialogs/dlgWaypointDetails.cpp \
-	$(SRC)/Dialogs/dlgTaskWaypoint.cpp \
-	$(SRC)/Math/SunEphemeris.cpp \
-	$(SRC)/Airspace/AirspaceParser.cpp \
-	$(MORE_SCREEN_SOURCES) \
-	$(SRC)/Look/GlobalFonts.cpp \
-	$(SRC)/Task/ProtectedTaskManager.cpp \
-	$(SRC)/LocalPath.cpp \
-	$(SRC)/UtilsFont.cpp \
-	$(SRC)/Units/Units.cpp \
-	$(SRC)/Units/Settings.cpp \
-	$(SRC)/Units/Descriptor.cpp \
-	$(SRC)/Formatter/Units.cpp \
-	$(SRC)/Repository/FileType.cpp \
-	$(SRC)/Waypoint/WaypointGlue.cpp \
-	$(SRC)/Waypoint/Factory.cpp \
-	$(TEST_SRC_DIR)/FakeAsset.cpp \
-	$(TEST_SRC_DIR)/FakeDialogs.cpp \
-	$(TEST_SRC_DIR)/FakeLanguage.cpp \
-	$(TEST_SRC_DIR)/FakeLogFile.cpp \
-	$(TEST_SRC_DIR)/FakeProfile.cpp \
-	$(TEST_SRC_DIR)/FakeTerrain.cpp \
-	$(TEST_SRC_DIR)/RunTaskEditorDialog.cpp
-RUN_TASK_EDITOR_DIALOG_LDADD = $(FAKE_LIBS)
-RUN_TASK_EDITOR_DIALOG_DEPENDS = WAYPOINTFILE TASKFILE OPERATION FORM WIDGET DATA_FIELD SCREEN EVENT RESOURCE IO OS THREAD ZZIP UTIL GEO
-$(eval $(call link-program,RunTaskEditorDialog,RUN_TASK_EDITOR_DIALOG))
 
 TEST_NOTIFY_SOURCES = \
 	$(SRC)/Hardware/CPU.cpp \
@@ -2952,9 +3044,10 @@ DUMP_TASK_FILE_SOURCES = \
 	$(SRC)/Engine/Util/Gradient.cpp \
 	$(SRC)/IGC/IGCParser.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/Engine/Route/Config.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
+	$(TEST_SRC_DIR)/FakeGeoid.cpp \
 	$(TEST_SRC_DIR)/DumpTaskFile.cpp
 DUMP_TASK_FILE_DEPENDS = TASKFILE GLIDE WAYPOINT WAYPOINTFILE OPERATION IO OS THREAD ZZIP GEO TIME MATH UTIL
 $(eval $(call link-program,DumpTaskFile,DUMP_TASK_FILE))
@@ -2962,7 +3055,7 @@ $(eval $(call link-program,DumpTaskFile,DUMP_TASK_FILE))
 DUMP_FLARM_NET_SOURCES = \
 	$(SRC)/FLARM/FlarmNetReader.cpp \
 	$(SRC)/FLARM/Id.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(SRC)/FLARM/FlarmNetRecord.cpp \
 	$(SRC)/FLARM/FlarmNetDatabase.cpp \
 	$(TEST_SRC_DIR)/DumpFlarmNet.cpp
@@ -2972,7 +3065,7 @@ $(eval $(call link-program,DumpFlarmNet,DUMP_FLARM_NET))
 IGC2NMEA_SOURCES = \
 	$(DEBUG_REPLAY_SOURCES) \
 	$(SRC)/Formatter/NMEAFormatter.cpp \
-	$(SRC)/TransponderCode.cpp \
+	$(SRC)/Radio/TransponderCode.cpp \
 	$(TEST_SRC_DIR)/IGC2NMEA.cpp
 IGC2NMEA_DEPENDS = $(DEBUG_REPLAY_DEPENDS) GEO MATH UTIL TIME
 
@@ -2984,7 +3077,7 @@ TEST_REPLAY_RETROSPECTIVE_SOURCES = \
 	$(SRC)/Atmosphere/AirDensity.cpp \
 	$(SRC)/Engine/Util/Gradient.cpp \
 	$(SRC)/Waypoint/Factory.cpp \
-	$(SRC)/RadioFrequency.cpp \
+	$(SRC)/Radio/RadioFrequency.cpp \
 	$(TEST_SRC_DIR)/FakeTerrain.cpp \
 	$(TEST_SRC_DIR)/test_replay_retrospective.cpp
 TEST_REPLAY_RETROSPECTIVE_DEPENDS = $(TEST1_DEPENDS) OPERATION WAYPOINTFILE
@@ -2995,6 +3088,12 @@ TEST_PACKED_FLOAT_SOURCES = \
 	$(TEST_SRC_DIR)/TestPackedFloat.cpp
 TEST_PACKED_FLOAT_DEPENDS = MATH
 $(eval $(call link-program,TestPackedFloat,TEST_PACKED_FLOAT))
+
+TEST_WAYLAND_SCALE_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestWaylandScale.cpp
+TEST_WAYLAND_SCALE_DEPENDS = MATH
+$(eval $(call link-program,TestWaylandScale,TEST_WAYLAND_SCALE))
 
 TEST_WEGLIDE_SCORING_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \

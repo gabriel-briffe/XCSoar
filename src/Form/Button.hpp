@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "Hardware/Vibrator.hpp"
 #include "ui/window/PaintWindow.hpp"
 #include "ui/event/Timer.hpp"
 
@@ -159,3 +160,11 @@ private:
   [[gnu::pure]]
   ButtonState GetState() const noexcept;
 };
+
+/**
+ * Vibrate if the user setting allows it.  Hardware/Vibrator must
+ * not read those settings; every press that should click goes
+ * through here.
+ */
+void PlayHapticFeedback(HapticFeedbackType type =
+                       HapticFeedbackType::PRESS) noexcept;

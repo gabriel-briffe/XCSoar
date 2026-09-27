@@ -6,6 +6,7 @@
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "Form/DataField/Enum.hpp"
+#include "Hardware/DisplayBrightness.hpp"
 #include "Hardware/RotateDisplay.hpp"
 #include "Interface.hpp"
 #include "MainWindow.hpp"
@@ -20,15 +21,23 @@
 #include "UtilsSettings.hpp"
 
 #include <cassert>
+#include <memory>
 
 #ifdef USE_POLL_EVENT
 #include "ui/event/Globals.hpp"
 #include "ui/event/Queue.hpp"
 #endif
 
+#if defined(KOBO) || (defined(__linux__) && !defined(ANDROID))
+#define HAVE_DISPLAY_BRIGHTNESS_CONTROL
+#endif
+
 enum ControlIndex {
   CustomDPI,
   MapOrientation,
+#if defined(HAVE_DISPLAY_BRIGHTNESS_CONTROL)
+  ScreenBrightness,
+#endif
   AppDisplayType,
 #ifdef DRAW_MOUSE_CURSOR
   CursorSize,
@@ -62,9 +71,12 @@ static_assert(ARRAY_SIZE(display_type_list) ==
               "display_type_list must match DisplayType::COUNT");
 
 class HardwareDisplayConfigPanel final : public RowFormWidget {
+  std::unique_ptr<DisplayBrightness> brightness;
+
 public:
   HardwareDisplayConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
+    :RowFormWidget(UIGlobals::GetDialogLook()),
+     brightness(DisplayBrightness::Detect()) {}
 
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
   bool Save(bool &changed) noexcept override;
@@ -108,6 +120,21 @@ HardwareDisplayConfigPanel::Prepare(ContainerWindow &parent,
   else
     AddDummy();
 
+#ifdef HAVE_DISPLAY_BRIGHTNESS_CONTROL
+  if (brightness != nullptr) {
+    AddInteger(_("Screen brightness"),
+               brightness->IsWritable()
+               ? _("Adjust the screen brightness.")
+               : _("Screen brightness is read-only because writing requires additional permissions."),
+               "%d %%", "%d", 0, 100, 5,
+               brightness->GetBrightnessPercent());
+
+    if (!brightness->IsWritable())
+      SetReadOnly(ScreenBrightness);
+  } else
+    AddDummy();
+#endif
+
   AddEnum(C_("Setting", "Display type"),
           _("Select the display technology. E-ink modes disable kinetic "
             "and smooth scrolling for slow refresh screens."),
@@ -141,6 +168,15 @@ HardwareDisplayConfigPanel::Save(bool &_changed) noexcept
     changed |= orientation_changed;
   }
 
+#ifdef HAVE_DISPLAY_BRIGHTNESS_CONTROL
+  if (brightness != nullptr && brightness->IsWritable()) {
+    const unsigned old_percent = brightness->GetBrightnessPercent();
+    const unsigned new_percent = GetValueInteger(ScreenBrightness);
+    if (new_percent != old_percent)
+      brightness->SetBrightnessPercent(new_percent);
+  }
+#endif
+
   if (SaveValueEnum(AppDisplayType, ProfileKeys::DisplayType,
                     settings.display.display_type)) {
     changed = true;
@@ -163,6 +199,11 @@ HardwareDisplayConfigPanel::Save(bool &_changed) noexcept
 
     if (!Display::Rotate(settings.display.orientation))
       LogString("Display rotation failed");
+
+#ifdef SOFTWARE_ROTATE_DISPLAY
+    CommonInterface::main_window->SetDisplayOrientation(
+        settings.display.orientation);
+#endif
 
 #ifdef USE_POLL_EVENT
     UI::event_queue->SetDisplayOrientation(settings.display.orientation);

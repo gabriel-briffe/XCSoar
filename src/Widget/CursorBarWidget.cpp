@@ -11,7 +11,6 @@
 #include "Form/Button.hpp"
 #include "Renderer/SymbolButtonRenderer.hpp"
 #include "ui/canvas/Canvas.hpp"
-#include "ui/canvas/Features.hpp"
 #include "ui/window/SolidContainerWindow.hpp"
 #include "ui/window/PaintWindow.hpp"
 #include "util/StaticArray.hxx"
@@ -62,10 +61,6 @@ protected:
 
   void OnPaint(Canvas &canvas) noexcept override {
     const auto rc = GetClientRect();
-    if (HaveClipping())
-      /* with clipping, the parent's background does not extend into
-         child windows, so we must fill the background ourselves */
-      canvas.Clear(look.background_brush);
 
     canvas.SetBackgroundTransparent();
     canvas.SetTextColor(is_available

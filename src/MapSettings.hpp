@@ -108,7 +108,7 @@ struct TrailSettings {
    */
   bool vbo;
 
-  /** 0: standard, 1: seeyou colors */
+  /** Vario #1: green/brown; Vario #2 (default): SeeYou orange/cyan */
   enum class Type: uint8_t {
     VARIO_1,
     VARIO_2,
