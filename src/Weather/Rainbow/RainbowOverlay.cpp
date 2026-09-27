@@ -73,6 +73,7 @@ SetOverlayTile(GlueMapWindow &map, unsigned slot, Path path,
   auto overlay = std::make_unique<MapOverlayBitmap>(
     std::move(bitmap), GeoBitmap::GetGeoQuadrilateral(tile),
     label.c_str());
+  overlay->EnableWebMercator();
   overlay->SetAlpha(layer.alpha);
   map.SetOverlay(slot, std::move(overlay));
   return true;

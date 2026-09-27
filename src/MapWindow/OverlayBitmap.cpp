@@ -14,6 +14,7 @@
 #include "util/StaticArray.hxx"
 
 #include <algorithm>
+#include <cmath>
 #include <boost/geometry/geometries/register/ring.hpp>
 #include <boost/geometry/algorithms/covered_by.hpp>
 #include <boost/geometry/strategies/strategies.hpp>
@@ -26,6 +27,14 @@ MapOverlayBitmap::MapOverlayBitmap(Path path)
 {
   bounds = bitmap.LoadGeoFile(path);
   simple_bounds = bounds.GetBounds();
+
+  /* Slippy PNG/JPEG tiles (SkySight sat/rain, etc.) are Web Mercator;
+     GeoTIFF products stay geographic with linear lat. */
+  if (path.EndsWithIgnoreCase(".jpg") ||
+      path.EndsWithIgnoreCase(".jpeg") ||
+      path.EndsWithIgnoreCase(".jfif") ||
+      path.EndsWithIgnoreCase(".png"))
+    web_mercator = true;
 }
 
 /**
@@ -52,26 +61,74 @@ ToArrayQuadrilateral(const GeoQuadrilateral q) noexcept
 }
 
 [[gnu::pure]]
+static double
+LatitudeToMercatorY(double lat_deg) noexcept
+{
+  return std::asinh(std::tan(lat_deg * M_PI / 180.0));
+}
+
+[[gnu::pure]]
+static double
+MercatorYToLatitude(double merc_y) noexcept
+{
+  return 180.0 / M_PI * std::atan(std::sinh(merc_y));
+}
+
+/**
+ * Geographic UV: lon and lat both linear in texture space (GeoTIFF).
+ */
+[[gnu::pure]]
 static GeoPoint
-InterpolateQuadrilateral(const GeoQuadrilateral &q,
-                         double u, double v) noexcept
+InterpolateGeographic(const GeoQuadrilateral &q,
+                      double u, double v) noexcept
 {
   const auto top = q.top_left.Interpolate(q.top_right, u);
   const auto bottom = q.bottom_left.Interpolate(q.bottom_right, u);
   return top.Interpolate(bottom, v);
 }
 
+/**
+ * Web Mercator UV: lon linear, lat via mercator Y (slippy tiles).
+ * Assumes an axis-aligned tile quad (constant N/S lat, E/W lon).
+ */
+[[gnu::pure]]
+static GeoPoint
+InterpolateWebMercator(const GeoQuadrilateral &q,
+                       double u, double v) noexcept
+{
+  const double west = q.top_left.longitude.Degrees();
+  const double east = q.top_right.longitude.Degrees();
+  const double north = q.top_left.latitude.Degrees();
+  const double south = q.bottom_left.latitude.Degrees();
+
+  const double lon = west + (east - west) * u;
+  const double merc0 = LatitudeToMercatorY(north);
+  const double merc1 = LatitudeToMercatorY(south);
+  const double lat = MercatorYToLatitude(merc0 + (merc1 - merc0) * v);
+  return {Angle::Degrees(lon), Angle::Degrees(lat)};
+}
+
+[[gnu::pure]]
+static GeoPoint
+InterpolateUV(const GeoQuadrilateral &q, double u, double v,
+              bool web_mercator) noexcept
+{
+  return web_mercator
+    ? InterpolateWebMercator(q, u, v)
+    : InterpolateGeographic(q, u, v);
+}
+
 [[gnu::pure]]
 static GeoQuadrilateral
-SliceQuadrilateral(const GeoQuadrilateral &q,
-                   double u0, double v0,
-                   double u1, double v1) noexcept
+SliceUV(const GeoQuadrilateral &q,
+        double u0, double v0, double u1, double v1,
+        bool web_mercator) noexcept
 {
   return {
-    InterpolateQuadrilateral(q, u0, v0),
-    InterpolateQuadrilateral(q, u1, v0),
-    InterpolateQuadrilateral(q, u0, v1),
-    InterpolateQuadrilateral(q, u1, v1),
+    InterpolateUV(q, u0, v0, web_mercator),
+    InterpolateUV(q, u1, v0, web_mercator),
+    InterpolateUV(q, u0, v1, web_mercator),
+    InterpolateUV(q, u1, v1, web_mercator),
   };
 }
 
@@ -113,7 +170,8 @@ MapOverlayBitmap::Draw([[maybe_unused]] Canvas &canvas,
      quad warps badly under map rotation/scale; ≥8×8 keeps edges
      closer to the true projection.  Larger textures keep ~128 px
      cells (capped at 32).  Antimeridian cull uses
-     GeoQuadrilateral::GetBounds() (Normalize + Extend). */
+     GeoQuadrilateral::GetBounds() (Normalize + Extend).  Slippy
+     tiles also use mercator V when web_mercator is set. */
   const unsigned x_steps = std::clamp((texture.GetWidth() + 127u) / 128u,
                                       8u, 32u);
   const unsigned y_steps = std::clamp((texture.GetHeight() + 127u) / 128u,
@@ -127,7 +185,7 @@ MapOverlayBitmap::Draw([[maybe_unused]] Canvas &canvas,
       const double u0 = double(x) / x_steps;
       const double u1 = double(x + 1) / x_steps;
 
-      const auto cell = SliceQuadrilateral(bounds, u0, v0, u1, v1);
+      const auto cell = SliceUV(bounds, u0, v0, u1, v1, web_mercator);
       if (!cell.GetBounds().Overlaps(screen_bounds))
         continue;
 

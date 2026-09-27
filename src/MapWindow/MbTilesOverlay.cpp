@@ -44,6 +44,7 @@ MbTilesOverlay::LoadTile(TileKey key)
   };
 
   MapOverlayBitmap overlay(std::move(bitmap), bounds, "");
+  overlay.EnableWebMercator();
   overlay.SetAlpha(1.0);
   return overlay;
 }

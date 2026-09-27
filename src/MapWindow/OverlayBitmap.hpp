@@ -34,13 +34,19 @@ class MapOverlayBitmap final : public MapOverlay {
 
   bool use_bitmap_alpha = true;
 
+  /**
+   * True when #bitmap is a Web Mercator slippy tile (constant metres
+   * in Y).  UV→geo then uses mercator latitude, not linear degrees.
+   */
+  bool web_mercator = false;
+
   float alpha = 1;
 
   std::string label;
 
 public:
   /**
-  * Load a georeferenced image file.
+   * Load a georeferenced image file.
    *
    * Throws on error.
    */
@@ -66,6 +72,13 @@ public:
    */
   void IgnoreBitmapAlpha() noexcept {
     use_bitmap_alpha = false;
+  }
+
+  /**
+   * Treat the bitmap as a Web Mercator slippy tile when drawing.
+   */
+  void EnableWebMercator() noexcept {
+    web_mercator = true;
   }
 
   /**
