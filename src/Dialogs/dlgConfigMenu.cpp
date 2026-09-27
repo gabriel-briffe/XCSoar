@@ -1107,12 +1107,11 @@ ShowTiledMenuDialog(UI::SingleWindow &parent, TiledMenuItemList &items,
     tiled_menu.NavigatePage(GridView::Direction::RIGHT);
   });
 
-  /* Nested menus: Back returns one level.  Close always dismisses
-     the whole stack back to the map. */
-  if (tiled_menu_depth > 1)
-    dialog.AddButton(_("Back"), mrCancel);
-
-  dialog.AddButton(_("Close"), [&dialog]() {
+  /* Close: a short press returns one level (to the parent menu, or
+     to the map from a root menu, same as the former Back button); a
+     long press dismisses the whole stack back to the map. */
+  Button *close_button = dialog.AddButton(_("Close"), mrCancel);
+  close_button->SetLongPressCallback([&dialog]() {
     tiled_menu_exit_all = true;
     dialog.SetModalResult(mrCancel);
   });
@@ -1632,6 +1631,36 @@ CollectXciItems(TiledMenuItemList &out,
 }
 
 /**
+ * Tools submenu (XCI mode "ConfigTools") opened as a nested tiled
+ * menu, so the Config menu stays open underneath it.
+ */
+static void
+ShowToolsTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  CollectXciItems(items, {"ConfigTools"});
+  ShowTiledMenuList(parent, N_("Tools"), "Tools", std::move(items));
+}
+
+/**
+ * Turn the XCI "Tools" tile (event ConfigTools, which would close the
+ * Config menu and reopen Tools as a new root) into a nested folder
+ * tile, like Data and System Setup.  Position, caption, and icon are
+ * kept.
+ */
+static void
+MakeToolsTileNested(TiledMenuItemList &items) noexcept
+{
+  for (auto &item : items) {
+    if (StringIsEqual(item.id.c_str(), "Tools")) {
+      item.kind = TiledMenuItem::Kind::NESTED;
+      item.show_nested = ShowToolsTiledMenu;
+      return;
+    }
+  }
+}
+
+/**
  * Insert Data, Flight Display, Glide Computer, and Task folder tiles
  * immediately after Configuration (in that order).
  */
@@ -1848,6 +1877,7 @@ ShowXciTiledMenuAndRun(UI::SingleWindow &parent,
   TiledMenuItemList items;
   CollectXciItems(items, modes);
   if (insert_folders) {
+    MakeToolsTileNested(items);
     InsertFoldersAfterConfiguration(items);
     InsertSystemSetupAfterTools(items);
     InsertQuitAfterSystemSetup(items);
