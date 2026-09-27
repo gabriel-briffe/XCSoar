@@ -11,6 +11,7 @@
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <string>
 #include <tuple>
 
 struct DialogLook;
@@ -183,6 +184,36 @@ public:
     /** something has succeeded, e.g. "connected" */
     SUCCESS,
   };
+
+  /**
+   * The face of a value row.  #text is copied.  The badge pointers
+   * are copied too, before the call returns.  #help nullptr leaves
+   * the explanation given when the row was added.
+   */
+  struct ValueState {
+    std::string text;
+
+    const char *help = nullptr;
+
+    const char *badge = nullptr;
+
+    BadgeStyle badge_style = BadgeStyle::PRIMARY;
+
+    const char *badge2 = nullptr;
+
+    BadgeStyle badge_style2 = BadgeStyle::PRIMARY;
+
+    bool hidden = false;
+
+    /**
+     * Grey the row out.  Applied only when the row has an action,
+     * so a status row stays as it was added.
+     */
+    bool disabled = false;
+  };
+
+  /** Writes the current face of one row. */
+  using ValueCallback = std::function<void(ValueState &state)>;
 
   /** The contents and the behaviour of a group. */
   struct GroupOptions {
@@ -361,6 +392,12 @@ public:
     const char *help = nullptr;
 
     /**
+     * Called by UpdateValues() to refresh the value, the badges and
+     * whether the row is hidden.  The row stays put.
+     */
+    ValueCallback value_callback;
+
+    /**
      * Is this item currently not available?  It is drawn greyed out,
      * the cursor skips it, and activating it does nothing.  Without
      * a value it carries a badge which says so, replacing #badge.
@@ -457,6 +494,40 @@ public:
    * only there to be checked.
    */
   void AddItem(const char *caption, const ItemOptions &options) noexcept;
+
+  /**
+   * A setting row.  With a callback, a tap on the label selects the
+   * row and a tap on the value opens it.  Without one, the row stays
+   * grey and the cursor may rest on it so its help can be read.  A
+   * badge on that row says why it cannot be used.
+   */
+  void AddValue(const char *caption, ItemOptions options) noexcept;
+
+  void AddValue(const char *caption, Callback callback,
+                ItemOptions options) noexcept;
+
+  /**
+   * A setting row whose value comes from #value.  Later refreshes
+   * call #value again instead of adding the row a second time.
+   */
+  void AddValue(const char *caption, const char *help,
+                ValueCallback value, Callback edit = {}) noexcept;
+
+  /**
+   * Call each #ValueCallback and draw what changed.
+   *
+   * @return true when the list needs to be fitted again, because a
+   * row grew or was hidden
+   */
+  bool UpdateValues() noexcept;
+
+  /**
+   * The widest caption, value, badge or explanation currently on
+   * the list.  A floating dialog uses it as its client width,
+   * plus the list padding.
+   */
+  [[nodiscard]]
+  unsigned PreferredTextWidth() const noexcept;
 
   /** One child for AddChildItems(). */
   struct ChildDefinition {

@@ -421,6 +421,9 @@ private:
     /** only for Type::ITEM */
     Callback callback{};
 
+    /** only for Type::ITEM: refreshes the value without rebuilding */
+    GroupedListWidget::ValueCallback value_callback{};
+
     /** only for Type::ITEM: draw an arrow at the right edge */
     bool chevron = false;
 
@@ -755,6 +758,11 @@ public:
   void SetCursorByIndex(unsigned i) noexcept;
 
   void SetItemChecked(unsigned i, bool checked) noexcept;
+
+  bool UpdateValues() noexcept;
+
+  [[nodiscard]]
+  unsigned PreferredTextWidth() const noexcept;
 
   [[gnu::pure]]
   bool IsItemChecked(unsigned i) const noexcept;
@@ -1896,6 +1904,7 @@ GroupedListControl::AddItem(const char *caption, Callback callback,
   });
 
   Element &element = elements.back();
+  element.value_callback = options.value_callback;
   element.badges[0] = {GetBadge(options), options.badge_style};
   if (!options.disabled && options.badge2 != nullptr)
     element.badges[1] = {options.badge2, options.badge_style2};
@@ -2150,6 +2159,129 @@ GroupedListControl::SetItemChecked(unsigned i, bool checked) noexcept
     elements[j].checked = checked;
 
   Invalidate();
+}
+
+bool
+GroupedListControl::UpdateValues() noexcept
+{
+  bool layout = false;
+  bool invalidate = false;
+
+  for (Element &element : elements) {
+    if (!element.IsItem() || !element.value_callback)
+      continue;
+
+    GroupedListWidget::ValueState state;
+    element.value_callback(state);
+
+    const bool disabled = element.chevron
+      ? state.disabled
+      : element.disabled;
+
+    const char *badge = state.badge;
+    if ((badge == nullptr || badge[0] == '\0') &&
+        disabled && state.text.empty())
+      badge = _("Disabled");
+
+    const char *badge2 = disabled ? nullptr : state.badge2;
+
+    const auto apply_badge = [&](Element::DrawnBadge &drawn,
+                                 const char *text,
+                                 BadgeStyle style) {
+      const char *next = text != nullptr ? text : "";
+      if (drawn.text == next &&
+          (drawn.text.empty() || drawn.style == style))
+        return;
+
+      drawn.text = next;
+      drawn.style = style;
+      layout = true;
+    };
+
+    apply_badge(element.badges[0], badge, state.badge_style);
+    apply_badge(element.badges[1], badge2, state.badge_style2);
+
+    if (element.chevron && element.disabled != state.disabled) {
+      element.disabled = state.disabled;
+      if (state.disabled)
+        element.selectable_when_disabled = true;
+      layout = true;
+    }
+
+    if (element.hidden != state.hidden) {
+      element.hidden = state.hidden;
+      layout = true;
+    }
+
+    if (state.help != nullptr && element.help != state.help) {
+      element.help = ParseLinks(state.help, element.links);
+      element.wrapped_help_width = -1;
+      element.help_height = 0;
+      element.help_full = 0;
+      element.help_from = 0;
+      layout = true;
+    }
+
+    if (element.value != state.text) {
+      const unsigned natural = state.text.empty()
+        ? 0u
+        : (unsigned)GetValueFont(element).TextSize(state.text.c_str()).width;
+      const bool fits = element.value_width > 0 &&
+        natural <= element.value_width;
+      element.value = std::move(state.text);
+      element.wrapped_value_width = -1;
+      if (fits)
+        invalidate = true;
+      else
+        layout = true;
+    }
+  }
+
+  if (layout || !IsDefined())
+    return layout;
+
+  if (invalidate)
+    Invalidate();
+
+  return false;
+}
+
+unsigned
+GroupedListControl::PreferredTextWidth() const noexcept
+{
+  if (look.list.font == nullptr || !look.list.font->IsDefined())
+    return 0;
+
+  const Font &font = *look.list.font;
+  const int padding = GetPadding();
+  unsigned text = 0;
+
+  for (const Element &element : elements) {
+    if (!element.IsItem() || element.hidden)
+      continue;
+
+    int row = (int)font.TextSize(element.text).width;
+    if (!element.value.empty())
+      row += padding +
+        (int)GetValueFont(element).TextSize(element.value).width;
+
+    const int badges = GetBadgesWidth(element);
+    if (badges > 0)
+      row += badges + padding;
+
+    row += GetDecorationWidth(element);
+
+    if (row > (int)text)
+      text = (unsigned)row;
+
+    if (!element.help.empty()) {
+      const unsigned help = font.TextSize(element.help).width;
+      if (help > text)
+        text = help;
+    }
+  }
+
+  return text;
 }
 
 bool
@@ -4958,6 +5090,57 @@ GroupedListWidget::AddItem(const char *caption, Callback callback,
                            const ItemOptions &options) noexcept
 {
   control.AddItem(caption, std::move(callback), options);
+}
+
+void
+GroupedListWidget::AddValue(const char *caption,
+                           ItemOptions options) noexcept
+{
+  AddValue(caption, {}, std::move(options));
+}
+
+void
+GroupedListWidget::AddValue(const char *caption, const char *help,
+                           ValueCallback value, Callback edit) noexcept
+{
+  ItemOptions options;
+  options.help = help;
+  options.value_callback = std::move(value);
+  AddValue(caption, std::move(edit), std::move(options));
+}
+
+bool
+GroupedListWidget::UpdateValues() noexcept
+{
+  return control.UpdateValues();
+}
+
+unsigned
+GroupedListWidget::PreferredTextWidth() const noexcept
+{
+  return control.PreferredTextWidth();
+}
+
+void
+GroupedListWidget::AddValue(const char *caption, Callback callback,
+                           ItemOptions options) noexcept
+{
+  if (callback) {
+    options.chevron = true;
+    options.label_selects = true;
+    control.AddItem(caption, std::move(callback), options);
+    return;
+  }
+
+  options.disabled = true;
+  options.selectable_when_disabled = true;
+  if (options.badge != nullptr &&
+      options.disabled_badge_label == nullptr) {
+    options.disabled_badge_label = options.badge;
+    options.badge = nullptr;
+  }
+
+  control.AddItem(caption, {}, options);
 }
 
 void
