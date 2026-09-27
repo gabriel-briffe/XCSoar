@@ -6,6 +6,7 @@
 #include "Audio/Features.hpp"
 #include "Dialogs/InternalLink.hpp"
 #include "Dialogs/Message.hpp"
+#include "UIActions.hpp"
 #include "Dialogs/Settings/Panels/AirspaceConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/GaugesConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/GlideComputerConfigPanel.hpp"
@@ -393,6 +394,8 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpConfigSounds;
   if (StringIsEqual(label, "Language"))
     return &icons.hBmpConfigLanguage;
+  if (StringIsEqual(label, "Quit"))
+    return &icons.hBmpConfigQuit;
   if (StringIsEqual(label, "System Setup"))
     return &icons.hBmpTabSettings;
   if (StringIsEqual(label, "Glide Computer"))
@@ -527,6 +530,13 @@ static unsigned tiled_menu_depth = 0;
 
 /** When true, nested menus cancel themselves to return to the map. */
 static bool tiled_menu_exit_all = false;
+
+/**
+ * Quit was confirmed from a tiled-menu tile.  #MainWindow::OnClose
+ * only cancels the open dialog while one is up, so we defer
+ * #UIActions::SignalShutdown until the Config menu has closed.
+ */
+static bool quit_after_tiled_menu = false;
 
 class TiledMenu final : public WindowWidget {
   WndForm &dialog;
@@ -1705,6 +1715,44 @@ InsertSystemSetupAfterTools(TiledMenuItemList &items) noexcept
   items.push_back(std::move(system_setup));
 }
 
+/**
+ * Insert Quit immediately after the System Setup tile.
+ */
+static void
+ShowQuitAction() noexcept
+{
+  /* Prompt here: MainWindow::OnClose skips CheckShutdown while any
+     dialog is open and would only CancelDialog the Config menu. */
+  if (!UIActions::CheckShutdown())
+    return;
+
+  quit_after_tiled_menu = true;
+  RequestTiledMenuCloseAll();
+}
+
+static void
+InsertQuitAfterSystemSetup(TiledMenuItemList &items) noexcept
+{
+  if (items.size() >= items.max_size())
+    return;
+
+  TiledMenuItem quit;
+  quit.id = "Quit";
+  quit.caption = _("Quit");
+  quit.icon = ConfigMenuIconForLabel("Quit");
+  quit.kind = TiledMenuItem::Kind::ACTION;
+  quit.show_action = ShowQuitAction;
+
+  for (auto it = items.begin(); it != items.end(); ++it) {
+    if (StringIsEqual(it->id.c_str(), "System Setup")) {
+      items.insert(it + 1, std::move(quit));
+      return;
+    }
+  }
+
+  items.push_back(std::move(quit));
+}
+
 static void
 ShowDataSiteFilesAction() noexcept
 {
@@ -1795,6 +1843,7 @@ ShowXciTiledMenuAndRun(UI::SingleWindow &parent,
   if (insert_folders) {
     InsertFoldersAfterConfiguration(items);
     InsertSystemSetupAfterTools(items);
+    InsertQuitAfterSystemSetup(items);
   }
   if (items.empty())
     return;
@@ -1809,8 +1858,15 @@ dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept
 {
   tiled_menu_exit_all = false;
   tiled_menu_depth = 0;
+  quit_after_tiled_menu = false;
   ShowXciTiledMenuAndRun(parent, {"Config1", "Config2", "Config3"},
                          N_("Config"), "Config", true);
+
+  if (quit_after_tiled_menu) {
+    quit_after_tiled_menu = false;
+    /* No dialog left: force skips a second "Quit program?" prompt. */
+    UIActions::SignalShutdown(true);
+  }
 }
 
 void

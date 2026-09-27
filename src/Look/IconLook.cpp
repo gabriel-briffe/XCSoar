@@ -33,6 +33,7 @@ IconLook::Initialise()
   hBmpConfigDisplay.LoadResource(IDB_DISPLAY_ALL);
   hBmpConfigSounds.LoadResource(IDB_SOUNDS_ALL);
   hBmpConfigLanguage.LoadResource(IDB_LANGUAGE_ALL);
+  hBmpConfigQuit.LoadResource(IDB_QUIT_ALL);
   hBmpConfigMap.LoadResource(IDB_MAP_ALL);
   hBmpConfigGauges.LoadResource(IDB_GAUGES_ALL);
   hBmpConfigGlideComputer.LoadResource(IDB_GLIDE_COMPUTER_ALL);
