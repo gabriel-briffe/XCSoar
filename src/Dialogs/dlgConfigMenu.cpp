@@ -386,7 +386,7 @@ ConfigMenuIconForLabel(const char *label) noexcept
   if (StringIsEqual(label, "Configuration"))
     return &icons.hBmpTabSettings;
   if (StringIsEqual(label, "Flight Display"))
-    return &icons.hBmpConfigFlightDisplay;
+    return &icons.hBmpConfigDisplay;
   if (StringIsEqual(label, "Pages"))
     return &icons.hBmpConfigPages;
   if (StringIsEqual(label, "Display"))

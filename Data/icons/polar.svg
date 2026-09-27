@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg version="1.1" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
-  <!-- Polar: abscissa (V) on top; ordinate (-w) down; curve below abscissa -->
-  <path fill="none" stroke="#000" stroke-width="1.25" stroke-linecap="square"
-        d="M4 18.5 V4.5 H19"/>
-  <path fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"
+<svg version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!-- Polar: abscissa (V) on top; ordinate (-w) down; both axes extend
+       slightly past the origin; flatter curve offset right of the ordinate; dashed tangent from
+       the origin whose lower edge rests on the curve's upper edge at
+       the tangent point (both stroke widths compensated) (best glide), extended to the right -->
+  <path fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="square"
+        d="M2.6 6 H21 M5 3.6 V20.5"/>
+  <path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"
         stroke-linejoin="round"
-        d="M5.8 10.5 C7.2 9.4 8.8 8.9 10.3 8.9 C12.8 8.9 14.8 12.2 17.2 16.5"/>
+        d="M8 11.9 C9.4 11 10.8 10.5 12.2 10.5 C15 10.5 17.6 12.9 20.5 16.4"/>
+  <path fill="none" stroke="#000" stroke-width="1" stroke-dasharray="1.6 1.1"
+        stroke-linecap="butt" d="M5 6 L22.6 12.71"/>
 </svg>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aperçu de l'icône planes</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: #f4f5f7; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  figure {
+    margin: 0; padding: 40px 56px; background: #fff; border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08); text-align: center;
+  }
+  svg { display: block; margin: 0 auto; }
+  figcaption { margin-top: 20px; font-size: 20px; color: #222; letter-spacing: .02em; }
+</style>
+</head>
+<body>
+<!-- Icône issue de Data/icons/polar.svg (tuile "Planes" du tiled menu, IDB_POLAR) -->
+<figure>
+<svg width="192" height="192" role="img" aria-label="planes" version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!-- Polar: abscissa (V) on top; ordinate (-w) down; both axes extend
+       slightly past the origin; flatter curve offset right of the ordinate; dashed tangent from
+       the origin whose lower edge rests on the curve's upper edge at
+       the tangent point (both stroke widths compensated) (best glide), extended to the right -->
+  <path fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="square"
+        d="M2.6 6 H21 M5 3.6 V20.5"/>
+  <path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M8 11.9 C9.4 11 10.8 10.5 12.2 10.5 C15 10.5 17.6 12.9 20.5 16.4"/>
+  <path fill="none" stroke="#000" stroke-width="1" stroke-dasharray="1.6 1.1"
+        stroke-linecap="butt" d="M5 6 L22.6 12.71"/>
+</svg>
+<figcaption>planes</figcaption>
+</figure>
+</body>
+</html>
