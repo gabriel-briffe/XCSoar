@@ -1076,9 +1076,6 @@ msgstr "Gửi tuyên bố"
 msgid "Reading flight list"
 msgstr "Đọc danh sách chuyến bay"
 
-msgid "Downloading flight log"
-msgstr "Tải nhật ký chuyến bay"
-
 #, no-c-format
 msgid "Disabled"
 msgstr "Vô hiệu hóa"
@@ -1093,6 +1090,7 @@ msgstr "Cổng BLE"
 msgid "Bluetooth server"
 msgstr "Server Bluetooth"
 
+#, no-c-format
 msgid "Built-in GPS & sensors"
 msgstr "GPS tích hợp & cảm biến"
 
@@ -1771,6 +1769,7 @@ msgstr ""
 msgid "Select Color"
 msgstr "Chọn Màu sắc"
 
+#, no-c-format
 msgid "Display"
 msgstr "Hiển thị"
 
@@ -1780,9 +1779,6 @@ msgstr "Cảnh báo"
 #, no-c-format
 msgid "Airspace"
 msgstr "Không phận"
-
-msgid "Select Pattern"
-msgstr "Chọn Mô hình"
 
 msgid "Squawk code"
 msgstr "Mã squawk"
@@ -1838,9 +1834,6 @@ msgstr "Thay đổi màu viền"
 
 msgid "Change Fill Color"
 msgstr "Thay đổi màu nền"
-
-msgid "Change Fill Brush"
-msgstr "Chọn bút chì để tô màu"
 
 msgid "Border Width"
 msgstr "Độ rộng viền"
@@ -1972,10 +1965,6 @@ msgid "Orientation"
 msgstr "Hướng"
 
 #, no-c-format
-msgid "Elements"
-msgstr "Các thành phần"
-
-#, no-c-format
 msgid "Terrain"
 msgstr "Địa hình"
 
@@ -2012,14 +2001,6 @@ msgid "Turnpoint Types"
 msgstr "Loại điểm quay vòng"
 
 #, no-c-format
-msgid "Language, Input"
-msgstr "Ngôn ngữ, Nhập liệu"
-
-#, no-c-format
-msgid "Screen Layout"
-msgstr "Thiết kế màn hình"
-
-#, no-c-format
 msgid "Audio"
 msgstr "Âm thanh"
 
@@ -2045,14 +2026,8 @@ msgstr "Chuyên gia"
 msgid "Configuration"
 msgstr "Cấu hình"
 
-msgid "The name of this InfoBox panel configuration."
-msgstr "Tên của cấu hình bảng InfoBox này."
-
 msgid "InfoBox"
 msgstr "Bộ.InfoBox"
-
-msgid "Content"
-msgstr "Nội dung"
 
 msgid "Copy Set"
 msgstr "Sao chép"
@@ -2076,6 +2051,7 @@ msgstr "ID cuộc thi"
 msgid "Map"
 msgstr "Bản đồ"
 
+#, no-c-format
 msgid "Traffic"
 msgstr "Lưu lượng không lưu"
 
@@ -2155,6 +2131,7 @@ msgstr "Mã đội"
 msgid "Task Calc"
 msgstr "Tính toán nhiệm vụ"
 
+#, no-c-format
 msgid "Analysis"
 msgstr "Phân tích"
 
@@ -2191,6 +2168,7 @@ msgstr "Tốc độ thi"
 msgid "Warnings"
 msgstr "Các cảnh báo"
 
+#, no-c-format
 msgid "Checklist"
 msgstr "Danh sách kiểm tra"
 
@@ -2396,6 +2374,7 @@ msgstr "Mật khẩu sai."
 msgid "Enter a new password"
 msgstr "Nhập mật khẩu mới"
 
+#, no-c-format
 msgid "Status"
 msgstr "Tình trạng"
 
@@ -2925,12 +2904,6 @@ msgstr "Chế độ điền không phận"
 msgid "Specifies the mode for filling the airspace area."
 msgstr "Chỉ định chế độ điền cho khu vực không phận."
 
-msgid "Airspace transparency"
-msgstr "Độ trong suốt không phận"
-
-msgid "If enabled, then airspaces are filled transparently."
-msgstr "Nếu kích hoạt, thì không phận được điền bằng cách trong suốt."
-
 #, no-c-format
 msgid "Disable final glide bar."
 msgstr "Tắt thanh lượn cuối tự động."
@@ -3343,6 +3316,8 @@ msgstr "Độ phân giải màn hình"
 msgid "The display resolution is used to adapt line widths, font size, landable size and more."
 msgstr "Độ phân giải màn hình được sử dụng để điều chỉnh độ rộng của các đường, kích cỡ chữ, và kích thước hạ cánh."
 
+#. the Kobo has no time zone configuration which we could follow
+#, no-c-format
 msgid "Automatic"
 msgstr "Tự động"
 
@@ -3352,6 +3327,7 @@ msgstr "Sự kiện"
 msgid "The Input Events file defines the menu system and how XCSoar responds to button presses and events from external devices."
 msgstr "File Sự kiện Nhập định nghĩa hệ thống menu và cách XCSoar phản ứng với nhấn nút và sự kiện từ thiết bị ngoại vi."
 
+#, no-c-format
 msgid "Language"
 msgstr "Ngôn ngữ"
 
@@ -3403,90 +3379,6 @@ msgstr "Ngược chiều dọc"
 #, no-c-format
 msgid "Reverse Landscape"
 msgstr "Ngược chiều ngang"
-
-#, no-c-format
-msgid "8 Split"
-msgstr "Chia 8 phần"
-
-#, no-c-format
-msgid "10 Split"
-msgstr "Chia 10 phần"
-
-#, no-c-format
-msgid "12 Split in 3 rows"
-msgstr "Chia 12 phần thành 3 hàng"
-
-#, no-c-format
-msgid "15 Split in 3 rows"
-msgstr "15 Chia thành 3 hàng"
-
-#, no-c-format
-msgid "18 Split in 3 rows"
-msgstr "18 Chia thành 3 hàng"
-
-#, no-c-format
-msgid "8 Bottom or Right"
-msgstr "8 Dưới hoặc Phải"
-
-#, no-c-format
-msgid "8 Bottom + Vario (Portrait)"
-msgstr "8 Dưới + Đồng hồ tốc độ lên xuống (Portrait)"
-
-#, no-c-format
-msgid "8 Top or Left"
-msgstr "8 Trên hoặc Trái"
-
-#, no-c-format
-msgid "8 Top + Vario (Portrait)"
-msgstr "8 Trên + Đồng hồ tốc độ lên xuống (Portrait)"
-
-#, no-c-format
-msgid "9 Right + Vario (Landscape)"
-msgstr "9 Phải + Đồng hồ tốc độ lên xuống (Landscape)"
-
-#, no-c-format
-msgid "9 Left + Right + Vario (Landscape)"
-msgstr "9 Trái + Phải + Đồng hồ tốc độ lên xuống (Landscape)"
-
-#, no-c-format
-msgid "12 Left + 3 Right Vario (Landscape)"
-msgstr "12 Trái + 3 Hàng phải + Đồng hồ tốc độ lên xuống (Landscape)"
-
-#, no-c-format
-msgid "5 Right (Square)"
-msgstr "5 Phải (Hình vuông)"
-
-#, no-c-format
-msgid "10 Bottom or Right"
-msgstr "10 Dưới hoặc Phải"
-
-#, no-c-format
-msgid "12 Bottom or Right"
-msgstr "12 Dưới hoặc Phải"
-
-#, no-c-format
-msgid "10 Top or Left"
-msgstr "10 Trên hoặc Trái"
-
-#, no-c-format
-msgid "12 Top or Left"
-msgstr "12 Trên hoặc Trái"
-
-#, no-c-format
-msgid "16 Right (Landscape)"
-msgstr "16 Phải (Landscape)"
-
-#, no-c-format
-msgid "24 Bottom or Right"
-msgstr "24 Dưới hoặc Phải"
-
-#, no-c-format
-msgid "4 Top or Left"
-msgstr "4 Trên hoặc Trái"
-
-#, no-c-format
-msgid "4 Bottom or Right"
-msgstr "4 Dưới hoặc Phải"
 
 #, no-c-format
 msgid "Text"
@@ -3859,6 +3751,7 @@ msgstr "Hiển thị InfoBox quay vòng, di chuyển hoặc lượn cuối."
 msgid "Show fullscreen (no InfoBoxes)"
 msgstr "Hiển thị toàn màn hình (không có InfoBox)"
 
+#, no-c-format
 msgid "InfoBoxes"
 msgstr "Thông báo"
 
@@ -4758,15 +4651,6 @@ msgstr "Đơn vị được sử dụng cho quay."
 msgid "UTC offset"
 msgstr "Độ lệch múi giờ UTC"
 
-msgid ""
-"The UTC offset field allows the UTC local time offset to be specified. The "
-"local time is displayed below in order to make it easier to verify the "
-"correct offset has been entered."
-msgstr ""
-"Trường-offset giờ UTC cho phép chỉ định múi giờ địa phương của thời gian "
-"UTC. Thời gian địa phương được hiển thị dưới dạng để dễ dàng xác nhận múi "
-"giờ đã nhập chính xác."
-
 msgid "Use GPS time"
 msgstr "Sử dụng thời gian từ GPS"
 
@@ -4927,9 +4811,6 @@ msgstr "Ba kiểu biểu tượng có sẵn: Hình tròn màu tím (phong cách 
 
 msgid "Landable symbols"
 msgstr "Biểu tượng hạ cánh chi tiết"
-
-msgid "Three styles are available: Purple circles (WinPilot style), a high contrast (monochrome) style, or orange. The rendering differs for landable field and airport. All styles mark the waypoints within reach green."
-msgstr "Ba kiểu biểu tượng có sẵn: Hình tròn màu tím (phong cách WinPilot), một phong cách đối lập cao (xám đen) hoặc màu cam. Phong cách hiển thị khác nhau cho các điểm hạ cánh và sân bay. Tất cả các phong cách đều đánh dấu các điểm đường bay có thể đạt được bằng màu xanh."
 
 msgid "Detailed landables"
 msgstr "Hạ cánh chi tiết"
@@ -5325,6 +5206,7 @@ msgstr "Đã tối ưu hóa"
 msgid "No alternates available"
 msgstr "Không có điểm dự phòng sẵn có"
 
+#, no-c-format
 msgid "Alternates"
 msgstr "Điểm dự phòng"
 
@@ -7022,10 +6904,6 @@ msgid "T Next Leg"
 msgstr "T_leg_sau_this"
 
 #, no-c-format
-msgid "Thermal climb rate on the next leg that is equivalent to a thermal climb rate equal to the MacCready setting on the current leg."
-msgstr "Tốc độ leo nhiệt trên đoạn tiếp the next leg tương đương với tốc độ leo nhiệt bằng cài đặt MacCready hiện tại."
-
-#, no-c-format
 msgid "Wind, head component (simplified)"
 msgstr "Gió, thành phần đầu (đơn giản)"
 
@@ -8069,19 +7947,9 @@ msgstr "đi thẳng"
 msgid "Climb Demo"
 msgstr "Leo lên"
 
-msgid ""
-"Info\n"
-"Page 2/3"
-msgstr "Thông tin"
-
 #, no-c-format
 msgid "FLARM Radar"
 msgstr "Radar FLARM"
-
-msgid ""
-"Info\n"
-"Page 3/3"
-msgstr "Thông tin"
 
 #, no-c-format
 msgid "Thermal Assistant"
@@ -8099,6 +7967,7 @@ msgstr "Hướng dẫn nhanh"
 msgid "Nav"
 msgstr "Định hướng"
 
+#, no-c-format
 msgid "Config"
 msgstr "Cấu hình"
 
@@ -8236,12 +8105,6 @@ msgstr ""
 "Kích thước của các ký hiệu điểm tham chiếu trên bản đồ theo tỷ lệ phần trăm "
 "của tác phẩm nghệ thuật tích hợp (hộp thoại danh sách giữ kích thước biểu "
 "tượng hàng cố định)."
-
-msgid "Altn mode: MANUAL"
-msgstr "Altn način: RUČNI"
-
-msgid "Altn mode: AUTO"
-msgstr "Altn način: AUTO"
 
 msgid ""
 "# Gesture Navigation\n"
@@ -8722,11 +8585,6 @@ msgstr "Sao lưu"
 msgctxt "Button"
 msgid "Advanced File Explorer"
 msgstr "Napredni istraživač tệp"
-
-#, no-c-format
-msgctxt "Menu"
-msgid "Data Management"
-msgstr "Quản lý dữ liệu"
 
 #, no-c-format
 msgctxt "Button"
@@ -9579,9 +9437,6 @@ msgctxt "Setting"
 msgid "Show QuickMenu button"
 msgstr "Hiện nút QuickMenu"
 
-msgid "Show the QuickMenu button"
-msgstr "Hiện nút QuickMenu"
-
 msgid "WiFi service is not available."
 msgstr "Dịch vụ WiFi không khả dụng."
 
@@ -9893,14 +9748,6 @@ msgstr ""
 "Bao trùm toàn bộ vòng cung Alpine từ Vienna đến Perpignan, dự báo làn sóng "
 "trên toàn bộ khu vực Alps. mô hình ICON-CH."
 
-#, no-c-format
-msgid "UK"
-msgstr "UK"
-
-#, no-c-format
-msgid "United Kingdom. ICON-UK model."
-msgstr "Vương quốc Anh. Mô hình ICON-UK."
-
 msgid "XC Therm email"
 msgstr "XC Therm e-mail"
 
@@ -10208,9 +10055,6 @@ msgstr "Đã hủy"
 msgid "Not downloaded"
 msgstr "Nije preuzeto"
 
-msgid "No layer selected."
-msgstr "Nije odabran lớp."
-
 msgid "Network is not available."
 msgstr "Mạng nije dostupna."
 
@@ -10232,23 +10076,10 @@ msgstr ""
 "Đã nhận được %u trong số %u lát hàng giờ (%u mới được tải xuống).\n"
 "Một số vị trí không có sẵn."
 
-msgid ""
-"Altitude layer used for Update and Delete. Use Altitude below to change what"
-" the map shows."
-msgstr ""
-"Lớp độ cao dùng cho Cập nhật và Xóa. Dùng Độ cao bên dưới để đổi nội dung "
-"bản đồ hiển thị."
-
-msgid "Download and cache status for the selected layer."
-msgstr "Trạng thái tải xuống và lưu đệm của lớp đã chọn."
-
 #, no-c-format
 msgctxt "Weather control"
 msgid "Span"
 msgstr "Raspon"
-
-msgid "How many forecast hours to download with Update."
-msgstr "Koliko sati dự báo preuzeti s Cập nhậtm."
 
 #, c-format
 msgid ""
@@ -11076,5 +10907,701 @@ msgstr ""
 msgid "Blood oxygen saturation in percent, from a Bluetooth pulse oximeter."
 msgstr ""
 
+#, no-c-format
 msgid "Recently used waypoints"
 msgstr ""
+
+#, no-c-format
+msgid "Zoom in"
+msgstr ""
+
+#, no-c-format
+msgid "Zoom out"
+msgstr ""
+
+#, no-c-format
+msgid "Auto zoom"
+msgstr ""
+
+#, no-c-format
+msgid "Next page"
+msgstr ""
+
+#, no-c-format
+msgid "Previous page"
+msgstr ""
+
+#, no-c-format
+msgid "Waypoint list"
+msgstr ""
+
+#, no-c-format
+msgid "Menu"
+msgstr ""
+
+#, no-c-format
+msgid "Task manager"
+msgstr ""
+
+#, no-c-format
+msgid "Pan mode"
+msgstr ""
+
+#, no-c-format
+msgid "Quick menu"
+msgstr ""
+
+#, no-c-format
+msgid "Auto"
+msgstr ""
+
+#, no-c-format
+msgctxt "Weather layer"
+msgid "Sat"
+msgstr ""
+
+msgid "Restart"
+msgstr ""
+
+msgid "Power off"
+msgstr ""
+
+msgid "Sharing is not available."
+msgstr ""
+
+#, no-c-format
+msgctxt "Button"
+msgid "Share"
+msgstr ""
+
+#. overwriting the data files under a flying program helps nobody
+#. the loggers are writing, half the files would be left out -
+#. and nobody needs a backup right now up there
+msgid "Not available while flying."
+msgstr ""
+
+#. the backup is there, but on purpose without the files the
+#. loggers are writing right now: say so, and which ones
+msgid "Backup complete."
+msgstr ""
+
+msgid "Left out, being written right now:"
+msgstr ""
+
+msgid "Slow merge thread"
+msgstr ""
+
+#, no-c-format
+msgid "Topology"
+msgstr ""
+
+#, no-c-format
+msgid "Aircraft"
+msgstr ""
+
+#, no-c-format
+msgid "Glide Cone"
+msgstr ""
+
+#, no-c-format
+msgid "Haptics"
+msgstr ""
+
+#, no-c-format
+msgid "Services"
+msgstr ""
+
+#, no-c-format
+msgid "Input"
+msgstr ""
+
+#, no-c-format
+msgid "Appearance"
+msgstr ""
+
+#, no-c-format
+msgid "Controls"
+msgstr ""
+
+#, no-c-format
+msgid "InfoBox Layout"
+msgstr ""
+
+#, no-c-format
+msgid "Weather Controls"
+msgstr ""
+
+#, no-c-format
+msgid "Quick Menu"
+msgstr ""
+
+#, no-c-format
+msgid "Sounds"
+msgstr ""
+
+#, no-c-format
+msgid "Aircrafts"
+msgstr ""
+
+#, no-c-format
+msgid "Hardware"
+msgstr ""
+
+#, no-c-format
+msgid "Look & Accessibility"
+msgstr ""
+
+#, no-c-format
+msgid "Units & Time"
+msgstr ""
+
+#, no-c-format
+msgid "Accounts & Services"
+msgstr ""
+
+msgid "Copy remembers all InfoBoxes of this set, Paste replaces the InfoBoxes of another set with them."
+msgstr ""
+
+msgid "No flights"
+msgstr ""
+
+msgid "No IGC files found in the logs folder."
+msgstr ""
+
+msgid "More…"
+msgstr ""
+
+msgid "…"
+msgstr ""
+
+msgid "(no takeoff/landing)"
+msgstr ""
+
+msgid "warn:"
+msgstr ""
+
+msgid "started too late"
+msgstr ""
+
+msgid "ended too early"
+msgstr ""
+
+msgid "Logbook"
+msgstr ""
+
+msgid "Non-ICAO airports"
+msgstr ""
+
+msgid "Graphic"
+msgstr ""
+
+msgid "Label"
+msgstr ""
+
+#, no-c-format
+msgid "Single"
+msgstr ""
+
+#, no-c-format
+msgid "Compute the glide cone for the current Goto airport."
+msgstr ""
+
+#, no-c-format
+msgid "Combined"
+msgstr ""
+
+#, no-c-format
+msgid "Compute a combined glide cone from all landables within a moving window around the aircraft."
+msgstr ""
+
+msgid "Glide cone"
+msgstr ""
+
+msgid "Terrain-aware glide cone mode.  This is a GPU (OpenGL ES 3.1) feature and has no effect on devices without compute support."
+msgstr ""
+
+msgid "Glide ratio"
+msgstr ""
+
+msgid "Fixed glide ratio (L/D) used for the glide cone computation."
+msgstr ""
+
+msgid "Max. altitude"
+msgstr ""
+
+msgid "Maximum working altitude [m MSL].  Larger values enlarge the computed reachable area."
+msgstr ""
+
+msgid "Cell size"
+msgstr ""
+
+msgid "Target size of one compute cell [m].  Terrain is resampled by taking the highest DEM sample in each cell."
+msgstr ""
+
+msgid "Iteration cap"
+msgstr ""
+
+msgid "Upper bound on the number of GPU propagation iterations."
+msgstr ""
+
+msgid "Draw 100 m altitude contour lines of the reachable area."
+msgstr ""
+
+msgid "Contours min scale"
+msgstr ""
+
+msgid "Only show contours and labels when the map scale bar is at most this distance (same meaning as topography label thresholds)."
+msgstr ""
+
+msgid "Label distance"
+msgstr ""
+
+msgid "Minimum screen distance between labels of the same altitude, as a percentage of the shorter map side."
+msgstr ""
+
+msgid "Pan mode path"
+msgstr ""
+
+msgid "Draw the glide path and GlideCone altitude at the pan crosshair while panning the map."
+msgstr ""
+
+msgid "Custom menu"
+msgstr ""
+
+msgid "When enabled, the Quick Menu shows only the commands selected below, in that order. When disabled, the full default Quick Menu is used; your selection is kept for when you turn this back on."
+msgstr ""
+
+msgid "Add command"
+msgstr ""
+
+msgid "Haptic feedback is not available on this device."
+msgstr ""
+
+msgid "Unavailable"
+msgstr ""
+
+msgid "Screen brightness"
+msgstr ""
+
+msgid "Adjust the screen brightness."
+msgstr ""
+
+msgid "Screen brightness is read-only because writing requires additional permissions."
+msgstr ""
+
+#, no-c-format
+msgid "Do not show the QuickMenu button on the map."
+msgstr ""
+
+#, no-c-format
+msgid "Show the QuickMenu button on the map."
+msgstr ""
+
+#, no-c-format
+msgid "Transparent"
+msgstr ""
+
+#, no-c-format
+msgid "Keep an invisible touch target for the QuickMenu."
+msgstr ""
+
+msgid "Show the QuickMenu button on the map, hide it, or keep an invisible touch target."
+msgstr ""
+
+#, no-c-format
+msgctxt "Setting"
+msgid "Touch areas transparency"
+msgstr ""
+
+msgid "Pink markers for invisible map touch targets (QuickMenu when transparent, compass, airspace, pan, bottom area).  0 % is solid pink; 100 % hides the markers."
+msgstr ""
+
+msgid "Play alert and status sounds.  When Off, the audio vario is also silent."
+msgstr ""
+
+#, no-c-format
+msgid "Use the Terrain colors from Map Display → Terrain."
+msgstr ""
+
+msgid "Terrain color ramp for this map page. Default follows Map Display → Terrain."
+msgstr ""
+
+#, no-c-format
+msgid "Sets the opacity of the SkySight overlay on the map.  50% is more transparent, 100% is fully opaque."
+msgstr ""
+
+msgid "Trail VBO"
+msgstr ""
+
+msgid "OpenGL only: for Full trail length, keep the path in a GPU vertex buffer (no screen-space thinning). Off uses the normal CPU trail path."
+msgstr ""
+
+msgid "Thermal marker"
+msgstr ""
+
+msgid "Show thermal locator markers (spirals) for recent thermals on the map."
+msgstr ""
+
+#, no-c-format
+msgid "Arrow"
+msgstr ""
+
+#, no-c-format
+msgid "All traffic is drawn as an arrow head pointing in the direction of travel."
+msgstr ""
+
+#, no-c-format
+msgid "Traffic is drawn as a glider, powered aircraft, helicopter, paraglider or other symbol according to the aircraft type reported by FLARM, ADS-B or OGN. Targets of unknown type get a generic symbol."
+msgstr ""
+
+#, no-c-format
+msgid "Colored halo"
+msgstr ""
+
+#, no-c-format
+msgid "The silhouette is filled with the traffic colour; the glyph is black."
+msgstr ""
+
+#, no-c-format
+msgid "Colored halo with border"
+msgstr ""
+
+#, no-c-format
+msgid "Like Colored halo, plus a thin border around the silhouette."
+msgstr ""
+
+#, no-c-format
+msgid "White halo, colored glyph"
+msgstr ""
+
+#, no-c-format
+msgid "White silhouette with the traffic colour in the glyph. Calm on the map; the halo vanishes on a white radar background."
+msgstr ""
+
+#, no-c-format
+msgid "Black outline"
+msgstr ""
+
+#, no-c-format
+msgid "No halo; the glyph is filled with the traffic colour and outlined in black, like the classic arrow head."
+msgstr ""
+
+msgid "Traffic symbol"
+msgstr ""
+
+msgid "Determines how FLARM, ADS-B and online traffic is drawn on the map and the traffic radar."
+msgstr ""
+
+msgid "Traffic symbol style"
+msgstr ""
+
+msgid "How aircraft-type traffic symbols are coloured (halo and glyph)."
+msgstr ""
+
+msgid "GPU DEM spike"
+msgstr ""
+
+msgid "Experimental: sample fine DEM tiles on the GPU (no ScanMap)."
+msgstr ""
+
+msgid "Topology layers"
+msgstr ""
+
+msgid "Per-layer visibility thresholds from the map file (topology.tpl). Load a map with vector topography to adjust them."
+msgstr ""
+
+msgid "No vector topography in the current map."
+msgstr ""
+
+msgid "Layer"
+msgstr ""
+
+msgid "Select a topography layer from the current map, or all layers. With all layers, thresholds act as a maximum: layers that already disappear earlier are left unchanged. Individual layers cannot exceed the all-layers ceilings."
+msgstr ""
+
+msgid "All layers"
+msgstr ""
+
+msgid "Shape threshold"
+msgstr ""
+
+msgid "Maximum map scale (as on the map scale bar) at which shapes are drawn. Larger values keep the layer visible when more zoomed out. With all layers selected, this is a ceiling only and does not raise lower per-layer thresholds. The default maximum is 600 km (300 for miles)."
+msgstr ""
+
+msgid "Label threshold"
+msgstr ""
+
+msgid "Maximum map scale (as on the map scale bar) at which labels are drawn. May exceed the shape threshold so labels can appear without shapes."
+msgstr ""
+
+msgid "Important label threshold"
+msgstr ""
+
+msgid "Labels below this map scale use the default style (smaller / less prominent). Cannot exceed the label threshold."
+msgstr ""
+
+msgid "Apply custom settings"
+msgstr ""
+
+msgid "No matching topology layers"
+msgstr ""
+
+msgid "Custom topology thresholds applied"
+msgstr ""
+
+msgid "Reset layer to map default"
+msgstr ""
+
+msgid "Reset all layers to map defaults"
+msgstr ""
+
+#, no-c-format
+msgid "Use the time zone which is configured in the operating system, and keep following it across daylight saving time changes and when travelling to another time zone."
+msgstr ""
+
+#, no-c-format
+msgid "Time zone"
+msgstr ""
+
+#, no-c-format
+msgid "Use the time zone selected below.  XCSoar knows its daylight saving time rules and applies the transitions on its own, which means the setting does not need to be corrected twice a year."
+msgstr ""
+
+#, no-c-format
+msgid "Manual UTC offset"
+msgstr ""
+
+#, no-c-format
+msgid "Use the fixed UTC offset entered below.  It has to be corrected manually whenever daylight saving time begins or ends."
+msgstr ""
+
+msgid "Local time source"
+msgstr ""
+
+msgid "Selects where XCSoar gets the offset between UTC and local time from."
+msgstr ""
+
+msgid "The time zone of the airfield you are flying at."
+msgstr ""
+
+msgid "The UTC offset field allows the UTC local time offset to be specified. It keeps the value you entered even while another local time source is selected. The local time is displayed below, along with the UTC offset which is currently in effect."
+msgstr ""
+
+#, no-c-format
+msgid "Purple circle only"
+msgstr ""
+
+#, no-c-format
+msgid "Airports and outlanding fields are displayed as purple circles only. Reachability is not calculated or shown for landables."
+msgstr ""
+
+msgid "Purple circles (WinPilot style), high-contrast monochrome, traffic lights, or purple circles without reach marking. The first three styles mark waypoints within reach green."
+msgstr ""
+
+msgid "Height"
+msgstr ""
+
+msgid "Height of the weather overlay control rows at the bottom of the map, as a percentage of the default touch/control height."
+msgstr ""
+
+#, no-c-format
+msgid "UKV Model"
+msgstr ""
+
+#, no-c-format
+msgid "United Kingdom. UKV model."
+msgstr ""
+
+#, no-c-format
+msgid "Sets the opacity of the XC Therm overlay on the map.  50% is more transparent, 100% is fully opaque."
+msgstr ""
+
+#, no-c-format
+msgctxt "Setting"
+msgid "Rainbow API key"
+msgstr ""
+
+msgid "API token from the Rainbow.ai developer portal."
+msgstr ""
+
+#. Alternate Mode: Auto returns a MANUAL slot to the computed
+#. list. Pinning is Select as Alternate, which is always
+#. available and sets MANUAL.
+#, no-c-format
+msgctxt "Button"
+msgid "Alternate Mode: Auto"
+msgstr ""
+
+msgid "Paste"
+msgstr ""
+
+#, c-format
+msgid "Hide %s?"
+msgstr ""
+
+#, no-c-format
+msgid "Hidden"
+msgstr ""
+
+#, c-format
+msgid "Unhide %s?"
+msgstr ""
+
+msgid "Back"
+msgstr ""
+
+#, no-c-format
+msgid "Layout"
+msgstr ""
+
+#, no-c-format
+msgid "Flight Display"
+msgstr ""
+
+#, no-c-format
+msgid "System Setup"
+msgstr ""
+
+#, no-c-format
+msgid "Data"
+msgstr ""
+
+#, no-c-format
+msgid "Tools"
+msgstr ""
+
+msgid "Delete all cached XC Therm forecast data? This includes every altitude layer and region."
+msgstr ""
+
+msgid "XC Therm"
+msgstr ""
+
+msgid "How many forecast hours to download for each selected layer."
+msgstr ""
+
+msgid "No layers selected."
+msgstr ""
+
+#, c-format
+msgid "Download %u selected XC Therm layers for offline use?"
+msgstr ""
+
+msgid "Latest Rainbow cloud tiles"
+msgstr ""
+
+msgid "Latest Rainbow precipitation tiles"
+msgstr ""
+
+#, no-c-format
+msgctxt "Weather layer"
+msgid "Sat+Rain"
+msgstr ""
+
+msgid "Rainbow satellite with rain overlay"
+msgstr ""
+
+msgid "Pages setup"
+msgstr ""
+
+msgid "Live SkySight satellite with rain overlay"
+msgstr ""
+
+msgid "Location access denied"
+msgstr ""
+
+msgid " · git %@"
+msgstr ""
+
+msgid ""
+"© The XCSoar Project\n"
+"GPL-2.0-or-later"
+msgstr ""
+
+msgid "About %@"
+msgstr ""
+
+msgid "Hide %@"
+msgstr ""
+
+msgid "Hide Others"
+msgstr ""
+
+msgid "Show All"
+msgstr ""
+
+msgid "Quit %@"
+msgstr ""
+
+#, no-c-format
+msgid "Main value: thermal climb rate on the next leg that is equivalent to a thermal climb rate equal to the MacCready setting on the current leg. Secondary value: thermal climb rate on the current leg that is equivalent to a thermal climb rate equal to the MacCready setting on the next leg."
+msgstr ""
+
+#, no-c-format
+msgctxt "InfoBox"
+msgid "Glide Cone"
+msgstr ""
+
+#, no-c-format
+msgctxt "Abbreviation"
+msgid "GlideCone"
+msgstr ""
+
+#, no-c-format
+msgid "Altitude margin to the Goto airport (or nearest landable, in combined mode) from the terrain-aware glide cone computation: the main value is the glider's current altitude minus the altitude required at the glider position (green when at or above, red when below); the bottom line is that required altitude. The title shows the current glide ratio (GC L/D). Tap to choose the mode (off/single/combined) and adjust the glide ratio. Requires the glide cone feature (GPU/OpenGL ES 3.1)."
+msgstr ""
+
+#, no-c-format
+msgctxt "InfoBox"
+msgid "Glide Cone Distance"
+msgstr ""
+
+#, no-c-format
+msgctxt "Abbreviation"
+msgid "GC Dist"
+msgstr ""
+
+#, no-c-format
+msgid "Euclidean ground distance along the terrain-aware glide cone relay path from the aircraft to the Goto airport (or the landable the path leads to, in combined mode). The bottom line shows that destination using the Waypoints label format. Requires the glide cone feature (GPU/OpenGL ES 3.1)."
+msgstr ""
+
+#, no-c-format
+msgctxt "Menu"
+msgid "Contours"
+msgstr ""
+
+msgid "GC Dist"
+msgstr ""
+
+msgid "Drag an InfoBox onto another one to exchange the two.  Hold an InfoBox and lift to choose a different InfoBox for that position."
+msgstr ""
+
+msgid "Press Enter to take the selected InfoBox, move it with the cursor keys and press Enter again to put it down.  Pressing Enter twice without moving an InfoBox chooses a different InfoBox for that position."
+msgstr ""
+
+msgid "Arrange InfoBoxes"
+msgstr ""
+
+msgid "GlideCone compute stopped, raise iteration cap"
+msgstr ""
+
+msgid ""
+"Info\n"
+"Page 2/4"
+msgstr ""
+
+msgid ""
+"Info\n"
+"Page 3/4"
+msgstr ""
+
+msgid ""
+"Info\n"
+"Page 4/4"
+msgstr ""
+
+msgid "WiFi List"
+msgstr ""
+
+msgid "Arrange"
+msgstr ""
+
