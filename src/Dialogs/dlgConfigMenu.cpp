@@ -1235,7 +1235,6 @@ static constexpr TabMenuPage computer_pages[] = {
   { N_("Settings"), CreateGlideComputerConfigPanel },
   { N_("Glide Cone"), CreateGlideConeConfigPanel,
     GlideConeGpuSession::Available },
-  { N_("Wind"), CreateWindConfigPanel },
   { N_("Route"), CreateRouteConfigPanel },
   { N_("Scoring"), CreateScoringConfigPanel },
   { nullptr, nullptr }
