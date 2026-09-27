@@ -46,4 +46,6 @@ IconLook::Initialise()
   hBmpConfigTraffic.LoadResource(IDB_TRAFFIC_ALL);
   hBmpConfigTerrain.LoadResource(IDB_TERRAIN_ICON_ALL);
   hBmpConfigTopology.LoadResource(IDB_TOPOLOGY_ALL);
+  hBmpConfigSafetyFactors.LoadResource(IDB_SAFETY_FACTORS_ALL);
+  hBmpConfigSettingsWrench.LoadResource(IDB_SETTINGS_WRENCH_ALL);
 }

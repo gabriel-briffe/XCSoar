@@ -51,6 +51,8 @@ struct IconLook {
   MaskedIcon hBmpConfigTraffic;
   MaskedIcon hBmpConfigTerrain;
   MaskedIcon hBmpConfigTopology;
+  MaskedIcon hBmpConfigSafetyFactors;
+  MaskedIcon hBmpConfigSettingsWrench;
 
   void Initialise();
 };

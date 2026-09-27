@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Settings tile: open-end wrench alone, extracted from wrench.svg
+    (Tools icon, public domain Openclipart). The screwdriver was removed
+    and the two wrench halves it covered were joined into one shaft.
+    Centred in the 24×24 viewBox.
+  -->
+  <g transform="translate(12 12) scale(0.145) translate(-82 -76)">
+    <path fill="#000"
+          d="M20 0 L18 4 L39 16 C39 26 35 34 26 39 L5 27 L4 29 C9 44 19 54 39 54 C44 54 59 69 67 77 L79 89 C91 101 107 117 107 122 C107 140 112 152 144 152 L146 148 L125 136 C125 126 129 118 138 113 L159 125 L160 123 C155 108 145 98 125 98 C120 98 107 85 95 73 L83 61 C75 53 57 35 57 30 C57 12 52 0 20 0 Z"/>
+  </g>
+</svg>

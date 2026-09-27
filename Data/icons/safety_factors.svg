@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Safety Factors tile: simplified terrain (two peaks on a ground line),
+    safety altitude line above, and a double-headed vertical arrow from
+    the highest peak up to that line marking the terrain clearance margin.
+  -->
+
+  <!-- Safety altitude line -->
+  <path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"
+        d="M2 3.2 H22"/>
+
+  <!-- Terrain: ground line with two peaks -->
+  <path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M2 21.5 L9 14.2 L12.5 17.8 L15.5 15.4 L22 21.5 Z"/>
+
+  <!-- Margin: double-headed vertical arrow between peak and altitude line -->
+  <g fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round"
+     stroke-linejoin="round">
+    <path d="M9 5.4 V12"/>
+    <path d="M7.5 6.7 L9 5.2 L10.5 6.7"/>
+    <path d="M7.5 10.7 L9 12.2 L10.5 10.7"/>
+  </g>
+</svg>

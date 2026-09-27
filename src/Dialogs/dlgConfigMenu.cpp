@@ -401,6 +401,10 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpTabSettings;
   if (StringIsEqual(label, "Glide Computer"))
     return &icons.hBmpConfigGlideComputer;
+  if (StringIsEqual(label, "Settings"))
+    return &icons.hBmpConfigSettingsWrench;
+  if (StringIsEqual(label, "Safety Factors"))
+    return &icons.hBmpConfigSafetyFactors;
   if (StringIsEqual(label, "Task"))
     return &icons.hBmpTabTask;
   if (StringIsEqual(label, "Task Defaults"))
@@ -1228,7 +1232,7 @@ static constexpr TabMenuPage infoboxes_pages[] = {
 
 static constexpr TabMenuPage computer_pages[] = {
   { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
-  { N_("Glide Computer"), CreateGlideComputerConfigPanel },
+  { N_("Settings"), CreateGlideComputerConfigPanel },
   { N_("Glide Cone"), CreateGlideConeConfigPanel,
     GlideConeGpuSession::Available },
   { N_("Wind"), CreateWindConfigPanel },
