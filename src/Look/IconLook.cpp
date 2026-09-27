@@ -21,6 +21,8 @@ IconLook::Initialise()
   hBmpConfigProfiles.LoadResource(IDB_USER_ALL);
   hBmpConfigFlightSetup.LoadResource(IDB_TAKEOFF_ALL);
   hBmpConfigWind.LoadResource(IDB_WIND_ALL);
+  hBmpConfigWeather.LoadResource(IDB_WEATHER_ALL);
+  hBmpConfigDistanceRings.LoadResource(IDB_DISTANCE_RINGS_ALL);
   hBmpConfigDataManagement.LoadResource(IDB_DATABASE_ALL);
   hBmpConfigWaypointEditor.LoadResource(IDB_WAYPOINT_EDIT_ALL);
   hBmpConfigReplay.LoadResource(IDB_REPLAY_ALL);

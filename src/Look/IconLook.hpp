@@ -26,6 +26,8 @@ struct IconLook {
   MaskedIcon hBmpConfigProfiles;
   MaskedIcon hBmpConfigFlightSetup;
   MaskedIcon hBmpConfigWind;
+  MaskedIcon hBmpConfigWeather;
+  MaskedIcon hBmpConfigDistanceRings;
   MaskedIcon hBmpConfigDataManagement;
   MaskedIcon hBmpConfigWaypointEditor;
   MaskedIcon hBmpConfigReplay;

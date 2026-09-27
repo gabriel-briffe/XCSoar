@@ -441,6 +441,10 @@ ConfigMenuIconForLabel(const char *label) noexcept
     return &icons.hBmpTabSystem;
   if (StringIsEqual(label, "Wind"))
     return &icons.hBmpConfigWind;
+  if (StringIsEqual(label, "Weather"))
+    return &icons.hBmpConfigWeather;
+  if (StringStartsWith(label, "Distance Rings"))
+    return &icons.hBmpConfigDistanceRings;
   if (StringIsEqual(label, "Data"))
     return &icons.hBmpConfigDataManagement;
   if (StringIsEqual(label, "Data Management"))
