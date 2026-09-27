@@ -495,7 +495,7 @@ TrailRenderer::MakeTrailQuery(TimeStamp min_time,
     query.max_points = 0;
   } else {
     query.min_distance_m =
-      projection.DistancePixelsToMeters(GetTrailSpacingPixels(map_scale));
+      projection.DistancePixelsToMeters(GetTrailSpacingPixels());
     query.point_stride = 1;
     query.max_points = GetTrailPointBudget();
   }

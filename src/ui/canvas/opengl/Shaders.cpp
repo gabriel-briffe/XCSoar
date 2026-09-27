@@ -431,6 +431,9 @@ static constexpr char height_blit_fragment_shader[] =
       float h0 = mix(height(b00), height(b10), f.x);
       float h1 = mix(height(b01), height(b11), f.x);
       gl_FragColor = encode_height(mix(h0, h1, f.y));
+    }
+)glsl";
+
 static constexpr char round_line_vertex_shader[] =
   GLSL_VERSION
   GLSL_PRECISION

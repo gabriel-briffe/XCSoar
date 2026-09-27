@@ -73,7 +73,8 @@ extern GLint hillshade_projection, hillshade_translate,
   hillshade_height_tex, hillshade_ramp_tex,
   hillshade_texel_step, hillshade_sun, hillshade_contrast,
   hillshade_height_slope_factor, hillshade_height_div,
-  hillshade_height_offset;
+  hillshade_q, hillshade_do_shading, hillshade_contour_div,
+  hillshade_height_texel;
 
 /**
  * Copy a DEM height tile into an FBO (LA → RGBA as L,0,0,A),
