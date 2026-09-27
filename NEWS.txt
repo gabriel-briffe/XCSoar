@@ -134,6 +134,9 @@ Version 7.46 - not yet released
     protocol, so an S-series logger is not sent Colibri commands
     while it is still identifying
 * dialogs
+  - reorganise the list Configuration menu to match the tiled Config
+    folders (Map, Flight Display pages, Glide Computer Settings,
+    Weather, Accounts, and so on)
   - show the flight name, the device, and the driver on separate
     lines above a flight download, and the percent, amount complete,
     transfer speed, and estimated time remaining inside the progress
@@ -257,6 +260,8 @@ Version 7.46 - not yet released
   - fix quitting from the Fly / Simulator screen with -profile=
     emptying the profile file #3190
 * documentation
+  - document that the list Configuration menu follows the same
+    panel groups as the tiled Config folders
   - document that a BlueFly Vario on Android uses BLE port, not BLE
     sensor
   - document that Engine Type is only shown for engine-sensor BLE

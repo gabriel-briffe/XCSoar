@@ -8,11 +8,11 @@ namespace UI { class SingleWindow; }
 class Menu;
 
 /**
- * Full-screen tiled menu for Config: flat list of Config1/2/3
- * actions in a Garmin-style tile grid (portrait 3×4, landscape 4×3)
- * with bottom page and Close buttons.  Includes a per-menu Hidden
- * folder (long-press tiles to hide/unhide), plus Data, Flight Display,
- * Glide Computer, Task, and System Setup folders.
+ * Full-screen tiled Config menu (portrait 3×4 / landscape 4×3 grid).
+ * Folder panels come from ConfigMenuData (shared with the list
+ * Configuration dialog); softkey actions still come from XCI
+ * Config1/2/3.  Includes per-menu Hidden tiles and nested Data,
+ * Flight Display, Glide Computer, Task, Tools, and System Setup.
  */
 void
 dlgConfigMenuShowModal(UI::SingleWindow &parent) noexcept;

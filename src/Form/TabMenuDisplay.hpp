@@ -14,7 +14,7 @@ class PagerWidget;
 class TabMenuDisplay final : public PaintWindow
 {
   /* excludes "Main Menu" which is a "super menu" */
-  static constexpr unsigned MAX_MAIN_MENU_ITEMS = 13;
+  static constexpr unsigned MAX_MAIN_MENU_ITEMS = 16;
 
   /**
    * The offset from a page number in the #TabMenuDisplay to a page

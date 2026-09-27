@@ -3,47 +3,11 @@
 
 #include "dlgConfigMenu.hpp"
 #include "Asset.hpp"
-#include "Audio/Features.hpp"
 #include "Dialogs/InternalLink.hpp"
 #include "Dialogs/Message.hpp"
 #include "UIActions.hpp"
-#include "Dialogs/Settings/Panels/AirspaceConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/GaugesConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/GlideComputerConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/GlideConeConfigPanel.hpp"
-#include "GlideCone/GlideConeCompute.hpp"
-#include "Dialogs/Settings/Panels/InfoBoxLayoutConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/InfoBoxesConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/MapDisplayConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/RouteConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/SafetyFactorsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/ScoringConfigPanel.hpp"
+#include "Dialogs/Settings/ConfigMenuData.hpp"
 #include "Dialogs/Settings/Panels/SiteConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/SymbolsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/TrafficSymbolsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/TaskDefaultsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/TaskRulesConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/TerrainDisplayConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/TopographyDisplayConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/VarioConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/WaypointDisplayConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/WindConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/LanguageConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/InputConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/HapticsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/HardwareDisplayConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/AppearanceConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/OverlayControlsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/PagesConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/UnitsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/TimeConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/QuickMenuConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/LoggerConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/SoundsConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/NetworkConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/WeGlideConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/RaspConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/WeatherControlsConfigPanel.hpp"
 #include "Dialogs/DataManagement/AdvancedFileExplorer.hpp"
 #include "Dialogs/DataManagement/BackupRestorePanel.hpp"
 #include "Dialogs/DataManagement/ExportFlightsPanel.hpp"
@@ -70,8 +34,6 @@
 #include "UIGlobals.hpp"
 #include "Widget/WindowWidget.hpp"
 #include "WidgetDialog.hpp"
-#include "Tracking/Features.hpp"
-#include "net/http/Features.hpp"
 #include "ui/canvas/Brush.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Icon.hpp"
@@ -81,38 +43,6 @@
 #include "util/StaticString.hxx"
 #include "util/StringAPI.hxx"
 #include "util/StringCompare.hxx"
-
-#ifdef HAVE_HTTP
-#include "Dialogs/Settings/Panels/NOTAMConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_PCM_PLAYER
-#include "Dialogs/Settings/Panels/AudioVarioConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_VOLUME_CONTROLLER
-#include "Dialogs/Settings/Panels/AudioConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_TRACKING
-#include "Dialogs/Settings/Panels/TrackingConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/CloudConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_HTTP
-#include "Dialogs/Settings/Panels/WeatherConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/SkySightConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/XCThermConfigPanel.hpp"
-#include "Dialogs/Settings/Panels/RainbowConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_PCMET
-#include "Dialogs/Settings/Panels/PCMetConfigPanel.hpp"
-#endif
-
-#if defined(__linux__) && !defined(__ANDROID__) && !defined(KOBO)
-#include "Dialogs/Settings/Panels/SystemdConfigPanel.hpp"
-#endif
 
 #include <algorithm>
 #include <boost/container/static_vector.hpp>
@@ -1198,398 +1128,21 @@ AppendPanelPages(TiledMenuItemList &out, const TabMenuPage *pages) noexcept
   }
 }
 
-/* Keep in sync with map_pages / aircrafts_pages / gauge_pages /
-   computer_pages / task_pages / look_pages in dlgConfiguration.cpp. */
-static constexpr TabMenuPage map_pages[] = {
-  { N_("Orientation"), CreateMapDisplayConfigPanel },
-  { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
-  { N_("Terrain"), CreateTerrainDisplayConfigPanel },
-  { N_("Topology"), CreateTopographyDisplayConfigPanel },
-  { N_("Airspace"), CreateAirspaceConfigPanel },
-#ifdef HAVE_HTTP
-  { NC_("Setting", "NOTAM"), CreateNOTAMConfigPanel },
-#endif
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage aircrafts_pages[] = {
-  { N_("Aircraft"), CreateSymbolsConfigPanel },
-  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage gauge_pages[] = {
-  { N_("FLARM, Other"), CreateGaugesConfigPanel },
-  { N_("Vario"), CreateVarioConfigPanel },
-#ifdef HAVE_PCM_PLAYER
-  { N_("Audio Vario"), CreateAudioVarioConfigPanel },
-#endif
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage infoboxes_pages[] = {
-  { N_("Layout"), CreateInfoBoxLayoutConfigPanel },
-  { N_("InfoBox Sets"), CreateInfoBoxesConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage computer_pages[] = {
-  { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
-  { N_("Settings"), CreateGlideComputerConfigPanel },
-  { N_("Glide Cone"), CreateGlideConeConfigPanel,
-    GlideConeGpuSession::Available },
-  { N_("Route"), CreateRouteConfigPanel },
-  { N_("Scoring"), CreateScoringConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage task_defaults_pages[] = {
-  { N_("Task Rules"), CreateTaskRulesConfigPanel },
-  { N_("Turnpoint Types"), CreateTaskDefaultsConfigPanel },
-  { nullptr, nullptr }
-};
-
 static void
-ShowMapTiledMenu(UI::SingleWindow &parent) noexcept
+AppendNestedFolder(TiledMenuItemList &out, const char *id,
+                   const char *caption,
+                   void (*show_nested)(UI::SingleWindow &) noexcept) noexcept
 {
-  TiledMenuItemList items;
-  AppendPanelPages(items, map_pages);
-  ShowTiledMenuList(parent, N_("Map"), "Map", std::move(items));
-}
+  if (out.size() >= out.max_size())
+    return;
 
-static void
-ShowAircraftsTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, aircrafts_pages);
-  ShowTiledMenuList(parent, N_("Aircrafts"), "Aircrafts",
-                    std::move(items));
-}
-
-static void
-ShowGaugesTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, gauge_pages);
-  ShowTiledMenuList(parent, N_("Gauges"), "Gauges", std::move(items));
-}
-
-static void
-ShowInfoBoxesTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, infoboxes_pages);
-  ShowTiledMenuList(parent, N_("InfoBoxes"), "InfoBoxes",
-                    std::move(items));
-}
-
-static void
-ShowFlightDisplayTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-
-  {
-    TiledMenuItem item;
-    item.id = "Map";
-    item.caption = _("Map");
-    item.icon = ConfigMenuIconForLabel("Map");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowMapTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Aircrafts";
-    item.caption = _("Aircrafts");
-    item.icon = ConfigMenuIconForLabel("Aircrafts");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowAircraftsTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Gauges";
-    item.caption = _("Gauges");
-    item.icon = ConfigMenuIconForLabel("Gauges");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowGaugesTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "InfoBoxes";
-    item.caption = _("InfoBoxes");
-    item.icon = ConfigMenuIconForLabel("InfoBoxes");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowInfoBoxesTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Pages";
-    item.caption = _("Pages");
-    item.icon = ConfigMenuIconForLabel("Pages");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreatePagesConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  ShowTiledMenuList(parent, N_("Flight Display"), "Flight Display",
-                    std::move(items));
-}
-
-static void
-ShowGlideComputerTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, computer_pages);
-  ShowTiledMenuList(parent, N_("Glide Computer"), "Glide Computer",
-                    std::move(items));
-}
-
-static void
-ShowTaskDefaultsTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, task_defaults_pages);
-  ShowTiledMenuList(parent, N_("Task Defaults"), "Task Defaults",
-                    std::move(items));
-}
-
-static void
-ShowTaskTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-
-  {
-    TiledMenuItem item;
-    item.id = "Task Defaults";
-    item.caption = _("Task Defaults");
-    item.icon = ConfigMenuIconForLabel("Task Defaults");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowTaskDefaultsTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  ShowTiledMenuList(parent, N_("Task"), "Task", std::move(items));
-}
-
-/* Keep in sync with dlgConfiguration.cpp system groups. */
-static constexpr TabMenuPage hardware_pages[] = {
-  { N_("Display"), CreateHardwareDisplayConfigPanel },
-  { N_("Haptics"), CreateHapticsConfigPanel },
-#ifdef HAVE_VOLUME_CONTROLLER
-  { N_("Audio"), CreateAudioConfigPanel },
-#endif
-  { N_("Network"), CreateNetworkConfigPanel },
-#if defined(__linux__) && !defined(__ANDROID__) && !defined(KOBO)
-  { N_("Services"), CreateSystemdConfigPanel },
-#endif
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage look_accessibility_pages[] = {
-  { N_("Input"), CreateInputConfigPanel },
-  { N_("Appearance"), CreateAppearanceConfigPanel },
-  { N_("Controls"), CreateOverlayControlsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage units_time_pages[] = {
-  { N_("Units"), CreateUnitsConfigPanel },
-  { NC_("Setting", "Time"), CreateTimeConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage weather_pages[] = {
-#ifdef HAVE_HTTP
-  { N_("Thermal Information Map"), CreateWeatherConfigPanel },
-#endif
-  { "RASP", CreateRaspConfigPanel },
-#ifdef HAVE_HTTP
-  { "SkySight", CreateSkySightConfigPanel },
-#endif
-#ifdef HAVE_PCMET
-  { "Flugwetter (pc_met)", CreatePCMetConfigPanel },
-#endif
-#ifdef HAVE_HTTP
-  { "Rainbow", CreateRainbowConfigPanel },
-  { "XC Therm", CreateXCThermConfigPanel },
-#endif
-  { N_("Controls"), CreateWeatherControlsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static void
-ShowHardwareTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, hardware_pages);
-  ShowTiledMenuList(parent, N_("Hardware"), "Hardware", std::move(items));
-}
-
-static void
-ShowLookAccessibilityTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, look_accessibility_pages);
-  ShowTiledMenuList(parent, N_("Look & Accessibility"),
-                    "Look & Accessibility", std::move(items));
-}
-
-static void
-ShowUnitsTimeTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, units_time_pages);
-  ShowTiledMenuList(parent, N_("Units & Time"), "Units & Time",
-                    std::move(items));
-}
-
-static void
-ShowWeatherTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-  AppendPanelPages(items, weather_pages);
-  ShowTiledMenuList(parent, N_("Weather"), "Weather", std::move(items));
-}
-
-static void
-ShowAccountsServicesTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-
-  {
-    TiledMenuItem item;
-    item.id = "Weather";
-    item.caption = _("Weather");
-    item.icon = ConfigMenuIconForLabel("Weather");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowWeatherTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-#ifdef HAVE_TRACKING
-  {
-    TiledMenuItem item;
-    item.id = "Tracking";
-    item.caption = _("Tracking");
-    item.icon = ConfigMenuIconForLabel("Tracking");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateTrackingConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "XCSoar Cloud";
-    item.caption = "XCSoar Cloud";
-    item.icon = ConfigMenuIconForLabel("XCSoar Cloud");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateCloudConfigPanel;
-    items.push_back(std::move(item));
-  }
-#endif
-
-  {
-    TiledMenuItem item;
-    item.id = "WeGlide";
-    item.caption = "WeGlide";
-    item.icon = ConfigMenuIconForLabel("WeGlide");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateWeGlideConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  ShowTiledMenuList(parent, N_("Accounts & Services"),
-                    "Accounts & Services", std::move(items));
-}
-
-static void
-ShowSystemSetupTiledMenu(UI::SingleWindow &parent) noexcept
-{
-  TiledMenuItemList items;
-
-  {
-    TiledMenuItem item;
-    item.id = "Language";
-    item.caption = _("Language");
-    item.icon = ConfigMenuIconForLabel("Language");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateLanguageConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Hardware";
-    item.caption = _("Hardware");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowHardwareTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Look & Accessibility";
-    item.caption = _("Look & Accessibility");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowLookAccessibilityTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Units & Time";
-    item.caption = _("Units & Time");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowUnitsTimeTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Quick Menu";
-    item.caption = _("Quick Menu");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateQuickMenuConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Sounds";
-    item.caption = _("Sounds");
-    item.icon = ConfigMenuIconForLabel("Sounds");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateSoundsConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Logger";
-    item.caption = _("Logger");
-    item.kind = TiledMenuItem::Kind::PANEL;
-    item.create_panel = CreateLoggerConfigPanel;
-    items.push_back(std::move(item));
-  }
-
-  {
-    TiledMenuItem item;
-    item.id = "Accounts & Services";
-    item.caption = _("Accounts & Services");
-    item.kind = TiledMenuItem::Kind::NESTED;
-    item.show_nested = ShowAccountsServicesTiledMenu;
-    items.push_back(std::move(item));
-  }
-
-  ShowTiledMenuList(parent, N_("System Setup"), "System Setup",
-                    std::move(items));
+  TiledMenuItem item;
+  item.id = id;
+  item.caption = caption;
+  item.icon = ConfigMenuIconForLabel(id);
+  item.kind = TiledMenuItem::Kind::NESTED;
+  item.show_nested = show_nested;
+  out.push_back(std::move(item));
 }
 
 static void
@@ -1635,131 +1188,167 @@ CollectXciItems(TiledMenuItemList &out,
 }
 
 /**
- * Tools submenu (XCI mode "ConfigTools") opened as a nested tiled
- * menu, so the Config menu stays open underneath it.
+ * Move the first XCI item whose id equals #id (or starts with #id when
+ * #prefix is true) from #xci into #out.  Returns false if not found.
  */
+static bool
+TakeXciItem(TiledMenuItemList &xci, TiledMenuItemList &out,
+            const char *id, bool prefix=false) noexcept
+{
+  if (out.size() >= out.max_size())
+    return false;
+
+  for (auto it = xci.begin(); it != xci.end(); ++it) {
+    const bool match = prefix
+      ? StringStartsWith(it->id.c_str(), id)
+      : StringIsEqual(it->id.c_str(), id);
+    if (!match)
+      continue;
+
+    out.push_back(std::move(*it));
+    xci.erase(it);
+    return true;
+  }
+
+  return false;
+}
+
+static void ShowMapTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::map_pages);
+  ShowTiledMenuList(parent, N_("Map"), "Map", std::move(items));
+}
+
+static void ShowAircraftsTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::aircrafts_pages);
+  ShowTiledMenuList(parent, N_("Aircrafts"), "Aircrafts",
+                    std::move(items));
+}
+
+static void ShowGaugesTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::gauge_pages);
+  ShowTiledMenuList(parent, N_("Gauges"), "Gauges", std::move(items));
+}
+
+static void ShowInfoBoxesTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::infoboxes_pages);
+  ShowTiledMenuList(parent, N_("InfoBoxes"), "InfoBoxes",
+                    std::move(items));
+}
+
+static void ShowFlightDisplayTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendNestedFolder(items, "Map", _("Map"), ShowMapTiledMenu);
+  AppendNestedFolder(items, "Aircrafts", _("Aircrafts"),
+                     ShowAircraftsTiledMenu);
+  AppendNestedFolder(items, "Gauges", _("Gauges"), ShowGaugesTiledMenu);
+  AppendNestedFolder(items, "InfoBoxes", _("InfoBoxes"),
+                     ShowInfoBoxesTiledMenu);
+  AppendPanelPages(items, ConfigMenuData::pages_pages);
+  ShowTiledMenuList(parent, N_("Flight Display"), "Flight Display",
+                    std::move(items));
+}
+
+static void ShowGlideComputerTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::computer_pages);
+  ShowTiledMenuList(parent, N_("Glide Computer"), "Glide Computer",
+                    std::move(items));
+}
+
+static void ShowTaskDefaultsTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::task_defaults_pages);
+  ShowTiledMenuList(parent, N_("Task Defaults"), "Task Defaults",
+                    std::move(items));
+}
+
+static void ShowTaskTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendNestedFolder(items, "Task Defaults", _("Task Defaults"),
+                     ShowTaskDefaultsTiledMenu);
+  ShowTiledMenuList(parent, N_("Task"), "Task", std::move(items));
+}
+
+static void ShowHardwareTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::hardware_pages);
+  ShowTiledMenuList(parent, N_("Hardware"), "Hardware", std::move(items));
+}
+
 static void
-ShowToolsTiledMenu(UI::SingleWindow &parent) noexcept
+ShowLookAccessibilityTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::look_accessibility_pages);
+  ShowTiledMenuList(parent, N_("Look & Accessibility"),
+                    "Look & Accessibility", std::move(items));
+}
+
+static void ShowUnitsTimeTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::units_time_pages);
+  ShowTiledMenuList(parent, N_("Units & Time"), "Units & Time",
+                    std::move(items));
+}
+
+static void ShowWeatherTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::weather_pages);
+  ShowTiledMenuList(parent, N_("Weather"), "Weather", std::move(items));
+}
+
+static void
+ShowAccountsServicesTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendNestedFolder(items, "Weather", _("Weather"), ShowWeatherTiledMenu);
+  AppendPanelPages(items, ConfigMenuData::accounts_pages);
+  ShowTiledMenuList(parent, N_("Accounts & Services"),
+                    "Accounts & Services", std::move(items));
+}
+
+static void ShowSystemSetupTiledMenu(UI::SingleWindow &parent) noexcept
+{
+  TiledMenuItemList items;
+  AppendPanelPages(items, ConfigMenuData::language_pages);
+  AppendNestedFolder(items, "Hardware", _("Hardware"),
+                     ShowHardwareTiledMenu);
+  AppendNestedFolder(items, "Look & Accessibility",
+                     _("Look & Accessibility"),
+                     ShowLookAccessibilityTiledMenu);
+  AppendNestedFolder(items, "Units & Time", _("Units & Time"),
+                     ShowUnitsTimeTiledMenu);
+  AppendPanelPages(items, ConfigMenuData::setup_pages);
+  AppendNestedFolder(items, "Accounts & Services",
+                     _("Accounts & Services"),
+                     ShowAccountsServicesTiledMenu);
+  ShowTiledMenuList(parent, N_("System Setup"), "System Setup",
+                    std::move(items));
+}
+
+static void ShowToolsTiledMenu(UI::SingleWindow &parent) noexcept
 {
   TiledMenuItemList items;
   CollectXciItems(items, {"ConfigTools"});
   ShowTiledMenuList(parent, N_("Tools"), "Tools", std::move(items));
 }
 
-/**
- * Turn the XCI "Tools" tile (event ConfigTools, which would close the
- * Config menu and reopen Tools as a new root) into a nested folder
- * tile, like Data and System Setup.  Position, caption, and icon are
- * kept.
- */
-static void
-MakeToolsTileNested(TiledMenuItemList &items) noexcept
-{
-  for (auto &item : items) {
-    if (StringIsEqual(item.id.c_str(), "Tools")) {
-      item.kind = TiledMenuItem::Kind::NESTED;
-      item.show_nested = ShowToolsTiledMenu;
-      return;
-    }
-  }
-}
-
-/**
- * Insert Data, Flight Display, Glide Computer, and Task folder tiles
- * immediately after Configuration (in that order).
- */
-static void
-InsertFoldersAfterConfiguration(TiledMenuItemList &items) noexcept
-{
-  auto insert_after_configuration = [&items](TiledMenuItem &&tile) {
-    if (items.size() >= items.max_size())
-      return;
-
-    for (auto it = items.begin(); it != items.end(); ++it) {
-      if (StringIsEqual(it->id.c_str(), "Configuration")) {
-        items.insert(it + 1, std::move(tile));
-        return;
-      }
-    }
-
-    /* Configuration missing: still expose the folder at the front. */
-    items.insert(items.begin(), std::move(tile));
-  };
-
-  /* Insert in reverse so the final order is Data, Flight Display,
-     Glide Computer, Task. */
-  {
-    TiledMenuItem task;
-    task.id = "Task";
-    task.caption = _("Task");
-    task.icon = ConfigMenuIconForLabel("Task");
-    task.kind = TiledMenuItem::Kind::NESTED;
-    task.show_nested = ShowTaskTiledMenu;
-    insert_after_configuration(std::move(task));
-  }
-
-  {
-    TiledMenuItem computer;
-    computer.id = "Glide Computer";
-    computer.caption = _("Glide Computer");
-    computer.icon = ConfigMenuIconForLabel("Glide Computer");
-    computer.kind = TiledMenuItem::Kind::NESTED;
-    computer.show_nested = ShowGlideComputerTiledMenu;
-    insert_after_configuration(std::move(computer));
-  }
-
-  {
-    TiledMenuItem flight_display;
-    flight_display.id = "Flight Display";
-    flight_display.caption = _("Flight Display");
-    flight_display.icon = ConfigMenuIconForLabel("Flight Display");
-    flight_display.kind = TiledMenuItem::Kind::NESTED;
-    flight_display.show_nested = ShowFlightDisplayTiledMenu;
-    insert_after_configuration(std::move(flight_display));
-  }
-
-  {
-    TiledMenuItem data;
-    data.id = "Data";
-    data.caption = _("Data");
-    data.icon = ConfigMenuIconForLabel("Data");
-    data.kind = TiledMenuItem::Kind::NESTED;
-    data.show_nested = ShowDataTiledMenu;
-    insert_after_configuration(std::move(data));
-  }
-}
-
-/**
- * Insert System Setup immediately after the Tools tile.
- */
-static void
-InsertSystemSetupAfterTools(TiledMenuItemList &items) noexcept
-{
-  if (items.size() >= items.max_size())
-    return;
-
-  TiledMenuItem system_setup;
-  system_setup.id = "System Setup";
-  system_setup.caption = _("System Setup");
-  system_setup.icon = ConfigMenuIconForLabel("System Setup");
-  system_setup.kind = TiledMenuItem::Kind::NESTED;
-  system_setup.show_nested = ShowSystemSetupTiledMenu;
-
-  for (auto it = items.begin(); it != items.end(); ++it) {
-    if (StringIsEqual(it->id.c_str(), "Tools")) {
-      items.insert(it + 1, std::move(system_setup));
-      return;
-    }
-  }
-
-  items.push_back(std::move(system_setup));
-}
-
-/**
- * Insert Quit immediately after the System Setup tile.
- */
-static void
-ShowQuitAction() noexcept
+static void ShowQuitAction() noexcept
 {
   /* Prompt here: MainWindow::OnClose skips CheckShutdown while any
      dialog is open and would only CancelDialog the Config menu. */
@@ -1768,29 +1357,6 @@ ShowQuitAction() noexcept
 
   quit_after_tiled_menu = true;
   RequestTiledMenuCloseAll();
-}
-
-static void
-InsertQuitAfterSystemSetup(TiledMenuItemList &items) noexcept
-{
-  if (items.size() >= items.max_size())
-    return;
-
-  TiledMenuItem quit;
-  quit.id = "Quit";
-  quit.caption = _("Quit");
-  quit.icon = ConfigMenuIconForLabel("Quit");
-  quit.kind = TiledMenuItem::Kind::ACTION;
-  quit.show_action = ShowQuitAction;
-
-  for (auto it = items.begin(); it != items.end(); ++it) {
-    if (StringIsEqual(it->id.c_str(), "System Setup")) {
-      items.insert(it + 1, std::move(quit));
-      return;
-    }
-  }
-
-  items.push_back(std::move(quit));
 }
 
 static void
@@ -1846,8 +1412,7 @@ AppendDataAction(TiledMenuItemList &out, const char *id,
   out.push_back(std::move(item));
 }
 
-static void
-ShowDataTiledMenu(UI::SingleWindow &parent) noexcept
+static void ShowDataTiledMenu(UI::SingleWindow &parent) noexcept
 {
   TiledMenuItemList items;
   AppendDataAction(items, "Navigation & Flight Resources",
@@ -1871,21 +1436,75 @@ ShowDataTiledMenu(UI::SingleWindow &parent) noexcept
   ShowTiledMenuList(parent, N_("Data"), "Data", std::move(items));
 }
 
+/**
+ * Build the Config root tile list in fixed order.  Softkey actions
+ * (Planes, Devices, …) still come from XCI Config1/2/3 so labels and
+ * macros stay data-driven; folder tiles and Quit are declared here so
+ * the tree is not assembled by insert-after patches.
+ */
+static void
+BuildConfigRootItems(TiledMenuItemList &out) noexcept
+{
+  TiledMenuItemList xci;
+  CollectXciItems(xci, {"Config1", "Config2", "Config3"});
+
+  TakeXciItem(xci, out, "Configuration");
+  AppendNestedFolder(out, "Data", _("Data"), ShowDataTiledMenu);
+  AppendNestedFolder(out, "Flight Display", _("Flight Display"),
+                     ShowFlightDisplayTiledMenu);
+  AppendNestedFolder(out, "Glide Computer", _("Glide Computer"),
+                     ShowGlideComputerTiledMenu);
+  AppendNestedFolder(out, "Task", _("Task"), ShowTaskTiledMenu);
+  TakeXciItem(xci, out, "Planes");
+  TakeXciItem(xci, out, "Devices");
+  TakeXciItem(xci, out, "Flight Setup");
+  TakeXciItem(xci, out, "Wind");
+  TakeXciItem(xci, out, "Profiles");
+  TakeXciItem(xci, out, "Logger", true);
+  /* Prefer the exact NMEA Logger label; fall back to prefix. */
+  if (!TakeXciItem(xci, out, "NMEA Logger$(CheckLogger)"))
+    TakeXciItem(xci, out, "NMEA Logger", true);
+  TakeXciItem(xci, out, "Lua");
+  TakeXciItem(xci, out, "Vega", true);
+  if (TakeXciItem(xci, out, "Tools")) {
+    out.back().kind = TiledMenuItem::Kind::NESTED;
+    out.back().show_nested = ShowToolsTiledMenu;
+  }
+
+  /* Preserve any remaining custom Config XCI entries. */
+  for (auto &item : xci) {
+    if (out.size() >= out.max_size())
+      break;
+    out.push_back(std::move(item));
+  }
+
+  AppendNestedFolder(out, "System Setup", _("System Setup"),
+                     ShowSystemSetupTiledMenu);
+
+  if (out.size() < out.max_size()) {
+    TiledMenuItem quit;
+    quit.id = "Quit";
+    quit.caption = _("Quit");
+    quit.icon = ConfigMenuIconForLabel("Quit");
+    quit.kind = TiledMenuItem::Kind::ACTION;
+    quit.show_action = ShowQuitAction;
+    out.push_back(std::move(quit));
+  }
+}
+
 static void
 ShowXciTiledMenuAndRun(UI::SingleWindow &parent,
                        std::initializer_list<const char *> modes,
                        const char *title,
                        const char *menu_id,
-                       bool insert_folders) noexcept
+                       bool config_root) noexcept
 {
   TiledMenuItemList items;
-  CollectXciItems(items, modes);
-  if (insert_folders) {
-    MakeToolsTileNested(items);
-    InsertFoldersAfterConfiguration(items);
-    InsertSystemSetupAfterTools(items);
-    InsertQuitAfterSystemSetup(items);
-  }
+  if (config_root)
+    BuildConfigRootItems(items);
+  else
+    CollectXciItems(items, modes);
+
   if (items.empty())
     return;
 

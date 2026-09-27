@@ -7,7 +7,7 @@
 #include "Dialogs/dlgConfigMenu.hpp"
 #include "Widget/ArrowPagerWidget.hpp"
 #include "Widget/CreateWindowWidget.hpp"
-#include "Widget/Widget.hpp"
+#include "Widget/Widget.hpp"  /* NullWidget */
 #include "Dialogs/WidgetDialog.hpp"
 #include "Look/DialogLook.hpp"
 #include "UIGlobals.hpp"
@@ -18,86 +18,14 @@
 #include "Form/Button.hpp"
 #include "Screen/Layout.hpp"
 #include "Profile/Profile.hpp"
-#include "util/Macros.hpp"
+#include "Profile/Keys.hpp"
+#include "ConfigMenuData.hpp"
 #include "Panels/ConfigPanel.hpp"
-#include "Panels/PagesConfigPanel.hpp"
-#include "Panels/UnitsConfigPanel.hpp"
-#include "Panels/TimeConfigPanel.hpp"
-#include "Panels/LoggerConfigPanel.hpp"
-#include "Panels/SoundsConfigPanel.hpp"
-#include "Panels/AirspaceConfigPanel.hpp"
-#include "Panels/SiteConfigPanel.hpp"
-#include "Panels/MapDisplayConfigPanel.hpp"
-#include "Panels/WaypointDisplayConfigPanel.hpp"
-#include "Panels/SymbolsConfigPanel.hpp"
-#include "Panels/TrafficSymbolsConfigPanel.hpp"
-#include "Panels/TerrainDisplayConfigPanel.hpp"
-#include "Panels/TopographyDisplayConfigPanel.hpp"
-#include "Panels/GlideComputerConfigPanel.hpp"
-#include "Panels/GlideConeConfigPanel.hpp"
-#include "GlideCone/GlideConeCompute.hpp"
-#include "Panels/WindConfigPanel.hpp"
-#include "Panels/SafetyFactorsConfigPanel.hpp"
-#include "Panels/RouteConfigPanel.hpp"
-#include "Panels/LanguageConfigPanel.hpp"
-#include "Panels/InputConfigPanel.hpp"
-#include "Panels/HapticsConfigPanel.hpp"
-#include "Panels/HardwareDisplayConfigPanel.hpp"
-#include "Panels/AppearanceConfigPanel.hpp"
-#include "Panels/OverlayControlsConfigPanel.hpp"
-#include "Panels/InfoBoxLayoutConfigPanel.hpp"
-#include "Panels/GaugesConfigPanel.hpp"
-#include "Panels/VarioConfigPanel.hpp"
-#include "Panels/TaskRulesConfigPanel.hpp"
-#include "Panels/TaskDefaultsConfigPanel.hpp"
-#include "Panels/ScoringConfigPanel.hpp"
-#include "Panels/InfoBoxesConfigPanel.hpp"
-#include "Panels/QuickMenuConfigPanel.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Audio/Features.hpp"
 #include "UtilsSettings.hpp"
-#include "net/http/Features.hpp"
-
-#ifdef HAVE_HTTP
-#include "Panels/NOTAMConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_PCM_PLAYER
-#include "Panels/AudioVarioConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_VOLUME_CONTROLLER
-#include "Panels/AudioConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_TRACKING
-#include "Panels/TrackingConfigPanel.hpp"
-#include "Panels/CloudConfigPanel.hpp"
-#endif
-
-#ifdef HAVE_HTTP
-#include "Panels/WeatherConfigPanel.hpp"
-#endif
-#include "Panels/RaspConfigPanel.hpp"
-#ifdef HAVE_PCMET
-#include "Panels/PCMetConfigPanel.hpp"
-#endif
-#ifdef HAVE_HTTP
-#include "Panels/XCThermConfigPanel.hpp"
-#include "Panels/RainbowConfigPanel.hpp"
-#endif
-#include "Panels/WeatherControlsConfigPanel.hpp"
-#ifdef HAVE_HTTP
-#include "Panels/SkySightConfigPanel.hpp"
-#endif
-
-#include "Panels/WeGlideConfigPanel.hpp"
-#include "Panels/NetworkConfigPanel.hpp"
-
-#if defined(__linux__) && !defined(__ANDROID__) && !defined(KOBO)
-#include "Panels/SystemdConfigPanel.hpp"
-#endif
+#include "util/Macros.hpp"
+#include "util/Compiler.h"
 
 #include <cassert>
 
@@ -105,142 +33,6 @@ static unsigned current_page;
 
 // TODO: eliminate global variables
 static ArrowPagerWidget *pager;
-
-static constexpr TabMenuPage files_pages[] = {
-  { N_("Site Files"), CreateSiteConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage map_pages[] = {
-  { N_("Orientation"), CreateMapDisplayConfigPanel },
-  { N_("Waypoints"), CreateWaypointDisplayConfigPanel },
-  { N_("Terrain"), CreateTerrainDisplayConfigPanel },
-  { N_("Topology"), CreateTopographyDisplayConfigPanel },
-  { N_("Airspace"), CreateAirspaceConfigPanel },
-#ifdef HAVE_HTTP
-  { NC_("Setting", "NOTAM"), CreateNOTAMConfigPanel },
-#endif
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage aircrafts_pages[] = {
-  { N_("Aircraft"), CreateSymbolsConfigPanel },
-  { N_("Traffic"), CreateTrafficSymbolsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage computer_pages[] = {
-  { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
-  { N_("Glide Computer"), CreateGlideComputerConfigPanel },
-  { N_("Glide Cone"), CreateGlideConeConfigPanel,
-    GlideConeGpuSession::Available },
-  { N_("Wind"), CreateWindConfigPanel },
-  { N_("Route"), CreateRouteConfigPanel },
-  { N_("Scoring"), CreateScoringConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage gauge_pages[] = {
-  { N_("FLARM, Other"), CreateGaugesConfigPanel },
-  { N_("Vario"), CreateVarioConfigPanel },
-#ifdef HAVE_PCM_PLAYER
-  { N_("Audio Vario"), CreateAudioVarioConfigPanel },
-#endif
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage task_pages[] = {
-  { N_("Task Rules"), CreateTaskRulesConfigPanel },
-  { N_("Turnpoint Types"), CreateTaskDefaultsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage language_pages[] = {
-  { N_("Language"), CreateLanguageConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage hardware_pages[] = {
-  { N_("Display"), CreateHardwareDisplayConfigPanel },
-  { N_("Haptics"), CreateHapticsConfigPanel },
-#ifdef HAVE_VOLUME_CONTROLLER
-  { N_("Audio"), CreateAudioConfigPanel },
-#endif
-  { N_("Network"), CreateNetworkConfigPanel },
-#if defined(__linux__) && !defined(__ANDROID__) && !defined(KOBO)
-  { N_("Services"), CreateSystemdConfigPanel },
-#endif
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage look_accessibility_pages[] = {
-  { N_("Input"), CreateInputConfigPanel },
-  { N_("Appearance"), CreateAppearanceConfigPanel },
-  { N_("Controls"), CreateOverlayControlsConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage units_time_pages[] = {
-  { N_("Units"), CreateUnitsConfigPanel },
-  // Important: all pages after Units in this list must not have data fields that are
-  // unit-dependent because they will be saved after their units may have changed.
-  { NC_("Setting", "Time"), CreateTimeConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage look_pages[] = {
-  { N_("Pages"), CreatePagesConfigPanel },
-  { N_("InfoBox Layout"), CreateInfoBoxLayoutConfigPanel },
-  { N_("InfoBox Sets"), CreateInfoBoxesConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage accounts_pages[] = {
-#ifdef HAVE_HTTP
-  { N_("Thermal Information Map"), CreateWeatherConfigPanel },
-#endif
-  { "RASP", CreateRaspConfigPanel },
-#ifdef HAVE_HTTP
-  { "SkySight", CreateSkySightConfigPanel },
-#endif
-#ifdef HAVE_PCMET
-  { "Flugwetter (pc_met)", CreatePCMetConfigPanel },
-#endif
-#ifdef HAVE_HTTP
-  { "Rainbow", CreateRainbowConfigPanel },
-  { "XC Therm", CreateXCThermConfigPanel },
-#endif
-  { N_("Weather Controls"), CreateWeatherControlsConfigPanel },
-#ifdef HAVE_TRACKING
-  { N_("Tracking"), CreateTrackingConfigPanel },
-  { "XCSoar Cloud", CreateCloudConfigPanel },
-#endif
-  { "WeGlide", CreateWeGlideConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuPage setup_pages[] = {
-  { N_("Quick Menu"), CreateQuickMenuConfigPanel },
-  { N_("Sounds"), CreateSoundsConfigPanel },
-  { N_("Logger"), CreateLoggerConfigPanel },
-  { nullptr, nullptr }
-};
-
-static constexpr TabMenuGroup main_menu_captions[] = {
-  { N_("Site Files"), files_pages },
-  { N_("Map Display"), map_pages },
-  { N_("Aircrafts"), aircrafts_pages },
-  { N_("Glide Computer"), computer_pages },
-  { N_("Gauges"), gauge_pages },
-  { N_("Task Defaults"), task_pages },
-  { N_("Language"), language_pages },
-  { N_("Hardware"), hardware_pages },
-  { N_("Look & Accessibility"), look_accessibility_pages },
-  { N_("Units & Time"), units_time_pages },
-  { NC_("Menu", "Setup"), setup_pages },
-  { N_("Look"), look_pages },
-  { N_("Accounts & Services"), accounts_pages },
-};
 
 static void
 OnUserLevel(bool expert) noexcept;
@@ -434,7 +226,8 @@ void dlgConfigurationShowModal()
     return std::move(_menu);
   }));
 
-  menu.InitMenu(main_menu_captions, ARRAY_SIZE(main_menu_captions));
+  menu.InitMenu(ConfigMenuData::list_groups,
+                ConfigMenuData::list_group_count);
 
   /* restore last selected menu item */
   menu.SetCursor(current_page);
