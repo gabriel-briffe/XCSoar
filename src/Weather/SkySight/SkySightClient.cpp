@@ -55,6 +55,20 @@ GetOverlayAlphaFromSettings() noexcept
   return float(percent) / 100.f;
 }
 
+/**
+ * Page that owns the SkySight time selection.  Pan switches to a
+ * transient FullScreen layout without the overlay; keep the configured
+ * page's skysight_time while SuspendForPan is set.
+ */
+[[gnu::pure]]
+static const PageLayout &
+GetLiveTimePageLayout() noexcept
+{
+  if (CommonInterface::GetUIState().weather.skysight.IsSuspendedForPan())
+    return PageActions::GetConfiguredLayout();
+  return PageActions::GetCurrentLayout();
+}
+
 void
 MigrateCacheFiles(Path source_path, Path destination_path) noexcept
 {
@@ -1251,7 +1265,7 @@ SkySightClient::DisplayTileLayer()
     displayed_layer = active_layer;
   }
 
-  const auto &page = PageActions::GetCurrentLayout();
+  const auto &page = GetLiveTimePageLayout();
   const time_t requested_time =
     page.UsesSkySightOverlay() &&
     page.skysight_time != PageLayout::SKYSIGHT_TIME_AUTO
@@ -1512,7 +1526,7 @@ SkySightClient::DisplaySatRainTileLayer()
     displayed_layer = active_layer;
   }
 
-  const auto &page = PageActions::GetCurrentLayout();
+  const auto &page = GetLiveTimePageLayout();
   const time_t requested_time =
     page.UsesSkySightOverlay() &&
     page.skysight_time != PageLayout::SKYSIGHT_TIME_AUTO
