@@ -81,6 +81,7 @@ static constexpr StaticEnumChoice online_traffic_map_mode_list[] = {
 class SymbolsConfigPanel final : public ConfigListPanel {
   DisplayGroundTrack display_ground_track;
   bool show_flarm_on_map, fade_traffic;
+  bool show_thermal_marker;
   TrailSettings trail;
   bool detour_cost_markers_enabled;
   AircraftSymbol aircraft_symbol;
@@ -106,6 +107,7 @@ SymbolsConfigPanel::LoadSettings() noexcept
   display_ground_track = settings_map.display_ground_track;
   show_flarm_on_map = settings_map.show_flarm_on_map;
   fade_traffic = settings_map.fade_traffic;
+  show_thermal_marker = settings_map.show_thermal_marker;
   trail = settings_map.trail;
   detour_cost_markers_enabled = settings_map.detour_cost_markers_enabled;
   aircraft_symbol = settings_map.aircraft_symbol;
@@ -135,6 +137,10 @@ SymbolsConfigPanel::Fill() noexcept
   AddToggleItem(C_("Setting", "Distance rings"),
                 _("Display distance rings around the aircraft on the map."),
                 distance_rings_enabled);
+
+  AddToggleItem(_("Thermal marker"),
+                _("Show thermal locator markers (spirals) for recent thermals on the map."),
+                show_thermal_marker);
 
   if (IsExpert())
     AddToggleItem(_("Detour cost markers"),
@@ -166,6 +172,12 @@ SymbolsConfigPanel::Fill() noexcept
 
     /* the rest of the trail is only drawn while there is one */
     if (trail.length != TrailSettings::Length::OFF) {
+      AddToggleItem(_("Trail VBO"),
+                    _("OpenGL only: for Full trail length, keep the path in a GPU "
+                      "vertex buffer (no screen-space thinning). Off uses the "
+                      "normal CPU trail path."),
+                    trail.vbo);
+
       AddToggleItem(_("Trail drift"),
                     _("Determines whether the snail trail is drifted with the wind "
                       "when displayed in circling mode at near map scales. Switched "
@@ -203,6 +215,13 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
 
   changed |= Profile::Update(ProfileKeys::SnailTrail,
                              settings_map.trail.length, trail.length);
+
+  changed |= Profile::Update(ProfileKeys::SnailTrailVBO,
+                             settings_map.trail.vbo, trail.vbo);
+
+  changed |= Profile::Update(ProfileKeys::EnableThermalMarker,
+                             settings_map.show_thermal_marker,
+                             show_thermal_marker);
 
   changed |= Profile::Update(ProfileKeys::TrailDrift,
                              settings_map.trail.wind_drift_enabled,

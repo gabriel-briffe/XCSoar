@@ -6,6 +6,7 @@
 #ifdef HAVE_HTTP
 
 #include "ConfigListPanel.hpp"
+#include "ActionInterface.hpp"
 #include "DataGlobals.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
@@ -22,6 +23,7 @@
 class SkySightConfigPanel final : public ConfigListPanel {
   StaticString<64> email, password;
   StaticString<32> region;
+  int opacity_percent;
 
   /** One region which may be chosen. */
   struct Region {
@@ -116,6 +118,7 @@ SkySightConfigPanel::LoadSettings() noexcept
   email = settings.skysight.email;
   password = settings.skysight.password;
   region = settings.skysight.region;
+  opacity_percent = int(settings.skysight.opacity_percent);
 
   LoadRegions();
 }
@@ -137,6 +140,12 @@ SkySightConfigPanel::Fill() noexcept
 
   AddItem(C_("Setting", "SkySight Region"), [this](){ PickRegion(); },
           {.value = GetRegionName(), .chevron = true});
+
+  AddPercentItem(_("Overlay opacity"),
+                 /* xgettext:no-c-format */
+                 _("Sets the opacity of the SkySight overlay on the map.  "
+                   "50% is more transparent, 100% is fully opaque."),
+                 50, 100, 5, opacity_percent);
 }
 
 bool
@@ -168,13 +177,27 @@ SkySightConfigPanel::Save(bool &_changed) noexcept
     Profile::Update(ProfileKeys::SkySightRegion, settings.skysight.region,
                     region);
 
+  unsigned opacity = unsigned(opacity_percent);
+  if (opacity < 50)
+    opacity = 50;
+  else if (opacity > 100)
+    opacity = 100;
+  const bool opacity_changed =
+    Profile::Update(ProfileKeys::SkySightOpacity,
+                    settings.skysight.opacity_percent, opacity);
+  if (opacity_changed) {
+    if (auto skysight = DataGlobals::GetSkySight())
+      skysight->ApplyOverlayOpacityFromSettings();
+    ActionInterface::SendUIState(true);
+  }
+
   const bool changed = email_changed || password_changed || region_changed;
 
   if (changed)
     if (auto skysight = DataGlobals::GetSkySight())
       skysight->Init();
 
-  _changed |= changed;
+  _changed |= changed || opacity_changed;
   return true;
 }
 

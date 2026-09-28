@@ -6,12 +6,14 @@
 #ifdef HAVE_HTTP
 
 #include "ConfigListPanel.hpp"
+#include "ActionInterface.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "Weather/Settings.hpp"
 #include "Weather/xctherm/XCThermAPI.hpp"
 #include "Weather/xctherm/XCThermCatalog.hpp"
+#include "Weather/xctherm/XCThermMapOverlay.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 
@@ -32,6 +34,7 @@ static constexpr StaticEnumChoice xctherm_region_list[] = {
 class XCThermConfigPanel final : public ConfigListPanel {
   StaticString<64> email, password;
   unsigned model;
+  int opacity_percent;
   bool auto_switch;
 
 protected:
@@ -53,6 +56,7 @@ XCThermConfigPanel::LoadSettings() noexcept
   email = settings.xctherm.credentials.email;
   password = settings.xctherm.credentials.password;
   model = settings.xctherm.model;
+  opacity_percent = int(settings.xctherm.opacity_percent);
   auto_switch = settings.xctherm.auto_switch;
 }
 
@@ -75,6 +79,12 @@ XCThermConfigPanel::Fill() noexcept
               _("Forecast region. Changes which model XC Therm fetches data "
                 "from. Restart or re-download after changing."),
               xctherm_region_list, model);
+
+  AddPercentItem(_("Overlay opacity"),
+                 /* xgettext:no-c-format */
+                 _("Sets the opacity of the XC Therm overlay on the map.  "
+                   "50% is more transparent, 100% is fully opaque."),
+                 50, 100, 5, opacity_percent);
 
   AddToggleItem(_("XC Therm Auto Layer/Time"),
                 _("Automatically switch altitude layer based on GPS altitude "
@@ -114,10 +124,23 @@ XCThermConfigPanel::Save(bool &_changed) noexcept
     Profile::Update(ProfileKeys::XCThermModel, settings.xctherm.model,
                     model);
 
+  unsigned opacity = unsigned(opacity_percent);
+  if (opacity < 50)
+    opacity = 50;
+  else if (opacity > 100)
+    opacity = 100;
+  const bool opacity_changed =
+    Profile::Update(ProfileKeys::XCThermOpacity,
+                    settings.xctherm.opacity_percent, opacity);
+  if (opacity_changed) {
+    XCTherm::ApplyOverlayOpacityFromSettings();
+    ActionInterface::SendUIState(true);
+  }
+
   XCThermAPI::Instance().ApplySessionSettings(settings.xctherm);
 
   _changed |= auto_switch_changed || email_changed || password_changed ||
-    model_changed;
+    model_changed || opacity_changed;
 
   return true;
 }

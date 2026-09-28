@@ -57,7 +57,35 @@ static constexpr StaticEnumChoice overlay_list[] = {
 #ifdef HAVE_HTTP
   { PageLayout::Overlay::XCTHERM, "XC Therm" },
   { PageLayout::Overlay::SKYSIGHT, "SkySight" },
+  { PageLayout::Overlay::RAINBOW, "Rainbow" },
 #endif
+  nullptr
+};
+
+/** Sentinel for "use Map Display → Terrain colors". */
+static constexpr unsigned TERRAIN_DEFAULT = 0xffff;
+
+static constexpr StaticEnumChoice page_terrain_list[] = {
+  { TERRAIN_DEFAULT, N_("Default"),
+    N_("Use the Terrain colors from Map Display → Terrain.") },
+  { 0, N_("Low lands") },
+  { 1, N_("Mountainous") },
+  { 2, N_("Imhof 7") },
+  { 3, N_("Imhof 4") },
+  { 4, N_("Imhof 12") },
+  { 5, N_("Imhof Atlas") },
+  { 6, N_("ICAO") },
+  { 9, N_("Vibrant") },
+  { 7, N_("Grey") },
+  { 8, N_("White") },
+  {10, N_("Sandstone") },
+  {11, N_("Pastel") },
+  {12, N_("Italian Avioportolano VFR Chart") },
+  {13, N_("German DFS VFR Chart") },
+  {14, N_("French SIA VFR Chart") },
+  {15, N_("High Contrast") },
+  {16, N_("High Contrast low lands") },
+  {17, N_("Very low lands") },
   nullptr
 };
 
@@ -206,6 +234,7 @@ private:
   void PickMain() noexcept;
   void PickInfoBoxes() noexcept;
   void PickBottom() noexcept;
+  void PickTerrainColors() noexcept;
   void PickOverlay() noexcept;
   void PickRaspField(const char *caption) noexcept;
 #ifdef HAVE_EDL
@@ -257,6 +286,16 @@ PageLayoutEditWidget::Fill() noexcept
   AddItem(gettext(Caption_BottomArea), [this](){ PickBottom(); },
           {.value = GetEnumCaption(bottom_list, (unsigned)value.bottom),
            .chevron = true});
+
+  const unsigned terrain =
+    value.terrain_ramp < 0 ? TERRAIN_DEFAULT
+                           : unsigned(value.terrain_ramp);
+  AddItem(_("Terrain colors"), [this](){ PickTerrainColors(); },
+          {.value = GetEnumCaption(page_terrain_list, terrain),
+           .chevron = true,
+           .help = _("Terrain color ramp for this map page. Default follows "
+                     "Map Display → Terrain."),
+           .disabled = !value.IsMapMain()});
 
   AddOverlayItems();
 
@@ -458,6 +497,26 @@ PageLayoutEditWidget::PickBottom() noexcept
 #endif
   }
 
+  value.Normalise();
+  Refresh();
+}
+
+void
+PageLayoutEditWidget::PickTerrainColors() noexcept
+{
+  PageLayout &value = GetValue();
+  if (!value.IsMapMain())
+    return;
+
+  unsigned ramp = value.terrain_ramp < 0 ? TERRAIN_DEFAULT
+                                         : unsigned(value.terrain_ramp);
+  if (!PickEnum(_("Terrain colors"),
+                _("Terrain color ramp for this map page. Default follows "
+                  "Map Display → Terrain."),
+                page_terrain_list, ramp))
+    return;
+
+  value.terrain_ramp = ramp == TERRAIN_DEFAULT ? -1 : int(ramp);
   value.Normalise();
   Refresh();
 }

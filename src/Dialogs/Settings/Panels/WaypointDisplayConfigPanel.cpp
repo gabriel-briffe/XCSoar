@@ -3,6 +3,8 @@
 
 #include "WaypointDisplayConfigPanel.hpp"
 #include "ConfigListPanel.hpp"
+#include "ConfigPanel.hpp"
+#include "Dialogs/Waypoint/WaypointDialogs.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
@@ -93,6 +95,10 @@ static constexpr StaticEnumChoice wp_style_list[] = {
     N_("Traffic lights"),
     N_("Airports and outlanding fields are displayed in the colors of a traffic light. "
        "Green if reachable, Orange if blocked by mountain and red if not reachable at all.") },
+  { WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE_ONLY,
+    N_("Purple circle only"),
+    N_("Airports and outlanding fields are displayed as purple circles only. "
+       "Reachability is not calculated or shown for landables.") },
   nullptr
 };
 
@@ -110,6 +116,8 @@ protected:
 
 public:
   /* virtual methods from class Widget */
+  void Show(const PixelRect &rc) noexcept override;
+  void Hide() noexcept override;
   bool Save(bool &changed) noexcept override;
 };
 
@@ -144,9 +152,9 @@ WaypointDisplayConfigPanel::Fill() noexcept
   AddGroup(_("Icons"));
 
   AddEnumItem(_("Landable symbols"),
-              _("Three styles are available: Purple circles (WinPilot style), a high "
-                "contrast (monochrome) style, or orange. The rendering differs for landable "
-                "field and airport. All styles mark the waypoints within reach green."),
+              _("Purple circles (WinPilot style), high-contrast monochrome, traffic lights, "
+                "or purple circles without reach marking. The first three styles mark "
+                "waypoints within reach green."),
               wp_style_list, settings.landable_style);
 
   AddPercentItem(_("Waypoint icon size"),
@@ -172,6 +180,23 @@ WaypointDisplayConfigPanel::Fill() noexcept
                     settings.scale_runway_length);
     }
   }
+}
+
+void
+WaypointDisplayConfigPanel::Show(const PixelRect &rc) noexcept
+{
+  ConfigPanel::BorrowExtraButton(2, _("Filter"), [](){
+    dlgWaypointFilterShowModal();
+  });
+
+  ConfigListPanel::Show(rc);
+}
+
+void
+WaypointDisplayConfigPanel::Hide() noexcept
+{
+  ConfigPanel::ReturnExtraButton(2);
+  ConfigListPanel::Hide();
 }
 
 bool

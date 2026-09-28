@@ -357,6 +357,13 @@ TerrainDisplayConfigPanel::Fill() noexcept
                 _("Draw contour lines on the terrain. Contour mode "
                   "controls density of contour lines."),
                 contours_list, terrain_settings.contours);
+
+#ifdef ENABLE_OPENGL
+    AddToggleItem(_("GPU DEM spike"),
+                  _("Experimental: sample fine DEM tiles on the GPU "
+                    "(no ScanMap)."),
+                  terrain_settings.gpu_dem_spike);
+#endif
   }
 }
 
@@ -402,6 +409,10 @@ TerrainDisplayConfigPanel::Save(bool &_changed) noexcept
     Profile::SetEnum(ProfileKeys::SlopeShadingType,
                      terrain_settings.slope_shading);
     Profile::SetEnum(ProfileKeys::TerrainContours, terrain_settings.contours);
+#ifdef ENABLE_OPENGL
+    Profile::Set(ProfileKeys::TerrainGpuDemSpike,
+                 terrain_settings.gpu_dem_spike);
+#endif
     changed = true;
   }
 
