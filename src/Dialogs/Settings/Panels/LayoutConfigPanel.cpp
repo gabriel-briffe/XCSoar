@@ -68,6 +68,7 @@ CreateLayoutConfigPanel()
     bool show_menu;
     bool show_zoom;
     bool show_quickmenu;
+    bool tiled_menu;
     bool saved = false;
   };
 
@@ -83,6 +84,7 @@ CreateLayoutConfigPanel()
     ui_settings.show_menu_button,
     ui_settings.show_zoom_button,
     ui_settings.show_quickmenu_button,
+    ui_settings.dialog.tiled_menu,
   });
 
   auto list =
@@ -116,6 +118,10 @@ CreateLayoutConfigPanel()
   list->AddSwitch(C_("Setting", "Show QuickMenu button"),
                   _("Show the QuickMenu button"),
                   fields->show_quickmenu, true);
+  list->AddSwitch(_("Tiled menu"),
+                  _("Show Configuration as a tile grid instead of the "
+                    "two-column list."),
+                  fields->tiled_menu);
 
   /* Another page, such as InfoBox sets, reads the live geometry.
      Cancel restores the value from when the page was opened. */
@@ -176,6 +182,8 @@ CreateLayoutConfigPanel()
 
     ConfigPanel::CommitSetting(changed, ui_settings.dialog.tab_style,
       fields->tab_style, ProfileKeys::AppDialogTabStyle);
+    ConfigPanel::CommitSetting(changed, ui_settings.dialog.tiled_menu,
+      fields->tiled_menu, ProfileKeys::AppDialogTiledMenu);
 
     if (layout_changed)
       CommonInterface::main_window->ReinitialiseLayout();

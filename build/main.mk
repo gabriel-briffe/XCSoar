@@ -70,6 +70,7 @@ DIALOG_SOURCES = \
 	$(if $(filter y,$(HAVE_HTTP)),$(SRC)/Dialogs/Airspace/NOTAMList.cpp) \
 	$(SRC)/Dialogs/Settings/WindSettingsDialog.cpp \
 	$(SRC)/Dialogs/Settings/dlgBasicSettings.cpp \
+	$(SRC)/Dialogs/Settings/ConfigTileMenu.cpp \
 	$(SRC)/Dialogs/Settings/dlgConfiguration.cpp \
 	$(SRC)/Dialogs/Settings/dlgConfigInfoboxes.cpp \
 	$(SRC)/Dialogs/Traffic/TrafficList.cpp \
