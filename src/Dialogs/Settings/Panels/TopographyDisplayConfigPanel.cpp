@@ -2,13 +2,12 @@
 // Copyright The XCSoar Project
 
 #include "TopographyDisplayConfigPanel.hpp"
+#include "ConfigListPanel.hpp"
 #include "ActionInterface.hpp"
 #include "Components.hpp"
 #include "ConfigPanel.hpp"
 #include "DataComponents.hpp"
-#include "Dialogs/ComboPicker.hpp"
 #include "Dialogs/Topography/TopographyDialogs.hpp"
-#include "Form/DataField/Enum.hpp"
 #include "Language/Language.hpp"
 #include "MapWindow/GlueMapWindow.hpp"
 #include "Message.hpp"
@@ -24,7 +23,6 @@
 #include "Widget/GroupedListWidget.hpp"
 #include "util/StaticString.hxx"
 #include "util/StringCompare.hxx"
-#include "util/StringFormat.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -94,25 +92,6 @@ NextThresholdChoice(unsigned value) noexcept
   }
 
   return value + 10;
-}
-
-static void
-FillThresholdChoices(DataFieldEnum &df, unsigned max_user,
-                     const char *unit_name) noexcept
-{
-  char label[32];
-  for (unsigned value = 0;;) {
-    StringFormat(label, sizeof(label), "%u %s", value, unit_name);
-    df.AddChoice(value, label, label);
-
-    if (value >= max_user)
-      break;
-
-    const unsigned next = NextThresholdChoice(value);
-    if (next <= value)
-      break;
-    value = next;
-  }
 }
 
 [[gnu::pure]]
@@ -339,251 +318,310 @@ struct TopographyFields {
     store->NotifyThresholdsChanged();
     ActionInterface::SendMapSettings(true);
   }
-
-  void FillLayerField(DataFieldEnum &df) const noexcept {
-    df.ClearChoices();
-    df.AddChoice(ALL_LAYERS, _("All layers"), _("All layers"));
-    for (unsigned i = 0; i < layers.size(); ++i)
-      df.AddChoice(i + 1, layers[i]->GetLayerName(),
-                   layers[i]->GetLayerName());
-    df.SetValue(selected_enum);
-  }
 };
 
-} // namespace
+/**
+ * Per-layer visibility thresholds from the map file.  With all
+ * layers selected, a threshold is a ceiling and does not raise a
+ * layer that already disappears earlier.
+ */
+class TopographyDisplayConfigPanel final : public ConfigListPanel {
+  TopographyFields fields;
+  bool has_layers = false;
 
-std::unique_ptr<Widget>
-CreateTopographyDisplayConfigPanel()
+  bool PickThreshold(const char *caption, const char *help,
+                     unsigned max_user, unsigned &user_value) noexcept;
+
+  void AddThreshold(const char *caption, const char *help,
+                    unsigned max_user, unsigned &user_value) noexcept;
+
+  void PickLayer() noexcept;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  void Show(const PixelRect &rc) noexcept override;
+  void Hide() noexcept override;
+  bool Save(bool &changed) noexcept override;
+};
+
+bool
+TopographyDisplayConfigPanel::PickThreshold(const char *caption,
+                                            const char *help,
+                                            unsigned max_user,
+                                            unsigned &user_value) noexcept
 {
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  list->AddGroup(nullptr);
-
-  TopographyStore *store = data_components != nullptr
-    ? data_components->topography.get()
-    : nullptr;
-
-  if (store == nullptr || store->begin() == store->end()) {
-    list->AddValue(_("Topology layers"),
-                   _("Per-layer visibility thresholds from the map file "
-                     "(topology.tpl). Load a map with vector topography to "
-                     "adjust them."),
-                   [](GroupedListWidget::ValueState &state) {
-                     state.text =
-                       _("No vector topography in the current map.");
-                   });
-    return list;
-  }
-
-  auto fields = std::make_shared<TopographyFields>();
-  fields->store = store;
-  for (auto &file : *store)
-    fields->layers.push_back(&file);
-
-  fields->RefreshRulerFactor();
-  fields->RestoreSelectedLayer();
-
-  const unsigned list_max = GetDefaultMaxThresholdUser();
-  fields->all_ceiling_shape = list_max;
-  fields->all_ceiling_label = list_max;
-  fields->all_ceiling_important = list_max;
-  fields->LoadSelectedLayer();
-
-  auto *page = list.get();
   const char *unit_name =
     Units::GetUnitName(Units::GetUserDistanceUnit());
 
-  const char *const layer_help =
+  struct Choice {
+    unsigned value;
+    StaticString<32> label;
+  };
+
+  std::vector<Choice> items;
+  for (unsigned value = 0;;) {
+    Choice choice;
+    choice.value = value;
+    choice.label.Format("%u %s", value, unit_name);
+    items.push_back(std::move(choice));
+
+    if (value >= max_user)
+      break;
+
+    const unsigned next = NextThresholdChoice(value);
+    if (next <= value)
+      break;
+    value = next;
+  }
+
+  const unsigned snapped = SnapThresholdChoice(user_value, max_user);
+  std::vector<PickerChoice> choices;
+  choices.reserve(items.size());
+  int current = 0;
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    if (items[i].value == snapped)
+      current = int(i);
+    choices.push_back({items[i].label.c_str()});
+  }
+
+  const int picked = PickChoice(caption, help, choices, current);
+  if (picked < 0 || items[picked].value == user_value)
+    return false;
+
+  user_value = items[picked].value;
+  return true;
+}
+
+void
+TopographyDisplayConfigPanel::AddThreshold(const char *caption,
+                                           const char *help,
+                                           unsigned max_user,
+                                           unsigned &user_value) noexcept
+{
+  const char *unit_name =
+    Units::GetUnitName(Units::GetUserDistanceUnit());
+  const unsigned shown = SnapThresholdChoice(user_value, max_user);
+  StaticString<32> text;
+  text.Format("%u %s", shown, unit_name);
+
+  AddItem(caption, [this, caption, help, max_user, &user_value](){
+    if (!PickThreshold(caption, help, max_user, user_value))
+      return;
+
+    fields.OnThresholdChanged();
+    Refresh();
+  }, {.value = text.c_str(), .chevron = true, .help = help});
+}
+
+void
+TopographyDisplayConfigPanel::PickLayer() noexcept
+{
+  const char *const help =
     _("Select a topography layer from the current map, or all "
       "layers. With all layers, thresholds act as a maximum: "
       "layers that already disappear earlier are left "
       "unchanged. Individual layers cannot exceed the all-layers "
       "ceilings.");
 
-  list->AddValue(_("Layer"), layer_help,
-                 [fields](GroupedListWidget::ValueState &state) {
-                   DataFieldEnum df;
-                   fields->FillLayerField(df);
-                   state.text = df.GetAsDisplayString();
-                 },
-                 [fields, page, layer_help] {
-                   DataFieldEnum df;
-                   fields->FillLayerField(df);
-                   if (!ComboPicker(_("Layer"), df, layer_help) ||
-                       df.GetValue() == fields->selected_enum)
-                     return;
-                   fields->selected_enum = df.GetValue();
-                   fields->RememberSelectedLayer();
-                   fields->LoadSelectedLayer();
-                   if (page->UpdateValues())
-                     page->UpdateLayout();
-                 });
+  std::vector<PickerChoice> choices;
+  choices.reserve(fields.layers.size() + 1);
+  choices.push_back({_("All layers")});
+  for (const TopographyFile *file : fields.layers)
+    choices.push_back({file->GetLayerName()});
 
-  const char *const shape_help =
-    _("Maximum map scale (as on the map scale bar) at which "
-      "shapes are drawn. Larger values keep the layer visible "
-      "when more zoomed out. With all layers selected, this "
-      "is a ceiling only and does not raise lower per-layer "
-      "thresholds. The default maximum is 600 km "
-      "(300 for miles).");
+  const int picked = PickChoice(_("Layer"), help, choices,
+                                int(fields.selected_enum));
+  if (picked < 0 || unsigned(picked) == fields.selected_enum)
+    return;
 
-  list->AddValue(_("Shape threshold"), shape_help,
-                 [fields, unit_name](GroupedListWidget::ValueState &state) {
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, fields->ShapeMax(), unit_name);
-                   df.SetValue(SnapThresholdChoice(fields->shape_user,
-                                                   fields->ShapeMax()));
-                   state.text = df.GetAsDisplayString();
-                 },
-                 [fields, page, unit_name, shape_help] {
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, fields->ShapeMax(), unit_name);
-                   df.SetValue(SnapThresholdChoice(fields->shape_user,
-                                                   fields->ShapeMax()));
-                   if (!ComboPicker(_("Shape threshold"), df, shape_help))
-                     return;
-                   fields->shape_user = df.GetValue();
-                   fields->OnThresholdChanged();
-                   page->UpdateValues();
-                 });
+  fields.selected_enum = unsigned(picked);
+  fields.RememberSelectedLayer();
+  fields.LoadSelectedLayer();
+  Refresh();
+}
 
-  const char *const label_help =
-    _("Maximum map scale (as on the map scale bar) at which "
-      "labels are drawn. May exceed the shape threshold so "
-      "labels can appear without shapes.");
+void
+TopographyDisplayConfigPanel::LoadSettings() noexcept
+{
+  TopographyStore *store = data_components != nullptr
+    ? data_components->topography.get()
+    : nullptr;
 
-  list->AddValue(_("Label threshold"), label_help,
-                 [fields, unit_name](GroupedListWidget::ValueState &state) {
-                   state.hidden = !fields->LabelsVisible();
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, fields->LabelMax(), unit_name);
-                   df.SetValue(SnapThresholdChoice(fields->label_user,
-                                                   fields->LabelMax()));
-                   state.text = df.GetAsDisplayString();
-                 },
-                 [fields, page, unit_name, label_help] {
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, fields->LabelMax(), unit_name);
-                   df.SetValue(SnapThresholdChoice(fields->label_user,
-                                                   fields->LabelMax()));
-                   if (!ComboPicker(_("Label threshold"), df, label_help))
-                     return;
-                   fields->label_user = df.GetValue();
-                   fields->OnThresholdChanged();
-                   if (page->UpdateValues())
-                     page->UpdateLayout();
-                 });
+  if (store == nullptr || store->begin() == store->end()) {
+    has_layers = false;
+    return;
+  }
 
-  const char *const important_help =
-    _("Labels below this map scale use the default style "
-      "(smaller / less prominent). Cannot exceed the label "
-      "threshold.");
+  has_layers = true;
+  fields.store = store;
+  for (auto &file : *store)
+    fields.layers.push_back(&file);
 
-  list->AddValue(_("Important label threshold"), important_help,
-                 [fields, unit_name](GroupedListWidget::ValueState &state) {
-                   state.hidden = !fields->LabelsVisible();
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, fields->ImportantMax(),
-                                        unit_name);
-                   df.SetValue(SnapThresholdChoice(fields->important_user,
-                                                   fields->ImportantMax()));
-                   state.text = df.GetAsDisplayString();
-                 },
-                 [fields, page, unit_name, important_help] {
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, fields->ImportantMax(),
-                                        unit_name);
-                   df.SetValue(SnapThresholdChoice(fields->important_user,
-                                                   fields->ImportantMax()));
-                   if (!ComboPicker(_("Important label threshold"), df,
-                                    important_help))
-                     return;
-                   fields->important_user = df.GetValue();
-                   fields->OnThresholdChanged();
-                   page->UpdateValues();
-                 });
+  fields.RefreshRulerFactor();
+  fields.RestoreSelectedLayer();
 
-  list->AddButton(_("Apply custom settings"), [fields, page] {
-    if (fields->store == nullptr)
+  const unsigned list_max = GetDefaultMaxThresholdUser();
+  fields.all_ceiling_shape = list_max;
+  fields.all_ceiling_label = list_max;
+  fields.all_ceiling_important = list_max;
+  fields.LoadSelectedLayer();
+}
+
+void
+TopographyDisplayConfigPanel::Fill() noexcept
+{
+  AddGroup();
+
+  if (!has_layers) {
+    AddItem(_("Topology layers"),
+            {.value = _("No vector topography in the current map."),
+             .help = _("Per-layer visibility thresholds from the map file "
+                       "(topology.tpl). Load a map with vector topography to "
+                       "adjust them."),
+             .disabled = true,
+             .selectable_when_disabled = true});
+    return;
+  }
+
+  const char *layer_name = fields.IsAllLayers()
+    ? _("All layers")
+    : fields.layers[fields.selected_enum - 1]->GetLayerName();
+
+  AddItem(_("Layer"), [this](){ PickLayer(); },
+          {.value = layer_name, .chevron = true,
+           .help = _("Select a topography layer from the current map, or all "
+                     "layers. With all layers, thresholds act as a maximum: "
+                     "layers that already disappear earlier are left "
+                     "unchanged. Individual layers cannot exceed the "
+                     "all-layers ceilings.")});
+
+  AddThreshold(_("Shape threshold"),
+               _("Maximum map scale (as on the map scale bar) at which "
+                 "shapes are drawn. Larger values keep the layer visible "
+                 "when more zoomed out. With all layers selected, this "
+                 "is a ceiling only and does not raise lower per-layer "
+                 "thresholds. The default maximum is 600 km "
+                 "(300 for miles)."),
+               fields.ShapeMax(), fields.shape_user);
+
+  if (fields.LabelsVisible()) {
+    AddThreshold(_("Label threshold"),
+                 _("Maximum map scale (as on the map scale bar) at which "
+                   "labels are drawn. May exceed the shape threshold so "
+                   "labels can appear without shapes."),
+                 fields.LabelMax(), fields.label_user);
+
+    AddThreshold(_("Important label threshold"),
+                 _("Labels below this map scale use the default style "
+                   "(smaller / less prominent). Cannot exceed the label "
+                   "threshold."),
+                 fields.ImportantMax(), fields.important_user);
+  }
+
+  AddButton(_("Apply custom settings"), [this](){
+    if (fields.store == nullptr)
       return;
 
     const unsigned count =
-      TopographySettings::ApplyCustomPreset(*fields->store);
+      TopographySettings::ApplyCustomPreset(*fields.store);
     if (count == 0) {
       Message::AddMessage(_("No matching topology layers"));
       return;
     }
 
-    fields->LoadSelectedLayer();
-    TopographySettings::SaveFromStore(*fields->store);
+    fields.LoadSelectedLayer();
+    TopographySettings::SaveFromStore(*fields.store);
     ActionInterface::SendMapSettings(true);
-    page->UpdateValues();
+    Refresh();
     Message::AddMessage(_("Custom topology thresholds applied"));
   });
 
-  list->AddButton(_("Reset layer to map default"), [fields, page] {
-    if (fields->store == nullptr || fields->layers.empty())
+  AddButton(_("Reset layer to map default"), [this](){
+    if (fields.store == nullptr || fields.layers.empty())
       return;
 
-    if (fields->IsAllLayers())
-      fields->store->ResetAllLayerThresholds();
+    if (fields.IsAllLayers())
+      fields.store->ResetAllLayerThresholds();
     else
-      fields->layers[fields->selected_enum - 1]->ResetThresholds();
+      fields.layers[fields.selected_enum - 1]->ResetThresholds();
 
-    fields->LoadSelectedLayer();
-    fields->store->NotifyThresholdsChanged();
-    TopographySettings::SaveFromStore(*fields->store);
+    fields.LoadSelectedLayer();
+    fields.store->NotifyThresholdsChanged();
+    TopographySettings::SaveFromStore(*fields.store);
     ActionInterface::SendMapSettings(true);
-    page->UpdateValues();
+    Refresh();
   });
 
-  list->AddButton(_("Reset all layers to map defaults"), [fields, page] {
-    if (fields->store == nullptr)
+  AddButton(_("Reset all layers to map defaults"), [this](){
+    if (fields.store == nullptr)
       return;
 
-    fields->store->ResetAllLayerThresholds();
-    fields->LoadSelectedLayer();
-    TopographySettings::SaveFromStore(*fields->store);
+    fields.store->ResetAllLayerThresholds();
+    fields.LoadSelectedLayer();
+    TopographySettings::SaveFromStore(*fields.store);
     ActionInterface::SendMapSettings(true);
-    page->UpdateValues();
+    Refresh();
   });
+}
 
-  list->SetVisibilityCallback([fields, page](bool visible) {
-    if (visible) {
-      ConfigPanel::BorrowExtraButton(2, _("Filter"), []() {
-        dlgTopologyFilterShowModal();
-      });
+void
+TopographyDisplayConfigPanel::Show(const PixelRect &rc) noexcept
+{
+  if (has_layers) {
+    ConfigPanel::BorrowExtraButton(2, _("Filter"), [](){
+      dlgTopologyFilterShowModal();
+    });
 
-      fields->RefreshRulerFactor();
-      if (!fields->layers.empty()) {
-        fields->RestoreSelectedLayer();
-        fields->LoadSelectedLayer();
-        page->UpdateValues();
-      }
-    } else {
-      fields->RememberSelectedLayer();
-      ConfigPanel::ReturnExtraButton(2);
-    }
-  });
+    fields.RefreshRulerFactor();
+    fields.RestoreSelectedLayer();
+    fields.LoadSelectedLayer();
+    Refresh();
+  }
 
-  list->SetSaveCallback([fields](bool &changed) {
-    if (fields->store == nullptr || fields->layers.empty())
-      return true;
+  ConfigListPanel::Show(rc);
+}
 
-    fields->ApplySelectedLayer();
+void
+TopographyDisplayConfigPanel::Hide() noexcept
+{
+  if (has_layers) {
+    fields.RememberSelectedLayer();
+    ConfigPanel::ReturnExtraButton(2);
+  }
 
-    const char *old_value =
-      Profile::Get(ProfileKeys::TopographyLayerOverrides);
-    TopographySettings::SaveFromStore(*fields->store);
-    const char *new_value =
-      Profile::Get(ProfileKeys::TopographyLayerOverrides);
+  ConfigListPanel::Hide();
+}
 
-    if (!StringIsEqual(old_value != nullptr ? old_value : "",
-                       new_value != nullptr ? new_value : ""))
-      changed = true;
-
+bool
+TopographyDisplayConfigPanel::Save(bool &_changed) noexcept
+{
+  if (!has_layers || fields.store == nullptr || fields.layers.empty())
     return true;
-  });
 
-  return list;
+  fields.ApplySelectedLayer();
+
+  const char *old_value =
+    Profile::Get(ProfileKeys::TopographyLayerOverrides);
+  TopographySettings::SaveFromStore(*fields.store);
+  const char *new_value =
+    Profile::Get(ProfileKeys::TopographyLayerOverrides);
+
+  if (!StringIsEqual(old_value != nullptr ? old_value : "",
+                     new_value != nullptr ? new_value : ""))
+    _changed = true;
+
+  return true;
+}
+
+} // namespace
+
+std::unique_ptr<Widget>
+CreateTopographyDisplayConfigPanel()
+{
+  return std::make_unique<TopographyDisplayConfigPanel>();
 }

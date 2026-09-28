@@ -2,17 +2,14 @@
 // Copyright The XCSoar Project
 
 #include "AppearanceConfigPanel.hpp"
-#include "ConfigPanel.hpp"
+#include "ConfigListPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "Profile/Keys.hpp"
-#include "UIGlobals.hpp"
+#include "Profile/Profile.hpp"
 #include "UISettings.hpp"
 #include "UtilsSettings.hpp"
-#include "Widget/GroupedListWidget.hpp"
-
-#include <memory>
 
 #ifdef ANDROID
 #include "Android/Main.hpp"
@@ -47,110 +44,125 @@ static constexpr StaticEnumChoice dark_mode_list[] = {
 };
 #endif
 
-std::unique_ptr<Widget>
-CreateAppearanceConfigPanel()
+/** How the screens and the dialogs look. */
+class AppearanceConfigPanel final : public ConfigListPanel {
+#ifdef ANDROID
+  bool full_screen;
+#endif
+  int scale;
+#ifndef KOBO
+  UISettings::DarkMode dark_mode;
+#endif
+  DialogSettings::TabStyle tab_style;
+  UISettings::PopupMessagePosition popup_message_position;
+  bool tiled_menu;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+AppearanceConfigPanel::LoadSettings() noexcept
 {
   const UISettings &ui_settings = CommonInterface::GetUISettings();
 
-  struct Fields {
 #ifdef ANDROID
-    bool full_screen;
+  full_screen = ui_settings.display.full_screen;
 #endif
-    int scale;
+  scale = int(ui_settings.scale);
 #ifndef KOBO
-    UISettings::DarkMode dark_mode;
+  dark_mode = ui_settings.dark_mode;
 #endif
-    DialogSettings::TabStyle tab_style;
-    UISettings::PopupMessagePosition popup_message_position;
-    bool tiled_menu;
-  };
+  tab_style = ui_settings.dialog.tab_style;
+  popup_message_position = ui_settings.popup_message_position;
+  tiled_menu = ui_settings.dialog.tiled_menu;
+}
 
-  auto fields = std::make_shared<Fields>(Fields{
-#ifdef ANDROID
-    ui_settings.display.full_screen,
-#endif
-    int(ui_settings.scale),
-#ifndef KOBO
-    ui_settings.dark_mode,
-#endif
-    ui_settings.dialog.tab_style,
-    ui_settings.popup_message_position,
-    ui_settings.dialog.tiled_menu,
-  });
-
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  list->AddGroup(nullptr);
+void
+AppearanceConfigPanel::Fill() noexcept
+{
+  AddGroup();
 
 #ifdef ANDROID
-  list->AddSwitch(_("Full screen"), _("Run XCSoar in full screen mode"),
-                  fields->full_screen);
+  AddToggleItem(_("Full screen"), _("Run XCSoar in full screen mode"),
+                full_screen);
 #endif
 
-  list->AddInteger(_("Text size"),
-                   nullptr,
-                   "%d %%", "%d",
-                   UISettings::SCALE_MIN, UISettings::SCALE_MAX,
-                   UISettings::SCALE_STEP,
-                   fields->scale);
+  AddPercentItem(_("Text size"), nullptr,
+                 UISettings::SCALE_MIN, UISettings::SCALE_MAX,
+                 UISettings::SCALE_STEP, scale);
 
 #ifndef KOBO
-  list->AddEnum(_("Dark mode"), nullptr, dark_mode_list,
-                fields->dark_mode, true);
+  if (IsExpert())
+    AddEnumItem(_("Dark mode"), nullptr, dark_mode_list, dark_mode);
 #endif
 
-  list->AddEnum(_("Tab dialog style"), nullptr,
-                tabdialog_style_list, fields->tab_style);
+  AddEnumItem(_("Tab dialog style"), nullptr,
+              tabdialog_style_list, tab_style);
 
-  list->AddEnum(_("Message display"), nullptr,
-                popup_msg_position_list,
-                fields->popup_message_position, true);
+  if (IsExpert())
+    AddEnumItem(_("Message display"), nullptr,
+                popup_msg_position_list, popup_message_position);
 
-  list->AddSwitch(_("Tiled menu"),
-                  _("Show Configuration as a tile grid instead of the "
-                    "two-column list."),
-                  fields->tiled_menu);
+  AddToggleItem(_("Tiled menu"),
+                _("Show Configuration as a tile grid instead of the "
+                  "two-column list."),
+                tiled_menu);
+}
 
-  list->SetSaveCallback([fields](bool &changed) {
-    UISettings &ui_settings = CommonInterface::SetUISettings();
+bool
+AppearanceConfigPanel::Save(bool &_changed) noexcept
+{
+  bool changed = false;
+  UISettings &ui_settings = CommonInterface::SetUISettings();
 
 #ifdef ANDROID
-    if (ConfigPanel::CommitSetting(changed, ui_settings.display.full_screen,
-                                   fields->full_screen,
-                                   ProfileKeys::FullScreen))
-      native_view->SetFullScreen(Java::GetEnv(),
-                                 ui_settings.display.full_screen);
+  if (Profile::Update(ProfileKeys::FullScreen,
+                      ui_settings.display.full_screen, full_screen)) {
+    changed = true;
+    native_view->SetFullScreen(Java::GetEnv(),
+                               ui_settings.display.full_screen);
+  }
 #endif
 
-    unsigned scale = unsigned(fields->scale);
-    if (ConfigPanel::CommitSetting(changed, ui_settings.scale, scale,
-                                   ProfileKeys::UIScale))
-      require_restart = true;
+  if (Profile::Update(ProfileKeys::UIScale, ui_settings.scale,
+                      static_cast<unsigned>(scale))) {
+    changed = true;
+    require_restart = true;
+  }
 
 #ifndef KOBO
-    ConfigPanel::CommitSetting(changed, ui_settings.dark_mode,
-                               fields->dark_mode, ProfileKeys::DarkMode);
+  changed |= Profile::Update(ProfileKeys::DarkMode, ui_settings.dark_mode,
+                             dark_mode);
 #else
-    if (ui_settings.dark_mode != UISettings::DarkMode::OFF) {
-      ui_settings.dark_mode = UISettings::DarkMode::OFF;
-      changed = true;
-    }
+  if (ui_settings.dark_mode != UISettings::DarkMode::OFF) {
+    ui_settings.dark_mode = UISettings::DarkMode::OFF;
+    changed = true;
+  }
 #endif
 
-    ConfigPanel::CommitSetting(changed, ui_settings.popup_message_position,
-                               fields->popup_message_position,
-                               ProfileKeys::AppStatusMessageAlignment);
+  changed |= Profile::Update(ProfileKeys::AppStatusMessageAlignment,
+                             ui_settings.popup_message_position,
+                             popup_message_position);
 
-    DialogSettings &dialog_settings = ui_settings.dialog;
-    ConfigPanel::CommitSetting(changed, dialog_settings.tab_style,
-                               fields->tab_style,
-                               ProfileKeys::AppDialogTabStyle);
-    ConfigPanel::CommitSetting(changed, dialog_settings.tiled_menu,
-                               fields->tiled_menu,
-                               ProfileKeys::AppDialogTiledMenu);
+  DialogSettings &dialog_settings = ui_settings.dialog;
+  changed |= Profile::Update(ProfileKeys::AppDialogTabStyle,
+                             dialog_settings.tab_style, tab_style);
+  changed |= Profile::Update(ProfileKeys::AppDialogTiledMenu,
+                             dialog_settings.tiled_menu, tiled_menu);
 
-    return true;
-  });
+  _changed |= changed;
+  return true;
+}
 
-  return list;
+std::unique_ptr<Widget>
+CreateAppearanceConfigPanel()
+{
+  return std::make_unique<AppearanceConfigPanel>();
 }

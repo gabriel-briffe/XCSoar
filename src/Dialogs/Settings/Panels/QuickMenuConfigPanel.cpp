@@ -2,8 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "QuickMenuConfigPanel.hpp"
-#include "ConfigPanel.hpp"
-#include "Dialogs/ComboPicker.hpp"
+#include "ConfigListPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Input/InputEvents.hpp"
 #include "Interface.hpp"
@@ -12,16 +11,14 @@
 #include "Menu/MenuData.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
-#include "UIGlobals.hpp"
 #include "UISettings.hpp"
-#include "Widget/GroupedListWidget.hpp"
 #include "util/StaticString.hxx"
 #include "util/StringFormat.hpp"
 #include "util/TruncateString.hpp"
 #include "util/UTF8.hpp"
 
 #include <cstddef>
-#include <memory>
+#include <vector>
 
 static void
 FormatMenuChoiceLabel(const char *label, char *dest, size_t dest_size) noexcept
@@ -89,149 +86,173 @@ FillQuickMenuChoices(DataFieldEnum &dfe) noexcept
     dfe.Sort(1);
 }
 
-std::unique_ptr<Widget>
-CreateQuickMenuConfigPanel()
+/**
+ * The commands the Quick Menu shows when a custom list is on.
+ */
+class QuickMenuConfigPanel final : public ConfigListPanel {
+  bool custom_menu;
+  unsigned visible_count;
+  unsigned items[UISettings::MAX_CUSTOM_QUICK_MENU];
+  StaticString<8> captions[UISettings::MAX_CUSTOM_QUICK_MENU];
+
+  void SlotLabel(unsigned index, StaticString<128> &dest) const noexcept;
+  void PickSlot(unsigned index) noexcept;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+QuickMenuConfigPanel::SlotLabel(unsigned index,
+                                StaticString<128> &dest) const noexcept
+{
+  DataFieldEnum dfe;
+  FillQuickMenuChoices(dfe);
+  dfe.SetValue(items[index]);
+  dest = dfe.GetAsDisplayString();
+}
+
+void
+QuickMenuConfigPanel::PickSlot(unsigned index) noexcept
+{
+  DataFieldEnum dfe;
+  FillQuickMenuChoices(dfe);
+  dfe.SetValue(items[index]);
+
+  std::vector<StaticString<128>> labels(dfe.Count());
+  std::vector<PickerChoice> choices;
+  choices.reserve(dfe.Count());
+  int current = 0;
+
+  for (std::size_t i = 0; i < dfe.Count(); ++i) {
+    labels[i] = dfe[i].GetDisplayString();
+    choices.push_back({labels[i].c_str()});
+    if (dfe[i].GetId() == dfe.GetValue())
+      current = int(i);
+  }
+
+  const int picked = PickChoice(captions[index].c_str(), nullptr,
+                                choices, current);
+  if (picked < 0)
+    return;
+
+  items[index] = dfe[picked].GetId();
+  Refresh();
+}
+
+void
+QuickMenuConfigPanel::LoadSettings() noexcept
 {
   const UISettings &settings = CommonInterface::GetUISettings();
 
-  struct Fields {
-    bool custom_menu;
-    unsigned visible_count;
-    unsigned items[UISettings::MAX_CUSTOM_QUICK_MENU];
-    StaticString<8> captions[UISettings::MAX_CUSTOM_QUICK_MENU];
-  };
-
-  auto fields = std::make_shared<Fields>();
-  fields->custom_menu = settings.custom_quick_menu;
-  fields->visible_count = settings.custom_quick_menu_count > 0
+  custom_menu = settings.custom_quick_menu;
+  visible_count = settings.custom_quick_menu_count > 0
     ? settings.custom_quick_menu_count
     : 1;
+
   for (unsigned i = 0; i < UISettings::MAX_CUSTOM_QUICK_MENU; ++i) {
-    fields->items[i] = i < settings.custom_quick_menu_count
+    items[i] = i < settings.custom_quick_menu_count
       ? settings.custom_quick_menu_items[i]
       : 0;
-    fields->captions[i].Format("%u", i + 1);
+    captions[i].Format("%u", i + 1);
+  }
+}
+
+void
+QuickMenuConfigPanel::Fill() noexcept
+{
+  AddGroup();
+
+  AddToggleItem(_("Custom menu"),
+                _("When enabled, the Quick Menu shows only the commands "
+                  "selected below, in that order. When disabled, the full "
+                  "default Quick Menu is used; your selection is kept for "
+                  "when you turn this back on."),
+                custom_menu);
+
+  if (!custom_menu)
+    return;
+
+  for (unsigned i = 0; i < visible_count; ++i) {
+    StaticString<128> label;
+    SlotLabel(i, label);
+    AddItem(captions[i].c_str(), [this, i](){ PickSlot(i); },
+            {.value = label.c_str(), .chevron = true});
   }
 
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  auto *page = list.get();
-  list->AddGroup(nullptr);
+  AddItem(_("Add command"), [this](){
+    if (visible_count >= UISettings::MAX_CUSTOM_QUICK_MENU)
+      return;
 
-  /* Linked switch so slot rows refresh when Custom menu flips. */
-  {
-    GroupedListWidget::ItemOptions options;
-    options.toggle = true;
-    options.checked = fields->custom_menu;
-    options.help =
-      _("When enabled, the Quick Menu shows only the commands "
-        "selected below, in that order. When disabled, the full "
-        "default Quick Menu is used; your selection is kept for "
-        "when you turn this back on.");
-    list->AddItem(_("Custom menu"), [fields, page] {
-      fields->custom_menu = !fields->custom_menu;
-      if (page->UpdateValues())
-        page->UpdateLayout();
-    }, options);
-  }
-
-  for (unsigned i = 0; i < UISettings::MAX_CUSTOM_QUICK_MENU; ++i) {
-    const unsigned index = i;
-    auto slot_shown = [fields, index] {
-      return fields->custom_menu && index < fields->visible_count;
-    };
-
-    list->AddValue(fields->captions[i].c_str(), nullptr,
-                   [fields, index, slot_shown](
-                     GroupedListWidget::ValueState &state) {
-                     state.hidden = !slot_shown();
-                     DataFieldEnum dfe;
-                     FillQuickMenuChoices(dfe);
-                     dfe.SetValue(fields->items[index]);
-                     state.text = dfe.GetAsDisplayString();
-                   },
-                   [fields, page, index] {
-                     DataFieldEnum dfe;
-                     FillQuickMenuChoices(dfe);
-                     dfe.SetValue(fields->items[index]);
-                     if (!ComboPicker(fields->captions[index].c_str(),
-                                      dfe, nullptr))
-                       return;
-                     fields->items[index] = dfe.GetValue();
-                     page->UpdateValues();
-                   });
-  }
-
-  {
-    GroupedListWidget::ItemOptions options;
-    options.value_callback =
-      [fields](GroupedListWidget::ValueState &state) {
-        state.hidden = !fields->custom_menu;
-        state.text.clear();
-      };
-    list->AddItem(_("Add command"), [fields, page] {
-      if (!fields->custom_menu)
-        return;
-      if (fields->visible_count >= UISettings::MAX_CUSTOM_QUICK_MENU)
-        return;
-      fields->items[fields->visible_count] = 0;
-      ++fields->visible_count;
-      if (page->UpdateValues())
-        page->UpdateLayout();
-    }, options);
-  }
-
-  list->SetSaveCallback([fields](bool &changed) {
-    UISettings &settings = CommonInterface::SetUISettings();
-
-    ConfigPanel::CommitSetting(changed, settings.custom_quick_menu,
-                               fields->custom_menu,
-                               ProfileKeys::CustomQuickMenu);
-
-    /* Always persist the command list, even when Custom menu is off, so
-       the selection returns when the user enables it again. */
-    unsigned new_count = 0;
-    uint8_t new_items[UISettings::MAX_CUSTOM_QUICK_MENU]{};
-
-    for (unsigned i = 0; i < fields->visible_count; ++i) {
-      const unsigned location = fields->items[i];
-      if (location == 0 || location >= Menu::MAX_ITEMS)
-        continue;
-
-      new_items[new_count++] = (uint8_t)location;
-    }
-
-    bool list_changed = new_count != settings.custom_quick_menu_count;
-    if (!list_changed) {
-      for (unsigned i = 0; i < new_count; ++i) {
-        if (new_items[i] != settings.custom_quick_menu_items[i]) {
-          list_changed = true;
-          break;
-        }
-      }
-    }
-
-    if (list_changed) {
-      changed = true;
-      settings.custom_quick_menu_count = new_count;
-      for (unsigned i = 0; i < UISettings::MAX_CUSTOM_QUICK_MENU; ++i)
-        settings.custom_quick_menu_items[i] =
-          i < new_count ? new_items[i] : 0;
-
-      Profile::Set(ProfileKeys::CustomQuickMenuCount, new_count);
-      for (unsigned i = 0; i < UISettings::MAX_CUSTOM_QUICK_MENU; ++i) {
-        char profile_key[32];
-        StringFormat(profile_key, sizeof(profile_key),
-                     "CustomQuickMenuItem%u", i);
-        if (i < new_count)
-          Profile::Set(profile_key, (unsigned)new_items[i]);
-        else
-          Profile::Set(profile_key, 0u);
-      }
-    }
-
-    return true;
+    items[visible_count] = 0;
+    ++visible_count;
+    Refresh();
   });
+}
 
-  return list;
+bool
+QuickMenuConfigPanel::Save(bool &_changed) noexcept
+{
+  bool changed = false;
+  UISettings &settings = CommonInterface::SetUISettings();
+
+  changed |= Profile::Update(ProfileKeys::CustomQuickMenu,
+                             settings.custom_quick_menu, custom_menu);
+
+  /* Always persist the command list, even when Custom menu is off, so
+     the selection returns when the user enables it again. */
+  unsigned new_count = 0;
+  uint8_t new_items[UISettings::MAX_CUSTOM_QUICK_MENU]{};
+
+  for (unsigned i = 0; i < visible_count; ++i) {
+    const unsigned location = items[i];
+    if (location == 0 || location >= Menu::MAX_ITEMS)
+      continue;
+
+    new_items[new_count++] = (uint8_t)location;
+  }
+
+  bool list_changed = new_count != settings.custom_quick_menu_count;
+  if (!list_changed) {
+    for (unsigned i = 0; i < new_count; ++i) {
+      if (new_items[i] != settings.custom_quick_menu_items[i]) {
+        list_changed = true;
+        break;
+      }
+    }
+  }
+
+  if (list_changed) {
+    changed = true;
+    settings.custom_quick_menu_count = new_count;
+    for (unsigned i = 0; i < UISettings::MAX_CUSTOM_QUICK_MENU; ++i)
+      settings.custom_quick_menu_items[i] =
+        i < new_count ? new_items[i] : 0;
+
+    Profile::Set(ProfileKeys::CustomQuickMenuCount, new_count);
+    for (unsigned i = 0; i < UISettings::MAX_CUSTOM_QUICK_MENU; ++i) {
+      char profile_key[32];
+      StringFormat(profile_key, sizeof(profile_key),
+                   "CustomQuickMenuItem%u", i);
+      if (i < new_count)
+        Profile::Set(profile_key, (unsigned)new_items[i]);
+      else
+        Profile::Set(profile_key, 0u);
+    }
+  }
+
+  _changed |= changed;
+  return true;
+}
+
+std::unique_ptr<Widget>
+CreateQuickMenuConfigPanel()
+{
+  return std::make_unique<QuickMenuConfigPanel>();
 }

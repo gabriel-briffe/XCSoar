@@ -2,23 +2,21 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeConfigPanel.hpp"
-#include "ConfigPanel.hpp"
-#include "Dialogs/ComboPicker.hpp"
+#include "ConfigListPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "MapWindow/GlueMapWindow.hpp"
+#include "UIGlobals.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
-#include "UIGlobals.hpp"
 #include "Units/Descriptor.hpp"
 #include "Units/Units.hpp"
-#include "Widget/GroupedListWidget.hpp"
-#include "util/StringFormat.hpp"
+#include "util/StaticString.hxx"
 
 #include <algorithm>
 #include <cmath>
-#include <memory>
+#include <vector>
 
 static constexpr StaticEnumChoice glide_cone_mode_list[] = {
   { GlideConeSettings::Mode::OFF, N_("Off") },
@@ -75,25 +73,6 @@ NextThresholdChoice(unsigned value) noexcept
   return value + 10;
 }
 
-static void
-FillThresholdChoices(DataFieldEnum &df, unsigned max_user,
-                     const char *unit_name) noexcept
-{
-  char label[32];
-  for (unsigned value = 0;;) {
-    StringFormat(label, sizeof(label), "%u %s", value, unit_name);
-    df.AddChoice(value, label, label);
-
-    if (value >= max_user)
-      break;
-
-    const unsigned next = NextThresholdChoice(value);
-    if (next <= value)
-      break;
-    value = next;
-  }
-}
-
 [[gnu::pure]]
 static unsigned
 SnapThresholdChoice(double value_user, unsigned max_user) noexcept
@@ -123,13 +102,121 @@ SnapThresholdChoice(double value_user, unsigned max_user) noexcept
   return best;
 }
 
-std::unique_ptr<Widget>
-CreateGlideConeConfigPanel()
+/**
+ * The terrain-aware glide cone: the ratio, the grid, and when the
+ * contours are drawn.
+ */
+class GlideConeConfigPanel final : public ConfigListPanel {
+  GlideConeSettings::Mode mode;
+  double glide_ratio;
+  double max_altitude;
+  double cell_size;
+  int iteration_cap;
+  bool contours;
+  unsigned contours_min_scale_user;
+  int label_spacing;
+  bool pan_mode_path;
+  double map_scale_to_ruler;
+
+  void AddFixedItem(const char *caption, const char *help,
+                    const char *format, int min_value, int max_value,
+                    int step, double &value) noexcept;
+
+  void PickContoursScale() noexcept;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+GlideConeConfigPanel::AddFixedItem(const char *caption, const char *help,
+                                   const char *format,
+                                   int min_value, int max_value, int step,
+                                   double &value) noexcept
+{
+  const int shown = int(std::lround(value));
+  StaticString<16> text;
+  text.Format(format, shown);
+
+  AddItem(caption, [this, caption, help, format, min_value, max_value,
+                    step, &value](){
+    int picked = int(std::lround(value));
+    if (!PickNumber(caption, help, min_value, max_value, step, picked,
+                    [format](StaticString<32> &s, int v){
+                      s.Format(format, v);
+                    }))
+      return;
+
+    value = picked;
+    Refresh();
+  }, {.value = text.c_str(), .chevron = true, .help = help});
+}
+
+void
+GlideConeConfigPanel::PickContoursScale() noexcept
+{
+  const char *const help =
+    _("Only show contours and labels when the map scale bar is at most "
+      "this distance (same meaning as topography label thresholds).");
+  const char *unit_name =
+    Units::GetUnitName(Units::GetUserDistanceUnit());
+  const unsigned max_user = GetDefaultMaxThresholdUser();
+
+  struct Choice {
+    unsigned value;
+    StaticString<32> label;
+  };
+
+  std::vector<Choice> items;
+  for (unsigned value = 0;;) {
+    Choice choice;
+    choice.value = value;
+    choice.label.Format("%u %s", value, unit_name);
+    items.push_back(std::move(choice));
+
+    if (value >= max_user)
+      break;
+
+    const unsigned next = NextThresholdChoice(value);
+    if (next <= value)
+      break;
+    value = next;
+  }
+
+  const unsigned snapped =
+    SnapThresholdChoice(contours_min_scale_user, max_user);
+
+  std::vector<PickerChoice> choices;
+  choices.reserve(items.size());
+  int current = 0;
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    if (items[i].value == snapped)
+      current = int(i);
+    choices.push_back({items[i].label.c_str()});
+  }
+
+  const int picked = PickChoice(_("Contours min scale"), help,
+                                choices, current);
+  if (picked < 0 || items[picked].value == contours_min_scale_user)
+    return;
+
+  contours_min_scale_user = items[picked].value;
+  Refresh();
+}
+
+void
+GlideConeConfigPanel::LoadSettings() noexcept
 {
   const GlideConeSettings &glide_cone =
     CommonInterface::GetComputerSettings().glide_cone;
 
-  double map_scale_to_ruler = GetMapScaleToRulerFactor();
+  map_scale_to_ruler = GetMapScaleToRulerFactor();
   if (map_scale_to_ruler <= 0.)
     map_scale_to_ruler = 8.;
 
@@ -137,163 +224,136 @@ CreateGlideConeConfigPanel()
   const double ruler_user = Units::ToUserDistance(
     glide_cone.contours_min_scale * map_scale_to_ruler);
 
-  struct Fields {
-    GlideConeSettings::Mode mode;
-    double glide_ratio;
-    double max_altitude;
-    double cell_size;
-    int iteration_cap;
-    bool contours;
-    unsigned contours_min_scale_user;
-    int label_spacing;
-    bool pan_mode_path;
-    double map_scale_to_ruler;
-  };
+  mode = glide_cone.mode;
+  glide_ratio = glide_cone.glide_ratio;
+  max_altitude = glide_cone.max_altitude;
+  cell_size = glide_cone.cell_size;
+  iteration_cap = int(glide_cone.iteration_cap);
+  contours = glide_cone.contours;
+  contours_min_scale_user = SnapThresholdChoice(ruler_user, list_max);
+  label_spacing = int(glide_cone.label_spacing);
+  pan_mode_path = glide_cone.pan_mode_path;
+}
 
-  auto fields = std::make_shared<Fields>(Fields{
-    glide_cone.mode,
-    glide_cone.glide_ratio,
-    glide_cone.max_altitude,
-    glide_cone.cell_size,
-    int(glide_cone.iteration_cap),
-    glide_cone.contours,
-    SnapThresholdChoice(ruler_user, list_max),
-    int(glide_cone.label_spacing),
-    glide_cone.pan_mode_path,
-    map_scale_to_ruler,
-  });
+void
+GlideConeConfigPanel::Fill() noexcept
+{
+  AddGroup();
 
-  const auto mode_shown = [fields] {
-    return fields->mode != GlideConeSettings::Mode::OFF;
-  };
-  const auto contours_shown = [fields] {
-    return fields->mode != GlideConeSettings::Mode::OFF && fields->contours;
-  };
+  AddEnumItem(_("Glide cone"),
+              _("Terrain-aware glide cone mode.  This is a GPU "
+                "(OpenGL ES 3.1) feature and has no effect on devices "
+                "without compute support."),
+              glide_cone_mode_list, mode);
 
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  auto *page = list.get();
-  list->AddGroup(nullptr);
+  if (mode == GlideConeSettings::Mode::OFF)
+    return;
 
-  list->AddEnum(_("Glide cone"),
-                _("Terrain-aware glide cone mode.  This is a GPU (OpenGL ES 3.1) "
-                  "feature and has no effect on devices without compute support."),
-                glide_cone_mode_list, fields->mode);
+  AddFixedItem(_("Glide ratio"),
+               _("Fixed glide ratio (L/D) used for the glide cone "
+                 "computation."),
+               "%d", 1, 200, 1, glide_ratio);
 
-  list->AddFloat(_("Glide ratio"),
-                 _("Fixed glide ratio (L/D) used for the glide cone computation."),
-                 "%.0f", "%.0f", 1, 200, 1, false, fields->glide_ratio,
-                 false, mode_shown);
+  AddFixedItem(_("Max. altitude"),
+               _("Maximum working altitude [m MSL].  Larger values enlarge "
+                 "the computed reachable area."),
+               "%d m", 100, 10000, 50, max_altitude);
 
-  list->AddFloat(_("Max. altitude"),
-                 _("Maximum working altitude [m MSL].  Larger values enlarge the "
-                   "computed reachable area."),
-                 "%.0f m", "%.0f", 100, 10000, 50, false, fields->max_altitude,
-                 false, mode_shown);
+  AddFixedItem(_("Cell size"),
+               _("Target size of one compute cell [m].  Terrain is "
+                 "resampled by taking the highest DEM sample in each cell."),
+               "%d m", 50, 2000, 50, cell_size);
 
-  list->AddFloat(_("Cell size"),
-                 _("Target size of one compute cell [m].  Terrain is resampled by "
-                   "taking the highest DEM sample in each cell."),
-                 "%.0f m", "%.0f", 50, 2000, 50, false, fields->cell_size,
-                 false, mode_shown);
+  StaticString<16> iterations;
+  iterations.Format("%d", iteration_cap);
+  AddItem(_("Iteration cap"), [this](){
+    if (PickNumber(_("Iteration cap"),
+                   _("Upper bound on the number of GPU propagation "
+                     "iterations."),
+                   100, 20000, 100, iteration_cap,
+                   [](StaticString<32> &s, int v){ s.Format("%d", v); }))
+      Refresh();
+  }, {.value = iterations.c_str(), .chevron = true,
+      .help = _("Upper bound on the number of GPU propagation "
+                "iterations.")});
 
-  list->AddInteger(_("Iteration cap"),
-                   _("Upper bound on the number of GPU propagation iterations."),
-                   "%d", "%d", 100, 20000, 100, fields->iteration_cap,
-                   false, mode_shown);
+  AddToggleItem(_("Contours"),
+                _("Draw 100 m altitude contour lines of the reachable area."),
+                contours);
 
-  list->AddSwitch(_("Contours"),
-                  _("Draw 100 m altitude contour lines of the reachable area."),
-                  fields->contours, false, mode_shown);
+  if (contours) {
+    const char *unit_name =
+      Units::GetUnitName(Units::GetUserDistanceUnit());
+    StaticString<32> scale;
+    scale.Format("%u %s", contours_min_scale_user, unit_name);
+    AddItem(_("Contours min scale"), [this](){ PickContoursScale(); },
+            {.value = scale.c_str(), .chevron = true,
+             .help = _("Only show contours and labels when the map scale "
+                       "bar is at most this distance (same meaning as "
+                       "topography label thresholds).")});
 
-  const char *const scale_help =
-    _("Only show contours and labels when the map scale bar is at most "
-      "this distance (same meaning as topography label thresholds).");
-  const char *unit_name =
-    Units::GetUnitName(Units::GetUserDistanceUnit());
-
-  list->AddValue(_("Contours min scale"), scale_help,
-                 [fields, list_max, unit_name, contours_shown](
-                   GroupedListWidget::ValueState &state) {
-                   state.hidden = !contours_shown();
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, list_max, unit_name);
-                   df.SetValue(fields->contours_min_scale_user);
-                   state.text = df.GetAsDisplayString();
-                 },
-                 [fields, page, list_max, unit_name, scale_help] {
-                   DataFieldEnum df;
-                   FillThresholdChoices(df, list_max, unit_name);
-                   df.SetValue(fields->contours_min_scale_user);
-                   if (!ComboPicker(_("Contours min scale"), df, scale_help) ||
-                       df.GetValue() == fields->contours_min_scale_user)
-                     return;
-                   fields->contours_min_scale_user = df.GetValue();
-                   page->UpdateValues();
-                 });
-
-  list->AddInteger(_("Label distance"),
+    AddPercentItem(_("Label distance"),
                    _("Minimum screen distance between labels of the same "
                      "altitude, as a percentage of the shorter map side."),
-                   "%d %%", "%d", 20, 100, 5, fields->label_spacing,
-                   false, contours_shown);
+                   20, 100, 5, label_spacing);
+  }
 
-  list->AddSwitch(_("Pan mode path"),
-                  _("Draw the glide path and GlideCone altitude at the pan "
-                    "crosshair while panning the map."),
-                  fields->pan_mode_path, false, mode_shown);
+  AddToggleItem(_("Pan mode path"),
+                _("Draw the glide path and GlideCone altitude at the pan "
+                  "crosshair while panning the map."),
+                pan_mode_path);
+}
 
-  list->SetSaveCallback([fields](bool &changed) {
-    GlideConeSettings &glide_cone =
-      CommonInterface::SetComputerSettings().glide_cone;
+bool
+GlideConeConfigPanel::Save(bool &_changed) noexcept
+{
+  bool changed = false;
+  GlideConeSettings &glide_cone =
+    CommonInterface::SetComputerSettings().glide_cone;
 
-    ConfigPanel::CommitSetting(changed, glide_cone.mode, fields->mode,
-                               ProfileKeys::GlideConeMode);
-    ConfigPanel::CommitSetting(changed, glide_cone.glide_ratio,
-                               fields->glide_ratio,
-                               ProfileKeys::GlideConeGlideRatio);
-    ConfigPanel::CommitSetting(changed, glide_cone.max_altitude,
-                               fields->max_altitude,
-                               ProfileKeys::GlideConeMaxAltitude);
-    ConfigPanel::CommitSetting(changed, glide_cone.cell_size,
-                               fields->cell_size,
-                               ProfileKeys::GlideConeCellSize);
+  changed |= Profile::Update(ProfileKeys::GlideConeMode,
+                             glide_cone.mode, mode);
+  changed |= Profile::Update(ProfileKeys::GlideConeGlideRatio,
+                             glide_cone.glide_ratio, glide_ratio);
+  changed |= Profile::Update(ProfileKeys::GlideConeMaxAltitude,
+                             glide_cone.max_altitude, max_altitude);
+  changed |= Profile::Update(ProfileKeys::GlideConeCellSize,
+                             glide_cone.cell_size, cell_size);
 
-    unsigned iteration_cap = unsigned(fields->iteration_cap);
-    if (ConfigPanel::CommitSetting(changed, glide_cone.iteration_cap,
-                                   iteration_cap))
-      Profile::Set(ProfileKeys::GlideConeIterationCap,
-                   glide_cone.iteration_cap);
+  const unsigned iterations = unsigned(iteration_cap);
+  changed |= Profile::Update(ProfileKeys::GlideConeIterationCap,
+                             glide_cone.iteration_cap, iterations);
 
-    ConfigPanel::CommitSetting(changed, glide_cone.contours,
-                               fields->contours,
-                               ProfileKeys::GlideConeContours);
+  changed |= Profile::Update(ProfileKeys::GlideConeContours,
+                             glide_cone.contours, contours);
 
-    const double map_scale_m = std::max(
-      1.,
-      Units::ToSysDistance(double(fields->contours_min_scale_user)) /
-        fields->map_scale_to_ruler);
-    if (map_scale_m != glide_cone.contours_min_scale) {
-      glide_cone.contours_min_scale = map_scale_m;
-      Profile::Set(ProfileKeys::GlideConeContoursMinScale, map_scale_m);
-      changed = true;
-    }
+  const double map_scale_m = std::max(
+    1.,
+    Units::ToSysDistance(double(contours_min_scale_user)) /
+      map_scale_to_ruler);
+  if (map_scale_m != glide_cone.contours_min_scale) {
+    glide_cone.contours_min_scale = map_scale_m;
+    Profile::Set(ProfileKeys::GlideConeContoursMinScale, map_scale_m);
+    changed = true;
+  }
 
-    unsigned label_spacing = unsigned(fields->label_spacing);
-    if (label_spacing < 20)
-      label_spacing = 20;
-    else if (label_spacing > 100)
-      label_spacing = 100;
-    if (ConfigPanel::CommitSetting(changed, glide_cone.label_spacing,
-                                   label_spacing))
-      Profile::Set(ProfileKeys::GlideConeLabelSpacing,
-                   glide_cone.label_spacing);
+  unsigned spacing = unsigned(label_spacing);
+  if (spacing < 20)
+    spacing = 20;
+  else if (spacing > 100)
+    spacing = 100;
+  changed |= Profile::Update(ProfileKeys::GlideConeLabelSpacing,
+                             glide_cone.label_spacing, spacing);
 
-    ConfigPanel::CommitSetting(changed, glide_cone.pan_mode_path,
-                               fields->pan_mode_path,
-                               ProfileKeys::GlideConePanModePath);
-    return true;
-  });
+  changed |= Profile::Update(ProfileKeys::GlideConePanModePath,
+                             glide_cone.pan_mode_path, pan_mode_path);
 
-  return list;
+  _changed |= changed;
+  return true;
+}
+
+std::unique_ptr<Widget>
+CreateGlideConeConfigPanel()
+{
+  return std::make_unique<GlideConeConfigPanel>();
 }

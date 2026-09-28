@@ -2,17 +2,14 @@
 // Copyright The XCSoar Project
 
 #include "WeatherControlsConfigPanel.hpp"
-#include "ConfigPanel.hpp"
+#include "ConfigListPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "MainWindow.hpp"
 #include "Profile/Keys.hpp"
-#include "UIGlobals.hpp"
+#include "Profile/Profile.hpp"
 #include "Weather/Settings.hpp"
-#include "Widget/GroupedListWidget.hpp"
-
-#include <memory>
 
 static constexpr StaticEnumChoice controls_height_list[] = {
   { 30, "30 %" },
@@ -26,44 +23,62 @@ static constexpr StaticEnumChoice controls_height_list[] = {
   nullptr
 };
 
+/** How tall the weather controls are, as a percentage of a touch row. */
+class WeatherControlsConfigPanel final : public ConfigListPanel {
+  unsigned controls_height_percent;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+WeatherControlsConfigPanel::LoadSettings() noexcept
+{
+  controls_height_percent =
+    CommonInterface::GetComputerSettings().weather.controls_height_percent;
+}
+
+void
+WeatherControlsConfigPanel::Fill() noexcept
+{
+  AddGroup();
+
+  AddEnumItem(_("Height"),
+              _("Height of the weather overlay control rows at the bottom of "
+                "the map, as a percentage of the default touch/control "
+                "height."),
+              controls_height_list, controls_height_percent);
+}
+
+bool
+WeatherControlsConfigPanel::Save(bool &_changed) noexcept
+{
+  auto &settings = CommonInterface::SetComputerSettings().weather;
+
+  unsigned height = controls_height_percent;
+  if (height < 30)
+    height = 30;
+  else if (height > 100)
+    height = 100;
+
+  if (Profile::Update(ProfileKeys::WeatherControlsHeightPercent,
+                      settings.controls_height_percent, height)) {
+    _changed = true;
+    if (CommonInterface::main_window != nullptr)
+      CommonInterface::main_window->ReinitialiseLayout();
+  }
+
+  return true;
+}
+
 std::unique_ptr<Widget>
 CreateWeatherControlsConfigPanel()
 {
-  const auto &settings = CommonInterface::GetComputerSettings().weather;
-
-  struct Fields {
-    unsigned controls_height_percent;
-  };
-
-  auto fields = std::make_shared<Fields>(Fields{
-    settings.controls_height_percent,
-  });
-
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  list->AddGroup(nullptr);
-  list->AddEnum(_("Height"),
-                _("Height of the weather overlay control rows at the bottom of "
-                  "the map, as a percentage of the default touch/control height."),
-                controls_height_list, fields->controls_height_percent);
-
-  list->SetSaveCallback([fields](bool &changed) {
-    auto &settings = CommonInterface::SetComputerSettings().weather;
-
-    unsigned height = fields->controls_height_percent;
-    if (height < 30)
-      height = 30;
-    else if (height > 100)
-      height = 100;
-
-    if (ConfigPanel::CommitSetting(changed, settings.controls_height_percent,
-                                   height,
-                                   ProfileKeys::WeatherControlsHeightPercent) &&
-        CommonInterface::main_window != nullptr)
-      CommonInterface::main_window->ReinitialiseLayout();
-
-    return true;
-  });
-
-  return list;
+  return std::make_unique<WeatherControlsConfigPanel>();
 }

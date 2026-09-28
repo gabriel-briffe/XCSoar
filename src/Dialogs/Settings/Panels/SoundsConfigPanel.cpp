@@ -2,47 +2,62 @@
 // Copyright The XCSoar Project
 
 #include "SoundsConfigPanel.hpp"
+#include "ConfigListPanel.hpp"
 #include "Audio/Sound.hpp"
-#include "ConfigPanel.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "Profile/Keys.hpp"
-#include "UIGlobals.hpp"
-#include "Widget/GroupedListWidget.hpp"
+#include "Profile/Profile.hpp"
 
-#include <memory>
+/**
+ * Whether alert and status sounds play.  Off also silences the audio
+ * vario.
+ */
+class SoundsConfigPanel final : public ConfigListPanel {
+  bool enabled;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+SoundsConfigPanel::LoadSettings() noexcept
+{
+  enabled = CommonInterface::GetUISettings().sound.enabled;
+}
+
+void
+SoundsConfigPanel::Fill() noexcept
+{
+  AddGroup();
+
+  AddToggleItem(_("Sounds"),
+                _("Play alert and status sounds.  When Off, the audio vario "
+                  "is also silent."),
+                enabled);
+}
+
+bool
+SoundsConfigPanel::Save(bool &_changed) noexcept
+{
+  auto &settings = CommonInterface::SetUISettings().sound;
+
+  if (Profile::Update(ProfileKeys::Sounds, settings.enabled, enabled)) {
+    _changed = true;
+    ApplySoundSettings(settings);
+  }
+
+  return true;
+}
 
 std::unique_ptr<Widget>
 CreateSoundsConfigPanel()
 {
-  const auto &settings = CommonInterface::GetUISettings().sound;
-
-  struct Fields {
-    bool enabled;
-  };
-
-  auto fields = std::make_shared<Fields>(Fields{
-    settings.enabled,
-  });
-
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  list->AddGroup(nullptr);
-  list->AddSwitch(_("Sounds"),
-                  _("Play alert and status sounds.  When Off, the audio vario "
-                    "is also silent."),
-                  fields->enabled);
-
-  list->SetSaveCallback([fields](bool &changed) {
-    auto &settings = CommonInterface::SetUISettings().sound;
-
-    if (ConfigPanel::CommitSetting(changed, settings.enabled,
-                                   fields->enabled,
-                                   ProfileKeys::Sounds))
-      ApplySoundSettings(settings);
-
-    return true;
-  });
-
-  return list;
+  return std::make_unique<SoundsConfigPanel>();
 }
