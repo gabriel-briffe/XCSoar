@@ -147,11 +147,19 @@ MainWindow::GetShowZoomButtonRect(const PixelRect rc,
 
 [[gnu::pure]]
 PixelRect
-MainWindow::GetPanNorthUpButtonRect(const PixelRect rc) noexcept
+MainWindow::GetPanNorthUpButtonRect(const PixelRect rc,
+                                    unsigned top_right_margin) noexcept
 {
+  /* Match MapWindow::DrawCompass(): visible map area, then leave room
+     for the top-right overlay button column. */
+  PixelRect compass_rc = rc;
+  if (top_right_margin > 0)
+    compass_rc.right -= std::min(int(top_right_margin),
+                                 int(compass_rc.GetWidth()));
+
   const unsigned size = std::max(1u, Layout::GetMaximumControlHeight());
-  const int compass_x = rc.right - int(Layout::Scale(19));
-  const int compass_y = rc.top + int(Layout::Scale(19));
+  const int compass_x = compass_rc.right - int(Layout::Scale(19));
+  const int compass_y = compass_rc.top + int(Layout::Scale(19));
   const int half = int(size) / 2;
 
   return PixelRect(compass_x - half, compass_y - half,
@@ -472,6 +480,10 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
      the main view (orientation toggle), including pan (force north-up). */
   const bool compass_button_active =
     widget == nullptr && map != nullptr;
+  /* Same margin DrawCompass() subtracts (menu/zoom column). */
+  const unsigned top_right_width = overlay_buttons_active
+    ? GetMapOverlayTopRightWidth(map_area_rect)
+    : 0;
 
   if (show_menu_button != nullptr) {
     show_menu_button->SetVisible(overlay_buttons_active);
@@ -500,12 +512,15 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
                                                       ShowZoomButton::Sign::ZOOM_IN));
   }
 
+  /* Use map_area_rect (visible map), not map->GetPosition() (full
+     window under InfoBoxes / bottom widgets), so these targets track
+     the compass and the shrunk map like QuickMenu does. */
   if (show_pan_north_up_button != nullptr) {
     show_pan_north_up_button->SetVisible(compass_button_active);
     show_pan_north_up_button->SetEnabled(compass_button_active);
     if (compass_button_active)
       show_pan_north_up_button->Move(
-        GetPanNorthUpButtonRect(map->GetPosition()));
+        GetPanNorthUpButtonRect(map_area_rect, top_right_width));
   }
 
   if (show_airspace_toggle_button != nullptr) {
@@ -513,7 +528,7 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
     show_airspace_toggle_button->SetEnabled(overlay_buttons_active);
     if (overlay_buttons_active)
       show_airspace_toggle_button->Move(
-        GetShowAirspaceToggleButtonRect(map->GetPosition()));
+        GetShowAirspaceToggleButtonRect(map_area_rect));
   }
 
   if (show_pan_toggle_button != nullptr) {
@@ -521,7 +536,7 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
     show_pan_toggle_button->SetEnabled(compass_button_active);
     if (compass_button_active)
       show_pan_toggle_button->Move(
-        GetShowPanToggleButtonRect(map->GetPosition()));
+        GetShowPanToggleButtonRect(map_area_rect));
   }
 
   if (show_bottom_area_toggle_button != nullptr) {
@@ -529,7 +544,7 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
     show_bottom_area_toggle_button->SetEnabled(compass_button_active);
     if (compass_button_active)
       show_bottom_area_toggle_button->Move(
-        GetShowBottomAreaToggleButtonRect(map->GetPosition()));
+        GetShowBottomAreaToggleButtonRect(map_area_rect));
   }
 
 #ifdef ANDROID
@@ -539,9 +554,7 @@ MainWindow::UpdateMapOverlayButtonLayout() noexcept
 
   if (map != nullptr)
     /* keep the north arrow clear of the overlay buttons */
-    map->SetTopRightMargin(overlay_buttons_active
-                           ? GetMapOverlayTopRightWidth(map_area_rect)
-                           : 0);
+    map->SetTopRightMargin(top_right_width);
 
   /* Newly created overlay buttons are added after the map; keep the map
      underneath them (same as ReinitialiseLayout()). */

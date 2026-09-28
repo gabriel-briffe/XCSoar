@@ -600,7 +600,8 @@ protected:
   PixelRect GetShowQuickMenuButtonRect(const PixelRect rc) noexcept;
   PixelRect GetShowZoomButtonRect(const PixelRect rc,
                                   ShowZoomButton::Sign sign) noexcept;
-  static PixelRect GetPanNorthUpButtonRect(const PixelRect rc) noexcept;
+  static PixelRect GetPanNorthUpButtonRect(const PixelRect rc,
+                                           unsigned top_right_margin = 0) noexcept;
   static PixelRect GetShowAirspaceToggleButtonRect(const PixelRect rc) noexcept;
   static PixelRect GetShowPanToggleButtonRect(const PixelRect rc) noexcept;
   static PixelRect GetShowBottomAreaToggleButtonRect(const PixelRect rc) noexcept;
