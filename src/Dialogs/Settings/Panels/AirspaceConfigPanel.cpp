@@ -144,7 +144,7 @@ CreateAirspaceConfigPanel()
     renderer.fill_mode,
     {},
   });
-  fields->altitude_format.Format("%.0f %s",
+  fields->altitude_format.Format("%%.0f %s",
                                  Units::GetUnitName(altitude_unit));
 
   const auto warnings_shown = [fields] { return fields->warnings; };

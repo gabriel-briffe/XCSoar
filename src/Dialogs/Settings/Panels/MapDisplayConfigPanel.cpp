@@ -101,7 +101,7 @@ CreateMapDisplayConfigPanel()
     Units::GetUserUnitByGroup(UnitGroup::DISTANCE);
   fields->max_auto_zoom =
     Units::ToUserUnit(fields->max_auto_zoom, distance_unit);
-  fields->zoom_format.Format("%.0f %s",
+  fields->zoom_format.Format("%%.0f %s",
                              Units::GetUnitName(distance_unit));
 
   auto list =
