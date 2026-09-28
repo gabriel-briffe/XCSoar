@@ -204,6 +204,8 @@ Version 7.46 - not yet released
   - show no wind in the T Next Leg comment when the box is blank
     because wind is not available
 * ui
+  - show configuration pages as the same list as Wind Settings. A
+    page scrolls only when the rows do not fit
   - show a floating dialog's title as a heading on the page, in line
     with the contents. A dialog that fills the screen keeps a title
     bar

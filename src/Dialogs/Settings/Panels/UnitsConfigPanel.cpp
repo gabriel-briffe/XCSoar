@@ -2,298 +2,249 @@
 // Copyright The XCSoar Project
 
 #include "UnitsConfigPanel.hpp"
+#include "ConfigPanel.hpp"
+#include "Dialogs/DataField.hpp"
 #include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Listener.hpp"
-#include "Units/Units.hpp"
-#include "Units/UnitsStore.hpp"
-#include "Profile/Keys.hpp"
+#include "Geo/CoordinateFormat.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "Profile/Keys.hpp"
 #include "UIGlobals.hpp"
+#include "Units/Units.hpp"
+#include "Units/UnitsStore.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-enum ControlIndex {
-  UnitsPreset,
-  spacer_1,
-  UnitsSpeed,
-  UnitsDistance,
-  UnitsLift,
-  UnitsAltitude,
-  UnitsTemperature,
-  UnitsTaskSpeed,
-  UnitsPressure,
-  UnitsMass,
-  UnitsWingLoading,
-  spacer_2,
-  UnitsLatLon,
-  ROTATION,
+#include <memory>
+
+static constexpr StaticEnumChoice units_speed_list[] = {
+  { Unit::STATUTE_MILES_PER_HOUR, "mph" },
+  { Unit::KNOTS, N_("knots") },
+  { Unit::KILOMETER_PER_HOUR, "km/h" },
+  { Unit::METER_PER_SECOND, "m/s" },
+  nullptr
 };
 
-class UnitsConfigPanel final
-  : public RowFormWidget, DataFieldListener {
-public:
-  UnitsConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void UpdateUnitFields(const UnitSetting &units);
-  void PresetCheck();
-
-  /* methods from Widget */
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-
-private:
-  /* methods from DataFieldListener */
-  void OnModified(DataField &df) noexcept override;
+static constexpr StaticEnumChoice units_distance_list[] = {
+  { Unit::STATUTE_MILES, "sm" },
+  { Unit::NAUTICAL_MILES, "nm" },
+  { Unit::KILOMETER, "km" },
+  nullptr
 };
 
-void
-UnitsConfigPanel::UpdateUnitFields(const UnitSetting &units)
-{
-  LoadValueEnum(UnitsSpeed, units.speed_unit);
-  LoadValueEnum(UnitsDistance, units.distance_unit);
-  LoadValueEnum(UnitsLift, units.vertical_speed_unit);
-  LoadValueEnum(UnitsAltitude, units.altitude_unit);
-  LoadValueEnum(UnitsTemperature, units.temperature_unit);
-  LoadValueEnum(UnitsTaskSpeed, units.task_speed_unit);
-  LoadValueEnum(UnitsPressure, units.pressure_unit);
-  LoadValueEnum(UnitsMass, units.mass_unit);
-  LoadValueEnum(UnitsWingLoading, units.wing_loading_unit);
+static constexpr StaticEnumChoice units_lift_list[] = {
+  { Unit::KNOTS, N_("knots") },
+  { Unit::METER_PER_SECOND, "m/s" },
+  { Unit::FEET_PER_MINUTE, "ft/min" },
+  nullptr
+};
 
-  // Ignore the coord.format for the preset selection.
+static constexpr StaticEnumChoice units_altitude_list[] = {
+  { Unit::FEET,  N_("feet") },
+  { Unit::METER, N_("meters") },
+  nullptr
+};
+
+static constexpr StaticEnumChoice units_temperature_list[] = {
+  { Unit::DEGREES_CELCIUS, DEG "C" },
+  { Unit::DEGREES_FAHRENHEIT, DEG "F" },
+  nullptr
+};
+
+static constexpr StaticEnumChoice units_taskspeed_list[] = {
+  { Unit::STATUTE_MILES_PER_HOUR, "mph" },
+  { Unit::KNOTS, N_("knots") },
+  { Unit::KILOMETER_PER_HOUR, "km/h" },
+  { Unit::METER_PER_SECOND, "m/s" },
+  nullptr
+};
+
+static constexpr StaticEnumChoice pressure_labels_list[] = {
+  { Unit::HECTOPASCAL, "hPa" },
+  { Unit::MILLIBAR, "mb" },
+  { Unit::INCH_MERCURY, "inHg" },
+  nullptr
+};
+
+static constexpr StaticEnumChoice mass_labels_list[] = {
+  { Unit::KG, "kg" },
+  { Unit::LB, "lb" },
+  nullptr
+};
+
+static constexpr StaticEnumChoice wing_loading_labels_list[] = {
+  { Unit::KG_PER_M2, "kg/m²" },
+  { Unit::LB_PER_FT2, "lb/ft²" },
+  nullptr
+};
+
+static constexpr StaticEnumChoice units_lat_lon_list[] = {
+  { CoordinateFormat::DDMMSS, "DDMMSS" },
+  { CoordinateFormat::DDMMSS_S, "DDMMSS.s" },
+  { CoordinateFormat::DDMM_MMM, "DDMM.mmm" },
+  { CoordinateFormat::DD_DDDDD, "DD.ddddd" },
+  { CoordinateFormat::UTM, "UTM" },
+  nullptr
+};
+
+static constexpr StaticEnumChoice rotation_labels_list[] = {
+  { Unit::HZ, "Hz" },
+  { Unit::RPM, "rpm" },
+  nullptr
+};
+
+static unsigned
+MatchingPreset(const UnitSetting &units) noexcept
+{
+  UnitSetting current = units;
+  current.wind_speed_unit = current.speed_unit;
+  return Units::Store::EqualsPresetUnits(current);
 }
 
-void
-UnitsConfigPanel::PresetCheck()
+static const char *
+PresetLabel(const UnitSetting &units) noexcept
 {
-  UnitSetting current_dlg_set;
-  current_dlg_set.speed_unit = (Unit)GetValueEnum(UnitsSpeed);
-  current_dlg_set.wind_speed_unit = current_dlg_set.speed_unit;
-  current_dlg_set.distance_unit = (Unit)GetValueEnum(UnitsDistance);
-  current_dlg_set.vertical_speed_unit = (Unit)GetValueEnum(UnitsLift);
-  current_dlg_set.altitude_unit = (Unit)GetValueEnum(UnitsAltitude);
-  current_dlg_set.temperature_unit = (Unit)GetValueEnum(UnitsTemperature);
-  current_dlg_set.task_speed_unit = (Unit)GetValueEnum(UnitsTaskSpeed);
-  current_dlg_set.pressure_unit = (Unit)GetValueEnum(UnitsPressure);
-  current_dlg_set.mass_unit = (Unit)GetValueEnum(UnitsMass);
-  current_dlg_set.wing_loading_unit = (Unit)GetValueEnum(UnitsWingLoading);
+  const unsigned preset = MatchingPreset(units);
+  if (preset == 0)
+    return _("Custom");
 
-  LoadValueEnum(UnitsPreset, Units::Store::EqualsPresetUnits(current_dlg_set));
+  return Units::Store::GetName(preset - 1);
 }
 
-void
-UnitsConfigPanel::OnModified(DataField &df) noexcept
+static void
+ApplyPreset(UnitSetting &units, unsigned preset) noexcept
 {
-  if (IsDataField(UnitsPreset, df)) {
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    int result = dfe.GetValue();
-    if (result > 0) {
-      // First selection means not to load any preset.
-      const UnitSetting &units = Units::Store::Read(result - 1);
-      UpdateUnitFields(units);
-    }
-  } else
-    PresetCheck();
-}
+  if (preset == 0)
+    return;
 
-void
-UnitsConfigPanel::Prepare(ContainerWindow &parent,
-                          const PixelRect &rc) noexcept
-{
-  const UnitSetting &config = CommonInterface::GetUISettings().format.units;
-  const CoordinateFormat coordinate_format =
-      CommonInterface::GetUISettings().format.coordinate_format;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  WndProperty *wp = AddEnum(_("Preset"), _("Load a set of units."));
-  DataFieldEnum &df = *(DataFieldEnum *)wp->GetDataField();
-
-  df.addEnumText(_("Custom"), (unsigned)0, _("My individual set of units."));
-  unsigned len = Units::Store::Count();
-  for (unsigned i = 0; i < len; i++)
-    df.addEnumText(Units::Store::GetName(i), i+1);
-
-  LoadValueEnum(UnitsPreset, Units::Store::EqualsPresetUnits(config));
-  wp->GetDataField()->SetListener(this);
-
-  AddSpacer();
-  SetExpertRow(spacer_1);
-
-  static constexpr StaticEnumChoice units_speed_list[] = {
-    { Unit::STATUTE_MILES_PER_HOUR, "mph" },
-    { Unit::KNOTS, N_("knots") },
-    { Unit::KILOMETER_PER_HOUR, "km/h" },
-    { Unit::METER_PER_SECOND, "m/s" },
-    nullptr
-  };
-  AddEnum(_("Aircraft/Wind speed"),
-          _("Units used for airspeed and ground speed. "
-            "A separate unit is available for task speeds."),
-          units_speed_list,
-          (unsigned int)config.speed_unit, this);
-  SetExpertRow(UnitsSpeed);
-
-  static constexpr StaticEnumChoice units_distance_list[] = {
-    { Unit::STATUTE_MILES, "sm" },
-    { Unit::NAUTICAL_MILES, "nm" },
-    { Unit::KILOMETER, "km" },
-    nullptr
-  };
-  AddEnum(_("Distance"),
-          _("Units used for horizontal distances e.g. "
-            "range to waypoint, distance to go."),
-          units_distance_list,
-          (unsigned)config.distance_unit, this);
-  SetExpertRow(UnitsDistance);
-
-  static constexpr StaticEnumChoice units_lift_list[] = {
-    { Unit::KNOTS, N_("knots") },
-    { Unit::METER_PER_SECOND, "m/s" },
-    { Unit::FEET_PER_MINUTE, "ft/min" },
-    nullptr
-  };
-  AddEnum(_("Lift"), _("Units used for vertical speeds (variometer)."),
-          units_lift_list,
-          (unsigned)config.vertical_speed_unit, this);
-  SetExpertRow(UnitsLift);
-
-  static constexpr StaticEnumChoice units_altitude_list[] = {
-    { Unit::FEET,  N_("feet") },
-    { Unit::METER, N_("meters") },
-    nullptr
-  };
-  AddEnum(_("Altitude"), _("Units used for altitude and heights."),
-          units_altitude_list,
-          (unsigned)config.altitude_unit, this);
-  SetExpertRow(UnitsAltitude);
-
-  static constexpr StaticEnumChoice units_temperature_list[] = {
-    { Unit::DEGREES_CELCIUS, DEG "C" },
-    { Unit::DEGREES_FAHRENHEIT, DEG "F" },
-    nullptr
-  };
-  AddEnum(_("Temperature"), _("Units used for temperature."),
-          units_temperature_list,
-          (unsigned)config.temperature_unit, this);
-  SetExpertRow(UnitsTemperature);
-
-  static constexpr StaticEnumChoice units_taskspeed_list[] = {
-    { Unit::STATUTE_MILES_PER_HOUR, "mph" },
-    { Unit::KNOTS, N_("knots") },
-    { Unit::KILOMETER_PER_HOUR, "km/h" },
-    { Unit::METER_PER_SECOND, "m/s" },
-    nullptr
-  };
-  AddEnum(_("Task Speed"), _("Units used for task speeds."),
-          units_taskspeed_list,
-          (unsigned)config.task_speed_unit, this);
-  SetExpertRow(UnitsTaskSpeed);
-
-  static constexpr StaticEnumChoice pressure_labels_list[] = {
-    { Unit::HECTOPASCAL, "hPa" },
-    { Unit::MILLIBAR, "mb" },
-    { Unit::INCH_MERCURY, "inHg" },
-    nullptr
-  };
-  AddEnum(_("Pressure"), _("Units used for pressures."),
-          pressure_labels_list,
-          (unsigned)config.pressure_unit, this);
-  SetExpertRow(UnitsPressure);
-
-  static constexpr StaticEnumChoice mass_labels_list[] = {
-    { Unit::KG, "kg" },
-    { Unit::LB, "lb" },
-    nullptr
-  };
-  AddEnum(_("Mass"), _("Units used for mass."),
-          mass_labels_list,
-          (unsigned)config.mass_unit, this);
-  SetExpertRow(UnitsMass);
-
-  static constexpr StaticEnumChoice wing_loading_labels_list[] = {
-    { Unit::KG_PER_M2, "kg/m²" },
-    { Unit::LB_PER_FT2, "lb/ft²" },
-    nullptr
-  };
-  AddEnum(_("Wing loading"), _("Units used for wing loading."),
-          wing_loading_labels_list,
-          (unsigned)config.wing_loading_unit, this);
-  SetExpertRow(UnitsWingLoading);
-
-  AddSpacer();
-  SetExpertRow(spacer_2);
-
-  static constexpr StaticEnumChoice units_lat_lon_list[] = {
-    { CoordinateFormat::DDMMSS, "DDMMSS" },
-    { CoordinateFormat::DDMMSS_S, "DDMMSS.s" },
-    { CoordinateFormat::DDMM_MMM, "DDMM.mmm" },
-    { CoordinateFormat::DD_DDDDD, "DD.ddddd" },
-    { CoordinateFormat::UTM, "UTM" },
-    nullptr
-  };
-  AddEnum(_("Lat./Lon."), _("Units used for latitude and longitude."),
-          units_lat_lon_list,
-          (unsigned)coordinate_format);
-  SetExpertRow(UnitsLatLon);
-
-  static constexpr StaticEnumChoice rotation_labels_list[] = {
-    { Unit::HZ, "Hz" },
-    { Unit::RPM, "rpm" },
-    nullptr
-  };
-  AddEnum(_("Rotation"), _("Unit used for rotation."),
-          rotation_labels_list,
-          (unsigned)config.rotation_unit, this);
-  SetExpertRow(ROTATION);
-}
-
-bool
-UnitsConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-  UnitSetting &config = CommonInterface::SetUISettings().format.units;
-  CoordinateFormat &coordinate_format =
-      CommonInterface::SetUISettings().format.coordinate_format;
-
-  /* the Units settings affect how other form values are read and translated
-   * so changes to Units settings should be processed after all other form settings
-   */
-  changed |= SaveValueEnum(UnitsSpeed, ProfileKeys::SpeedUnitsValue, config.speed_unit);
-  config.wind_speed_unit = config.speed_unit; // Mapping the wind speed to the speed unit
-
-  changed |= SaveValueEnum(UnitsDistance, ProfileKeys::DistanceUnitsValue, config.distance_unit);
-
-  changed |= SaveValueEnum(UnitsLift, ProfileKeys::LiftUnitsValue, config.vertical_speed_unit);
-
-  changed |= SaveValueEnum(UnitsAltitude, ProfileKeys::AltitudeUnitsValue, config.altitude_unit);
-
-  changed |= SaveValueEnum(UnitsTemperature, ProfileKeys::TemperatureUnitsValue, config.temperature_unit);
-
-  changed |= SaveValueEnum(UnitsTaskSpeed, ProfileKeys::TaskSpeedUnitsValue, config.task_speed_unit);
-
-  changed |= SaveValueEnum(UnitsPressure, ProfileKeys::PressureUnitsValue, config.pressure_unit);
-
-  changed |= SaveValueEnum(UnitsMass, ProfileKeys::MassUnitValue,
-                           config.mass_unit);
-
-  changed |= SaveValueEnum(UnitsWingLoading, ProfileKeys::WingLoadingUnitValue,
-                           config.wing_loading_unit);
-
-  changed |= SaveValueEnum(UnitsLatLon, ProfileKeys::LatLonUnits, coordinate_format);
-
-  changed |= SaveValueEnum(ROTATION, ProfileKeys::RotationUnitValue,
-                           config.rotation_unit);
-
-  _changed |= changed;
-
-  return true;
+  const UnitSetting &from = Units::Store::Read(preset - 1);
+  units.speed_unit = from.speed_unit;
+  units.wind_speed_unit = from.speed_unit;
+  units.distance_unit = from.distance_unit;
+  units.vertical_speed_unit = from.vertical_speed_unit;
+  units.altitude_unit = from.altitude_unit;
+  units.temperature_unit = from.temperature_unit;
+  units.task_speed_unit = from.task_speed_unit;
+  units.pressure_unit = from.pressure_unit;
+  units.mass_unit = from.mass_unit;
+  units.wing_loading_unit = from.wing_loading_unit;
 }
 
 std::unique_ptr<Widget>
 CreateUnitsConfigPanel()
 {
-  return std::make_unique<UnitsConfigPanel>();
-}
+  const UISettings &ui = CommonInterface::GetUISettings();
 
+  struct Fields {
+    UnitSetting units;
+    CoordinateFormat coordinate_format;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    ui.format.units,
+    ui.format.coordinate_format,
+  });
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  GroupedListWidget *page = list.get();
+  list->AddGroup(nullptr);
+  list->AddValue(_("Preset"), _("Load a set of units."),
+                 [fields](GroupedListWidget::ValueState &state) {
+                   state.text = PresetLabel(fields->units);
+                 },
+                 [fields, page] {
+                   DataFieldEnum df;
+                   df.addEnumText(_("Custom"), 0u,
+                                  _("My individual set of units."));
+                   const unsigned len = Units::Store::Count();
+                   for (unsigned i = 0; i < len; ++i)
+                     df.addEnumText(Units::Store::GetName(i), i + 1);
+
+                   df.SetValue(MatchingPreset(fields->units));
+                   if (!EditDataFieldDialog(_("Preset"), df,
+                                            _("Load a set of units.")))
+                     return;
+
+                   ApplyPreset(fields->units, df.GetValue());
+                   page->UpdateValues();
+                 });
+
+  list->AddEnum(_("Aircraft/Wind speed"),
+                _("Units used for airspeed and ground speed. "
+                  "A separate unit is available for task speeds."),
+                units_speed_list, fields->units.speed_unit, true);
+  list->AddEnum(_("Distance"),
+                _("Units used for horizontal distances e.g. "
+                  "range to waypoint, distance to go."),
+                units_distance_list, fields->units.distance_unit, true);
+  list->AddEnum(_("Lift"),
+                _("Units used for vertical speeds (variometer)."),
+                units_lift_list, fields->units.vertical_speed_unit, true);
+  list->AddEnum(_("Altitude"),
+                _("Units used for altitude and heights."),
+                units_altitude_list, fields->units.altitude_unit, true);
+  list->AddEnum(_("Temperature"), _("Units used for temperature."),
+                units_temperature_list, fields->units.temperature_unit, true);
+  list->AddEnum(_("Task Speed"), _("Units used for task speeds."),
+                units_taskspeed_list, fields->units.task_speed_unit, true);
+  list->AddEnum(_("Pressure"), _("Units used for pressures."),
+                pressure_labels_list, fields->units.pressure_unit, true);
+  list->AddEnum(_("Mass"), _("Units used for mass."),
+                mass_labels_list, fields->units.mass_unit, true);
+  list->AddEnum(_("Wing loading"), _("Units used for wing loading."),
+                wing_loading_labels_list, fields->units.wing_loading_unit,
+                true);
+  list->AddEnum(_("Lat./Lon."),
+                _("Units used for latitude and longitude."),
+                units_lat_lon_list, fields->coordinate_format, true);
+  list->AddEnum(_("Rotation"), _("Unit used for rotation."),
+                rotation_labels_list, fields->units.rotation_unit, true);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    UnitSetting &config = CommonInterface::SetUISettings().format.units;
+    CoordinateFormat &coordinate_format =
+      CommonInterface::SetUISettings().format.coordinate_format;
+
+    /* the Units settings affect how other form values are read and translated
+     * so changes to Units settings should be processed after all other form settings
+     */
+    ConfigPanel::CommitSetting(changed, config.speed_unit,
+                               fields->units.speed_unit,
+                               ProfileKeys::SpeedUnitsValue);
+    config.wind_speed_unit = config.speed_unit;
+
+    ConfigPanel::CommitSetting(changed, config.distance_unit,
+                               fields->units.distance_unit,
+                               ProfileKeys::DistanceUnitsValue);
+    ConfigPanel::CommitSetting(changed, config.vertical_speed_unit,
+                               fields->units.vertical_speed_unit,
+                               ProfileKeys::LiftUnitsValue);
+    ConfigPanel::CommitSetting(changed, config.altitude_unit,
+                               fields->units.altitude_unit,
+                               ProfileKeys::AltitudeUnitsValue);
+    ConfigPanel::CommitSetting(changed, config.temperature_unit,
+                               fields->units.temperature_unit,
+                               ProfileKeys::TemperatureUnitsValue);
+    ConfigPanel::CommitSetting(changed, config.task_speed_unit,
+                               fields->units.task_speed_unit,
+                               ProfileKeys::TaskSpeedUnitsValue);
+    ConfigPanel::CommitSetting(changed, config.pressure_unit,
+                               fields->units.pressure_unit,
+                               ProfileKeys::PressureUnitsValue);
+    ConfigPanel::CommitSetting(changed, config.mass_unit,
+                               fields->units.mass_unit,
+                               ProfileKeys::MassUnitValue);
+    ConfigPanel::CommitSetting(changed, config.wing_loading_unit,
+                               fields->units.wing_loading_unit,
+                               ProfileKeys::WingLoadingUnitValue);
+    ConfigPanel::CommitSetting(changed, coordinate_format,
+                               fields->coordinate_format,
+                               ProfileKeys::LatLonUnits);
+    ConfigPanel::CommitSetting(changed, config.rotation_unit,
+                               fields->units.rotation_unit,
+                               ProfileKeys::RotationUnitValue);
+    return true;
+  });
+
+  return list;
+}

@@ -2,72 +2,46 @@
 // Copyright The XCSoar Project
 
 #include "WeatherConfigPanel.hpp"
-#include "Profile/Keys.hpp"
-#include "Profile/Profile.hpp"
-#include "Weather/Settings.hpp"
-#include "Weather/Features.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "net/http/Features.hpp"
+#include "ConfigPanel.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
+#include "Profile/Keys.hpp"
 #include "UIGlobals.hpp"
+#include "Weather/Features.hpp"
+#include "Widget/GroupedListWidget.hpp"
+#include "net/http/Features.hpp"
 
-#include <string_view>
-
-enum ControlIndex {
-#ifdef HAVE_HTTP
-  ENABLE_TIM,
-#endif
-};
-
-class WeatherConfigPanel final
-  : public RowFormWidget {
-public:
-  WeatherConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-WeatherConfigPanel::Prepare(ContainerWindow &parent,
-                            const PixelRect &rc) noexcept
-{
-#if defined(HAVE_PCMET) || defined(HAVE_HTTP)
-  const auto &settings = CommonInterface::GetComputerSettings().weather;
-#endif
-
-  RowFormWidget::Prepare(parent, rc);
-
-#ifdef HAVE_HTTP
-  AddBoolean(_("Thermal Information Map"),
-             _("Show thermal locations downloaded from Thermal Information Map (thermalmap.info)."),
-             settings.enable_tim);
-#endif
-}
-
-bool
-WeatherConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-#if defined(HAVE_PCMET) || defined(HAVE_HTTP)
-  auto &settings = CommonInterface::SetComputerSettings().weather;
-#endif
-
-#ifdef HAVE_HTTP
-  changed |= SaveValue(ENABLE_TIM, ProfileKeys::EnableThermalInformationMap,
-                       settings.enable_tim);
-#endif
-
-  _changed |= changed;
-  return true;
-}
+#include <memory>
 
 std::unique_ptr<Widget>
 CreateWeatherConfigPanel()
 {
-  return std::make_unique<WeatherConfigPanel>();
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+
+#ifdef HAVE_HTTP
+  struct Fields {
+    bool enable_tim;
+  };
+
+  const auto &settings = CommonInterface::GetComputerSettings().weather;
+  auto fields = std::make_shared<Fields>(Fields{
+    settings.enable_tim,
+  });
+
+  list->AddGroup(nullptr);
+  list->AddSwitch(_("Thermal Information Map"),
+                  _("Show thermal locations downloaded from Thermal Information Map (thermalmap.info)."),
+                  fields->enable_tim);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    auto &settings = CommonInterface::SetComputerSettings().weather;
+    ConfigPanel::CommitSetting(changed, settings.enable_tim,
+                               fields->enable_tim,
+                               ProfileKeys::EnableThermalInformationMap);
+    return true;
+  });
+#endif
+
+  return list;
 }

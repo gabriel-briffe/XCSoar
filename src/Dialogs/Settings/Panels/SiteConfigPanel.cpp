@@ -2,170 +2,168 @@
 // Copyright The XCSoar Project
 
 #include "SiteConfigPanel.hpp"
-#include "ConfigPanel.hpp"
+#include "Dialogs/DataField.hpp"
+#include "Form/DataField/File.hpp"
+#include "Form/DataField/MultiFile.hpp"
+#include "Form/DataField/String.hpp"
 #include "Language/Language.hpp"
 #include "LocalPath.hpp"
 #include "Profile/Keys.hpp"
-#include "Repository/FileType.hpp"
 #include "Profile/Profile.hpp"
-#include "UIGlobals.hpp"
+#include "Repository/FileType.hpp"
 #include "Repository/Glue.hpp"
+#include "UIGlobals.hpp"
 #include "UtilsSettings.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "Widget/GroupedListWidget.hpp"
 #include "system/Path.hpp"
+#include "util/StringCompare.hxx"
 
-enum ControlIndex {
-  DataPath,
-  MapFile,
-  WaypointFileList,
-  WatchedWaypointFileList,
-  AirfieldFileList,
-  AirspaceFileList,
-  FlarmFile,
-  RaspFile,
-  ChecklistFile,
-  UserRepositoriesList
-};
+#include <memory>
+#include <string>
 
-class SiteConfigPanel final : public RowFormWidget {
-  enum Buttons {
-    WAYPOINT_EDITOR,
-  };
-
-public:
-  SiteConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-SiteConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent, [[maybe_unused]] const PixelRect &rc) noexcept
+static void
+LoadFile(FileDataField &df, std::string_view key, FileType type) noexcept
 {
-  WndProperty *wp = Add(_("XCSoar data path"), _("Click to view full path"), false);
-  wp->SetText(GetPrimaryDataPath().c_str());
-  wp->SetReadOnly(true);
-
-  AddFile(_("Map database"),
-          _("The name of the file (.xcm) containing terrain, topography, and optionally "
-            "waypoints, their details and airspaces."),
-          ProfileKeys::MapFile, GetFileTypePatterns(FileType::MAP),
-          FileType::MAP);
-
-  AddMultipleFiles(_("Waypoints"),
-                   _("Primary waypoints files.  Supported file types are "
-                     "Cambridge/WinPilot files (.dat), "
-                     "Zander files (.wpz) or SeeYou files (.cup, .cupx)."),
-                   ProfileKeys::WaypointFileList,
-                   GetFileTypePatterns(FileType::WAYPOINT),
-                   FileType::WAYPOINT);
-
-  AddMultipleFiles(_("Watched WPTs"),
-                   _("Waypoint files containing special waypoints for which "
-                     "additional computations like "
-                     "calculation of arrival height in map display always "
-                     "takes place. Useful for "
-                     "waypoints like known reliable thermal sources (e.g. "
-                     "powerplants) or mountain passes."),
-                   ProfileKeys::WatchedWaypointFileList,
-                   GetFileTypePatterns(FileType::WAYPOINT),
-                   FileType::WAYPOINT);
-  SetExpertRow(WatchedWaypointFileList);
-
-  AddMultipleFiles(_("WPT A/F details"),
-                   _("The files may contain extracts from enroute supplements "
-                     "or other contributed "
-                     "information about individual waypoints and airfields."),
-                   ProfileKeys::AirfieldFileList,
-                   GetFileTypePatterns(FileType::WAYPOINTDETAILS),
-                   FileType::WAYPOINTDETAILS);
-  SetExpertRow(AirfieldFileList);
-
-  AddMultipleFiles(_("Airspace"),
-                   _("List of active airspace files. Use the Add and Remove "
-                     "buttons to activate or deactivate"
-                     " airspace files respectively. Supported file types are: "
-                     "Openair (.openair /.txt /.air), and Tim Newport-Pearce (.sua)."),
-                   ProfileKeys::AirspaceFileList,
-                   GetFileTypePatterns(FileType::AIRSPACE),
-                   FileType::AIRSPACE);
-
-  AddFile(_("FLARM database"),
-          _("The name of the file containing information about registered FLARM devices."),
-          ProfileKeys::FlarmFile,
-          GetFileTypePatterns(FileType::FLARMNET),
-          FileType::FLARMNET);
-
-  AddFile("RASP",
-          _("Regional Atmospheric Soaring Prediction file providing "
-            "weather forecasts for soaring. Displays color-coded map "
-            "overlays for thermal strength, boundary layer winds, "
-            "cloud cover, and other soaring-relevant parameters at "
-            "various forecast times throughout the day."),
-          ProfileKeys::RaspFile,
-          GetFileTypePatterns(FileType::RASP),
-          FileType::RASP);
-
-  AddFile(_("Checklist"),
-          _("The checklist file containing pre-flight and other checklists."),
-          ProfileKeys::ChecklistFile,
-          GetFileTypePatterns(FileType::CHECKLIST),
-          FileType::CHECKLIST);
-  
-  const char *user_repositories_list_value = Profile::Get(ProfileKeys::UserRepositoriesList, "");
-
-  AddText(_("User repositories"),
-          _("List of additional user repository URIs, separated by '|' character."),
-          user_repositories_list_value);
-  SetExpertRow(UserRepositoriesList);
+  df.SetFileType(type);
+  df.ScanMultiplePatterns(GetFileTypePatterns(type));
+  if (const auto path = Profile::GetPath(key); path != nullptr)
+    df.SetValue(path);
 }
 
-bool
-SiteConfigPanel::Save(bool &_changed) noexcept
+static void
+LoadFiles(MultiFileDataField &df, std::string_view key, FileType type) noexcept
 {
-  bool changed = false;
+  const char *filters = GetFileTypePatterns(type);
+  df.SetFileType(type);
+  df.ScanMultiplePatterns(filters);
+  for (const auto &path : Profile::GetMultiplePaths(key, filters))
+    df.AddInitialPath(path);
+}
 
-  MapFileChanged = SaveValueFileReader(MapFile, ProfileKeys::MapFile);
+template<typename DataField>
+static void
+AddFileRow(GroupedListWidget &list, const char *caption, const char *help,
+           DataField &df, bool expert) noexcept
+{
+  GroupedListWidget::ItemOptions options;
+  options.help = help;
+  options.expert = expert;
+  options.value_callback = [&df](GroupedListWidget::ValueState &state) {
+    state.text = df.GetAsDisplayString();
+  };
+  list.AddValue(caption, [caption, help, &df, page = &list] {
+    if (EditDataFieldDialog(caption, df, help))
+      page->UpdateValues();
+  }, std::move(options));
+}
 
-  // WaypointFileChanged has already a meaningful value
-  WaypointFileChanged |= SaveValueMultiFileReader(
-      WaypointFileList, ProfileKeys::WaypointFileList);
-  WaypointFileChanged |= SaveValueMultiFileReader(
-      WatchedWaypointFileList, ProfileKeys::WatchedWaypointFileList);
+static bool
+SaveFile(const FileDataField &df, std::string_view key) noexcept
+{
+  Path path = df.GetValue();
+  if (const auto contracted = ContractLocalPath(path); contracted != nullptr)
+    path = contracted;
+  if (StringIsEqual(Profile::Get(key, ""), path.c_str()))
+    return false;
 
-  AirspaceFileChanged |= SaveValueMultiFileReader(
-      AirspaceFileList, ProfileKeys::AirspaceFileList);
-
-  FlarmFileChanged = SaveValueFileReader(FlarmFile, ProfileKeys::FlarmFile);
-
-  AirfieldFileChanged = SaveValueMultiFileReader(
-      AirfieldFileList, ProfileKeys::AirfieldFileList);
-
-  RaspFileChanged = SaveValueFileReader(RaspFile, ProfileKeys::RaspFile);
-
-  ChecklistFileChanged = SaveValueFileReader(ChecklistFile, ProfileKeys::ChecklistFile);
-
-  const std::string old_repos{Profile::Get(ProfileKeys::UserRepositoriesList, "")};
-  std::string new_repos = old_repos;
-  UserRepositoriesListChanged = SaveValue(
-      UserRepositoriesList, ProfileKeys::UserRepositoriesList, new_repos);
-  if (UserRepositoriesListChanged)
-    PurgeChangedUserRepositoryFiles(old_repos.c_str(), new_repos.c_str());
-
-  changed = WaypointFileChanged || AirfieldFileChanged ||
-            AirspaceFileChanged || MapFileChanged || FlarmFileChanged ||
-            RaspFileChanged || ChecklistFileChanged ||
-            UserRepositoriesListChanged;
-
-  _changed |= changed;
-
+  Profile::Set(key, path.c_str());
   return true;
 }
 
+static bool
+SaveFiles(const MultiFileDataField &df, std::string_view key) noexcept
+{
+  std::string joined;
+  for (const auto &value : df.GetPathFiles()) {
+    const auto contracted = ContractLocalPath(value);
+    const Path path = contracted != nullptr ? Path{contracted} : value;
+    if (path.empty())
+      continue;
+    if (!joined.empty())
+      joined += '|';
+    joined += path.c_str();
+  }
+
+  const std::string old_value = Profile::Get(key, "");
+  if (old_value == joined)
+    return false;
+  Profile::Set(key, joined.c_str());
+  return true;
+}
 std::unique_ptr<Widget>
 CreateSiteConfigPanel()
 {
-  return std::make_unique<SiteConfigPanel>();
+  struct Fields {
+    FileDataField map;
+    MultiFileDataField waypoints, watched, airfields, airspace;
+    FileDataField flarm, rasp, checklist;
+    std::string repositories;
+  };
+
+  auto fields = std::make_shared<Fields>();
+  LoadFile(fields->map, ProfileKeys::MapFile, FileType::MAP);
+  LoadFiles(fields->waypoints, ProfileKeys::WaypointFileList, FileType::WAYPOINT);
+  LoadFiles(fields->watched, ProfileKeys::WatchedWaypointFileList, FileType::WAYPOINT);
+  LoadFiles(fields->airfields, ProfileKeys::AirfieldFileList, FileType::WAYPOINTDETAILS);
+  LoadFiles(fields->airspace, ProfileKeys::AirspaceFileList, FileType::AIRSPACE);
+  LoadFile(fields->flarm, ProfileKeys::FlarmFile, FileType::FLARMNET);
+  LoadFile(fields->rasp, ProfileKeys::RaspFile, FileType::RASP);
+  LoadFile(fields->checklist, ProfileKeys::ChecklistFile, FileType::CHECKLIST);
+  fields->repositories = Profile::Get(ProfileKeys::UserRepositoriesList, "");
+
+  auto list = std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
+  list->AddValue(_("XCSoar data path"), _("Click to view full path"),
+                 [](GroupedListWidget::ValueState &state) {
+                   state.text = GetPrimaryDataPath().c_str();
+                 });
+  AddFileRow(*list, _("Map database"), _("The name of the file (.xcm) containing terrain, topography, and optionally " "waypoints, their details and airspaces."), fields->map, false);
+  AddFileRow(*list, _("Waypoints"), _("Primary waypoints files.  Supported file types are " "Cambridge/WinPilot files (.dat), " "Zander files (.wpz) or SeeYou files (.cup, .cupx)."), fields->waypoints, false);
+  AddFileRow(*list, _("Watched WPTs"), _("Waypoint files containing special waypoints for which " "additional computations like " "calculation of arrival height in map display always " "takes place. Useful for " "waypoints like known reliable thermal sources (e.g. " "powerplants) or mountain passes."), fields->watched, true);
+  AddFileRow(*list, _("WPT A/F details"), _("The files may contain extracts from enroute supplements " "or other contributed " "information about individual waypoints and airfields."), fields->airfields, true);
+  AddFileRow(*list, _("Airspace"), _("List of active airspace files. Use the Add and Remove " "buttons to activate or deactivate" " airspace files respectively. Supported file types are: " "Openair (.openair /.txt /.air), and Tim Newport-Pearce (.sua)."), fields->airspace, false);
+  AddFileRow(*list, _("FLARM database"), _("The name of the file containing information about registered FLARM devices."), fields->flarm, false);
+  AddFileRow(*list, "RASP", _("Regional Atmospheric Soaring Prediction file providing " "weather forecasts for soaring. Displays color-coded map " "overlays for thermal strength, boundary layer winds, " "cloud cover, and other soaring-relevant parameters at " "various forecast times throughout the day."), fields->rasp, false);
+  AddFileRow(*list, _("Checklist"), _("The checklist file containing pre-flight and other checklists."), fields->checklist, false);
+
+  const char *repo_help =
+    _("List of additional user repository URIs, separated by '|' character.");
+  GroupedListWidget::ItemOptions repositories;
+  repositories.help = repo_help;
+  repositories.expert = true;
+  repositories.value_callback = [fields](GroupedListWidget::ValueState &state) {
+    state.text = fields->repositories;
+  };
+  list->AddValue(_("User repositories"), [fields, page = list.get(), repo_help] {
+    DataFieldString df(fields->repositories.c_str());
+    if (!EditDataFieldDialog(_("User repositories"), df, repo_help))
+      return;
+    fields->repositories = df.GetValue();
+    page->UpdateValues();
+  }, std::move(repositories));
+
+  list->SetSaveCallback([fields](bool &changed) {
+    MapFileChanged = SaveFile(fields->map, ProfileKeys::MapFile);
+    WaypointFileChanged |= SaveFiles(fields->waypoints, ProfileKeys::WaypointFileList);
+    WaypointFileChanged |= SaveFiles(fields->watched, ProfileKeys::WatchedWaypointFileList);
+    AirspaceFileChanged |= SaveFiles(fields->airspace, ProfileKeys::AirspaceFileList);
+    FlarmFileChanged = SaveFile(fields->flarm, ProfileKeys::FlarmFile);
+    AirfieldFileChanged = SaveFiles(fields->airfields, ProfileKeys::AirfieldFileList);
+    RaspFileChanged = SaveFile(fields->rasp, ProfileKeys::RaspFile);
+    ChecklistFileChanged = SaveFile(fields->checklist, ProfileKeys::ChecklistFile);
+
+    const std::string old_repos{Profile::Get(ProfileKeys::UserRepositoriesList, "")};
+    if (old_repos != fields->repositories) {
+      Profile::Set(ProfileKeys::UserRepositoriesList, fields->repositories.c_str());
+      PurgeChangedUserRepositoryFiles(old_repos.c_str(), fields->repositories.c_str());
+      UserRepositoriesListChanged = true;
+    } else
+      UserRepositoriesListChanged = false;
+
+    changed |= WaypointFileChanged || AirfieldFileChanged ||
+      AirspaceFileChanged || MapFileChanged || FlarmFileChanged ||
+      RaspFileChanged || ChecklistFileChanged || UserRepositoriesListChanged;
+    return true;
+  });
+  return list;
 }

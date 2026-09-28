@@ -62,9 +62,25 @@ bools until Close or `Save()`.
 
 ## Configuration page
 
-`GroupedListWidget` is `final`. The page owns one and forwards
-`Widget`, as `WindConfigPanel` does. `Save()` writes the settings
-when the configuration dialogue closes.
+The page is the list. `Create*()` returns a `GroupedListWidget`
+with `SetSaveCallback`. That callback writes the settings when
+the configuration dialogue closes. There is no forwarding wrapper.
+
+`AddSwitch(caption, help, field)` flips `field`. Pass `expert`
+to hide the row until expert mode is on, and `shown` to hide it
+while a predicate is false. `AddEnum` and `AddText` store the
+value and open the existing picker. A number is `AddInteger` or
+`AddFloat`. A file or password stays `AddValue` with the dialog
+that page already used.
+
+`ConfigPanel::CommitSetting` writes one setting and, with a key,
+its profile entry. Keep the values in a `shared_ptr` until the
+save callback runs.
+
+The configuration dialogue already wraps the page in
+`VScrollWidget`. Leave the list's minimum and maximum size as
+they are. That outer scroller stays idle, and the list draws a
+bar only when the rows, including an open explanation, do not fit.
 
 ## Leave the shared list alone
 

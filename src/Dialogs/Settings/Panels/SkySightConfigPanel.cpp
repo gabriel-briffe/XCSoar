@@ -6,102 +6,101 @@
 #ifdef HAVE_HTTP
 
 #include "DataGlobals.hpp"
+#include "Dialogs/DataField.hpp"
 #include "Form/DataField/Enum.hpp"
+#include "Form/DataField/Password.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
+#include "UIGlobals.hpp"
 #include "Weather/Settings.hpp"
 #include "Weather/SkySight/Regions.hpp"
 #include "Weather/SkySight/SkySightClient.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "Interface.hpp"
-#include "Language/Language.hpp"
-#include "UIGlobals.hpp"
+#include "Widget/GroupedListWidget.hpp"
+#include "util/StaticString.hxx"
+#include "util/TruncateString.hpp"
 
-enum ControlIndex {
-  SKYSIGHT_EMAIL,
-  SKYSIGHT_PASSWORD,
-  SKYSIGHT_REGION,
-};
+#include <memory>
 
-class SkySightConfigPanel final : public RowFormWidget {
-public:
-  SkySightConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-SkySightConfigPanel::Prepare(ContainerWindow &parent,
-                             const PixelRect &rc) noexcept
+static void
+FillSkySightRegion(DataFieldEnum &df, const char *region) noexcept
 {
-  const auto &settings = CommonInterface::GetComputerSettings().weather;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  AddText(C_("Setting", "SkySight Email"),
-          _("The e-mail address you use to sign in to skysight.io."),
-          settings.skysight.email);
-  AddPassword(C_("Setting", "SkySight Password"),
-              _("Your SkySight password."),
-              settings.skysight.password);
-
-  auto *region = AddEnum(C_("Setting", "SkySight Region"),
-                         _("Select the SkySight region used for live weather layers."));
-  if (region == nullptr)
-    return;
-
-  auto &df = *(DataFieldEnum *)region->GetDataField();
   if (const auto skysight = DataGlobals::GetSkySight(); skysight != nullptr) {
     for (const auto &candidate : skysight->GetRegions())
       df.addEnumText(candidate.id.c_str(), gettext(candidate.name.c_str()));
-
-    if (!df.SetValue(settings.skysight.region.c_str()))
+    if (!df.SetValue(region))
       df.SetValue(skysight->GetRegion().data());
   } else {
     for (const auto &candidate : SKYSIGHT_REGIONS)
       df.addEnumText(candidate.id, gettext(candidate.name));
-
-    df.SetValue(FindSkySightRegionById(settings.skysight.region.c_str()).id);
+    df.SetValue(FindSkySightRegionById(region).id);
   }
-
-  region->RefreshDisplay();
-}
-
-bool
-SkySightConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-  auto &settings = CommonInterface::SetComputerSettings().weather;
-
-  changed |= SaveValue(SKYSIGHT_EMAIL, ProfileKeys::SkySightEmail,
-                       settings.skysight.email);
-  changed |= SaveValue(SKYSIGHT_PASSWORD, ProfileKeys::SkySightPassword,
-                       settings.skysight.password);
-  changed |= SaveValue(SKYSIGHT_REGION, ProfileKeys::SkySightRegion,
-                       settings.skysight.region);
-
-  if (changed)
-    if (auto skysight = DataGlobals::GetSkySight())
-      skysight->Init();
-
-  _changed |= changed;
-  return true;
 }
 
 std::unique_ptr<Widget>
 CreateSkySightConfigPanel()
 {
-  return std::make_unique<SkySightConfigPanel>();
+  const auto &src = CommonInterface::GetComputerSettings().weather.skysight;
+  struct Fields { StaticString<64> email, password; StaticString<32> region; };
+  auto fields = std::make_shared<Fields>();
+  fields->email = src.email;
+  fields->password = src.password;
+  fields->region = src.region;
+  auto list = std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  auto *page = list.get();
+  list->AddGroup(nullptr);
+  list->AddText(C_("Setting", "SkySight Email"),
+                _("The e-mail address you use to sign in to skysight.io."),
+                fields->email.data(), fields->email.capacity());
+  list->AddValue(C_("Setting", "SkySight Password"),
+                 _("Your SkySight password."),
+                 [fields](GroupedListWidget::ValueState &state) {
+                   PasswordDataField df(fields->password.c_str());
+                   state.text = df.GetAsDisplayString();
+                 }, [fields, page] {
+                   PasswordDataField df(fields->password.c_str());
+                   if (!EditDataFieldDialog(C_("Setting", "SkySight Password"), df, _("Your SkySight password.")))
+                     return;
+                   CopyTruncateString(fields->password.data(),
+                                      fields->password.capacity(), df.GetValue());
+                   page->UpdateValues();
+                 });
+  const char *region_help = _("Select the SkySight region used for live weather layers.");
+  list->AddValue(C_("Setting", "SkySight Region"), region_help,
+                 [fields](GroupedListWidget::ValueState &state) {
+                   DataFieldEnum df;
+                   FillSkySightRegion(df, fields->region.c_str());
+                   state.text = df.GetAsDisplayString();
+                 }, [fields, page, region_help] {
+                   DataFieldEnum df;
+                   FillSkySightRegion(df, fields->region.c_str());
+                   if (!EditDataFieldDialog(C_("Setting", "SkySight Region"), df, region_help))
+                     return;
+                   fields->region = df.GetAsString();
+                   page->UpdateValues();
+                 });
+  list->SetSaveCallback([fields](bool &changed) {
+    auto &skysight = CommonInterface::SetComputerSettings().weather.skysight;
+    bool skysight_changed = false;
+    auto save = [&](auto &dest, const auto &value, std::string_view key) {
+      if (dest == value) return;
+      dest = value;
+      Profile::Set(key, dest.c_str());
+      skysight_changed = true;
+    };
+    save(skysight.email, fields->email, ProfileKeys::SkySightEmail);
+    save(skysight.password, fields->password, ProfileKeys::SkySightPassword);
+    save(skysight.region, fields->region, ProfileKeys::SkySightRegion);
+    if (skysight_changed)
+      if (auto client = DataGlobals::GetSkySight())
+        client->Init();
+    changed |= skysight_changed;
+    return true;
+  });
+  return list;
 }
-
 #else
-
 std::unique_ptr<Widget>
-CreateSkySightConfigPanel()
-{
-  return {};
-}
-
+CreateSkySightConfigPanel() { return {}; }
 #endif

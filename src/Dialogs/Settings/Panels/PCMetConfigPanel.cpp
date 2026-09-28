@@ -2,71 +2,70 @@
 // Copyright The XCSoar Project
 
 #include "PCMetConfigPanel.hpp"
+#include "Dialogs/DataField.hpp"
+#include "Form/DataField/Password.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
-#include "Weather/Settings.hpp"
-#include "Weather/Features.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "Interface.hpp"
 #include "UIGlobals.hpp"
-#include "Language/Language.hpp"
+#include "Weather/Features.hpp"
+#include "Weather/Settings.hpp"
+#include "Widget/GroupedListWidget.hpp"
+#include "util/StaticString.hxx"
+#include "util/TruncateString.hpp"
 
-enum ControlIndex {
-#ifdef HAVE_PCMET
-  PCMET_USER,
-  PCMET_PASSWORD,
-#endif
-};
-
-class PCMetConfigPanel final : public RowFormWidget {
-public:
-  PCMetConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-PCMetConfigPanel::Prepare(ContainerWindow &parent,
-                          const PixelRect &rc) noexcept
-{
-#ifdef HAVE_PCMET
-  const auto &settings = CommonInterface::GetComputerSettings().weather;
-#endif
-
-  RowFormWidget::Prepare(parent, rc);
-
-#ifdef HAVE_PCMET
-  AddText(_("pc_met Username"), "",
-          settings.pcmet.www_credentials.username);
-  AddPassword(_("pc_met Password"), "",
-              settings.pcmet.www_credentials.password);
-#endif
-}
-
-bool
-PCMetConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-#ifdef HAVE_PCMET
-  auto &settings = CommonInterface::SetComputerSettings().weather;
-
-  changed |= SaveValue(PCMET_USER, ProfileKeys::PCMetUsername,
-                       settings.pcmet.www_credentials.username);
-
-  changed |= SaveValue(PCMET_PASSWORD, ProfileKeys::PCMetPassword,
-                       settings.pcmet.www_credentials.password);
-#endif
-
-  _changed |= changed;
-  return true;
-}
+#include <memory>
 
 std::unique_ptr<Widget>
 CreatePCMetConfigPanel()
 {
-  return std::make_unique<PCMetConfigPanel>();
+  auto list = std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+
+#ifdef HAVE_PCMET
+  struct Fields {
+    StaticString<64> username, password;
+  };
+  const auto &src =
+    CommonInterface::GetComputerSettings().weather.pcmet.www_credentials;
+  auto fields = std::make_shared<Fields>();
+  fields->username = src.username;
+  fields->password = src.password;
+  auto *page = list.get();
+  list->AddGroup(nullptr);
+  list->AddText(_("pc_met Username"), "",
+                fields->username.data(), fields->username.capacity());
+  list->AddValue(_("pc_met Password"), "",
+                 [fields](GroupedListWidget::ValueState &state) {
+                   PasswordDataField df(fields->password.c_str());
+                   state.text = df.GetAsDisplayString();
+                 },
+                 [fields, page] {
+                   PasswordDataField df(fields->password.c_str());
+                   if (!EditDataFieldDialog(_("pc_met Password"), df, ""))
+                     return;
+                   CopyTruncateString(fields->password.data(),
+                                      fields->password.capacity(),
+                                      df.GetValue());
+                   page->UpdateValues();
+                 });
+
+  list->SetSaveCallback([fields](bool &changed) {
+    auto &credentials = CommonInterface::SetComputerSettings()
+      .weather.pcmet.www_credentials;
+    auto save = [&](auto &dest, const auto &value, std::string_view key) {
+      if (dest == value)
+        return;
+
+      dest = value;
+      Profile::Set(key, dest.c_str());
+      changed = true;
+    };
+    save(credentials.username, fields->username, ProfileKeys::PCMetUsername);
+    save(credentials.password, fields->password, ProfileKeys::PCMetPassword);
+    return true;
+  });
+#endif
+
+  return list;
 }

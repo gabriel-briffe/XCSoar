@@ -2,30 +2,16 @@
 // Copyright The XCSoar Project
 
 #include "LayoutConfigPanel.hpp"
-#include "Profile/Keys.hpp"
-#include "Profile/Profile.hpp"
-#include "Form/DataField/Enum.hpp"
+#include "Asset.hpp"
+#include "ConfigPanel.hpp"
 #include "InfoBoxes/InfoBoxGeometryList.hpp"
 #include "Interface.hpp"
-#include "MainWindow.hpp"
 #include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "MainWindow.hpp"
 #include "UIGlobals.hpp"
-#include "Asset.hpp"
-#include "Menu/ShowButton.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-enum ControlIndex {
-  AppInfoBoxGeom,
-  InfoBoxTitleScale,
-  TabDialogStyle,
-  AppStatusMessageAlignment,
-  AppInfoBoxColors,
-  AppInfoBoxTheme,
-  AppInfoBoxBorder,
-  ShowMenuButton,
-  ShowZoomButton,
-  ShowQuickMenuButton,
-};
+#include <memory>
 
 static constexpr StaticEnumChoice tabdialog_style_list[] = {
   { DialogSettings::TabStyle::Text, N_("Text"),
@@ -65,159 +51,134 @@ static constexpr StaticEnumChoice infobox_theme_list[] = {
   nullptr
 };
 
-class LayoutConfigPanel final : public RowFormWidget {
-  /** Geometry when this panel was opened; restored if Settings is cancelled. */
-  InfoBoxSettings::Geometry original_geometry{};
-  bool saved = false;
-
-public:
-  LayoutConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  void Unprepare() noexcept override;
-  bool Leave() noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-LayoutConfigPanel::Prepare(ContainerWindow &parent,
-                           const PixelRect &rc) noexcept
-{
-  const UISettings &ui_settings = CommonInterface::GetUISettings();
-
-  original_geometry = ui_settings.info_boxes.geometry;
-  saved = false;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  AddEnum(_("InfoBox geometry"),
-          _("A list of possible InfoBox layouts. Do some trials to find the best for your screen size."),
-          info_box_geometry_list, (unsigned)ui_settings.info_boxes.geometry);
-
-  AddInteger(_("InfoBox title size"), _("Zoom factor for InfoBox title and comment text"),
-             "%d %%", "%d", 50, 150, 5,
-             ui_settings.info_boxes.scale_title_font);
-  SetExpertRow(InfoBoxTitleScale);
-
-  AddEnum(_("Tab dialog style"), nullptr,
-          tabdialog_style_list, (unsigned)ui_settings.dialog.tab_style);
-
-  AddEnum(_("Message display"), nullptr,
-          popup_msg_position_list,
-          (unsigned)ui_settings.popup_message_position);
-  SetExpertRow(AppStatusMessageAlignment);
-
-  if (HasColors()) {
-    AddBoolean(_("Colored InfoBoxes"),
-               _("If true, certain InfoBoxes will have coloured text. For example, the active waypoint "
-                 "InfoBox will be blue when the glider is above final glide."),
-               ui_settings.info_boxes.use_colors);
-    SetExpertRow(AppInfoBoxColors);
-  } else
-    AddDummy();
-
-  AddEnum(_("InfoBox theme"), nullptr, infobox_theme_list,
-          (unsigned)ui_settings.info_boxes.theme);
-  SetExpertRow(AppInfoBoxTheme);
-
-  AddEnum(_("InfoBox border"), nullptr, infobox_border_list,
-          unsigned(ui_settings.info_boxes.border_style));
-  SetExpertRow(AppInfoBoxBorder);
-
-  AddBoolean(_("Show Menu button"), _("Show the Menu button"),
-             ui_settings.show_menu_button);
-  SetExpertRow(ShowMenuButton);
-  AddBoolean(_("Show Zoom button"), _("Show the Zoom button"),
-             ui_settings.show_zoom_button);
-  SetExpertRow(ShowZoomButton);
-  AddBoolean(C_("Setting", "Show QuickMenu button"),
-             _("Show the QuickMenu button"),
-             ui_settings.show_quickmenu_button);
-  SetExpertRow(ShowQuickMenuButton);
-
-}
-
-void
-LayoutConfigPanel::Unprepare() noexcept
-{
-  if (!saved)
-    CommonInterface::SetUISettings().info_boxes.geometry = original_geometry;
-
-  RowFormWidget::Unprepare();
-}
-
-bool
-LayoutConfigPanel::Leave() noexcept
-{
-  /* Switching to another settings page (still inside Configuration):
-     copy geometry so InfoBox Sets can read settings.geometry. */
-  SaveValueEnum(AppInfoBoxGeom,
-                CommonInterface::SetUISettings().info_boxes.geometry);
-  return true;
-}
-
-bool
-LayoutConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-  UISettings &ui_settings = CommonInterface::SetUISettings();
-  saved = true;
-
-  bool info_box_geometry_changed = false;
-
-  /* Leave() may already have synced the DataField into ui_settings;
-     re-base so SaveValueEnum still writes the profile when needed. */
-  ui_settings.info_boxes.geometry = original_geometry;
-  info_box_geometry_changed |=
-    SaveValueEnum(AppInfoBoxGeom, ProfileKeys::InfoBoxGeometry,
-                  ui_settings.info_boxes.geometry);
-  info_box_geometry_changed |=
-    SaveValueInteger(InfoBoxTitleScale, ProfileKeys::InfoBoxTitleScale,
-                  ui_settings.info_boxes.scale_title_font);
-
-  changed |= info_box_geometry_changed;
-
-  changed |= SaveValueEnum(AppStatusMessageAlignment, ProfileKeys::AppStatusMessageAlignment,
-                           ui_settings.popup_message_position);
-
-  if (HasColors())
-    changed |= SaveValue(AppInfoBoxColors, ProfileKeys::AppInfoBoxColors,
-                         ui_settings.info_boxes.use_colors);
-
-  changed |= SaveValueEnum(AppInfoBoxTheme, ProfileKeys::AppInfoBoxTheme,
-                           ui_settings.info_boxes.theme);
-
-  changed |= SaveValueEnum(AppInfoBoxBorder, ProfileKeys::AppInfoBoxBorder,
-                           ui_settings.info_boxes.border_style);
-
-  bool overlay_buttons_changed = false;
-  if (SaveValue(ShowMenuButton, ProfileKeys::ShowMenuButton,
-                ui_settings.show_menu_button))
-    overlay_buttons_changed = changed = true;
-  if (SaveValue(ShowZoomButton, ProfileKeys::ShowZoomButton,
-                ui_settings.show_zoom_button))
-    overlay_buttons_changed = changed = true;
-  if (SaveValue(ShowQuickMenuButton, ProfileKeys::ShowQuickMenuButton,
-                ui_settings.show_quickmenu_button))
-    overlay_buttons_changed = changed = true;
-  if (overlay_buttons_changed)
-    CommonInterface::main_window->ReinitialiseMapOverlayButtons();
-
-  DialogSettings &dialog_settings = CommonInterface::SetUISettings().dialog;
-  changed |= SaveValueEnum(TabDialogStyle, ProfileKeys::AppDialogTabStyle, dialog_settings.tab_style);
-
-  if (info_box_geometry_changed)
-    CommonInterface::main_window->ReinitialiseLayout();
-
-  _changed |= changed;
-
-  return true;
-}
-
 std::unique_ptr<Widget>
 CreateLayoutConfigPanel()
 {
-  return std::make_unique<LayoutConfigPanel>();
+  const UISettings &ui_settings = CommonInterface::GetUISettings();
+
+  struct Fields {
+    InfoBoxSettings::Geometry geometry;
+    InfoBoxSettings::Geometry original;
+    int title_scale;
+    DialogSettings::TabStyle tab_style;
+    UISettings::PopupMessagePosition popup_position;
+    bool use_colors;
+    InfoBoxSettings::Theme theme;
+    InfoBoxSettings::BorderStyle border;
+    bool show_menu;
+    bool show_zoom;
+    bool show_quickmenu;
+    bool saved = false;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    ui_settings.info_boxes.geometry,
+    ui_settings.info_boxes.geometry,
+    static_cast<int>(ui_settings.info_boxes.scale_title_font),
+    ui_settings.dialog.tab_style,
+    ui_settings.popup_message_position,
+    ui_settings.info_boxes.use_colors,
+    ui_settings.info_boxes.theme,
+    ui_settings.info_boxes.border_style,
+    ui_settings.show_menu_button,
+    ui_settings.show_zoom_button,
+    ui_settings.show_quickmenu_button,
+  });
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
+  list->AddEnum(_("InfoBox geometry"),
+                _("A list of possible InfoBox layouts. Do some trials to find the best for your screen size."),
+                info_box_geometry_list, fields->geometry);
+  list->AddInteger(_("InfoBox title size"),
+                   _("Zoom factor for InfoBox title and comment text"),
+                   "%d %%", "%d", 50, 150, 5, fields->title_scale, true);
+  list->AddEnum(_("Tab dialog style"), nullptr,
+                tabdialog_style_list, fields->tab_style);
+  list->AddEnum(_("Message display"), nullptr,
+                popup_msg_position_list, fields->popup_position, true);
+
+  if (HasColors())
+    list->AddSwitch(_("Colored InfoBoxes"),
+                    _("If true, certain InfoBoxes will have coloured text. For example, the active waypoint "
+                      "InfoBox will be blue when the glider is above final glide."),
+                    fields->use_colors, true);
+
+  list->AddEnum(_("InfoBox theme"), nullptr,
+                infobox_theme_list, fields->theme, true);
+  list->AddEnum(_("InfoBox border"), nullptr,
+                infobox_border_list, fields->border, true);
+  list->AddSwitch(_("Show Menu button"), _("Show the Menu button"),
+                  fields->show_menu, true);
+  list->AddSwitch(_("Show Zoom button"), _("Show the Zoom button"),
+                  fields->show_zoom, true);
+  list->AddSwitch(C_("Setting", "Show QuickMenu button"),
+                  _("Show the QuickMenu button"),
+                  fields->show_quickmenu, true);
+
+  /* Another page, such as InfoBox sets, reads the live geometry.
+     Cancel restores the value from when the page was opened. */
+  list->SetLeaveCallback([fields] {
+    CommonInterface::SetUISettings().info_boxes.geometry =
+      fields->geometry;
+    return true;
+  });
+  list->SetUnprepareCallback([fields] {
+    if (!fields->saved)
+      CommonInterface::SetUISettings().info_boxes.geometry =
+        fields->original;
+  });
+
+  list->SetSaveCallback([fields](bool &changed) {
+    fields->saved = true;
+    UISettings &ui_settings = CommonInterface::SetUISettings();
+    auto &info_boxes = ui_settings.info_boxes;
+    bool layout_changed = false;
+
+    if (fields->geometry != fields->original) {
+      info_boxes.geometry = fields->geometry;
+      Profile::Set(ProfileKeys::InfoBoxGeometry,
+                   static_cast<unsigned>(fields->geometry));
+      changed = layout_changed = true;
+    }
+
+    if (ConfigPanel::CommitSetting(changed, info_boxes.scale_title_font,
+          static_cast<unsigned>(fields->title_scale),
+          ProfileKeys::InfoBoxTitleScale))
+      layout_changed = true;
+
+    ConfigPanel::CommitSetting(changed,
+      ui_settings.popup_message_position, fields->popup_position,
+      ProfileKeys::AppStatusMessageAlignment);
+
+    if (HasColors())
+      ConfigPanel::CommitSetting(changed, info_boxes.use_colors,
+        fields->use_colors, ProfileKeys::AppInfoBoxColors);
+
+    ConfigPanel::CommitSetting(changed, info_boxes.theme,
+      fields->theme, ProfileKeys::AppInfoBoxTheme);
+    ConfigPanel::CommitSetting(changed, info_boxes.border_style,
+      fields->border, ProfileKeys::AppInfoBoxBorder);
+
+    const bool buttons =
+      ConfigPanel::CommitSetting(changed, ui_settings.show_menu_button,
+        fields->show_menu, ProfileKeys::ShowMenuButton) |
+      ConfigPanel::CommitSetting(changed, ui_settings.show_zoom_button,
+        fields->show_zoom, ProfileKeys::ShowZoomButton) |
+      ConfigPanel::CommitSetting(changed,
+        ui_settings.show_quickmenu_button, fields->show_quickmenu,
+        ProfileKeys::ShowQuickMenuButton);
+    if (buttons)
+      CommonInterface::main_window->ReinitialiseMapOverlayButtons();
+
+    ConfigPanel::CommitSetting(changed, ui_settings.dialog.tab_style,
+      fields->tab_style, ProfileKeys::AppDialogTabStyle);
+
+    if (layout_changed)
+      CommonInterface::main_window->ReinitialiseLayout();
+    return true;
+  });
+
+  return list;
 }

@@ -3,83 +3,82 @@
 
 #include "InfoBoxesConfigPanel.hpp"
 #include "../dlgConfigInfoboxes.hpp"
-#include "Profile/Profile.hpp"
+#include "ConfigPanel.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
+#include "Look/Look.hpp"
 #include "Profile/Current.hpp"
 #include "Profile/InfoBoxConfig.hpp"
-#include "Form/Button.hpp"
-#include "Interface.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "Language/Language.hpp"
+#include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
 #include "UIGlobals.hpp"
-#include "Look/Look.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-class InfoBoxesConfigPanel final
-  : public RowFormWidget {
-public:
-  InfoBoxesConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-
-  void OnAction(int id) noexcept;
-};
-
-void
-InfoBoxesConfigPanel::OnAction(int id) noexcept
-{
-  InfoBoxSettings &settings = CommonInterface::SetUISettings().info_boxes;
-
-  unsigned i = (unsigned)id;
-  InfoBoxSettings::Panel &data = settings.panels[i];
-
-  bool changed =
-    dlgConfigInfoboxesShowModal(UIGlobals::GetMainWindow(),
-                                UIGlobals::GetDialogLook(),
-                                UIGlobals::GetLook().info_box,
-                                settings.geometry, data,
-                                i >= InfoBoxSettings::PREASSIGNED_PANELS);
-  if (changed) {
-    Profile::Save(Profile::map, data, i);
-    Profile::Save();
-    ((Button &)GetRow(i)).SetCaption(gettext(data.name));
-  }
-}
-
-void
-InfoBoxesConfigPanel::Prepare(ContainerWindow &parent,
-                              const PixelRect &rc) noexcept
-{
-  const InfoBoxSettings &settings = CommonInterface::GetUISettings().info_boxes;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  for (unsigned i = 0; i < InfoBoxSettings::MAX_PANELS; i++) {
-    const InfoBoxSettings::Panel &data = settings.panels[i];
-
-    AddButton(gettext(data.name), [this, i](){ OnAction(i); });
-    if (i>2)
-      SetExpertRow(i);
-  }
-
-  AddBoolean(_("Use final glide mode"),
-             _("Controls whether the \"final glide\" InfoBox mode should be used on \"auto\" pages."),
-             settings.use_final_glide);
-}
-
-bool
-InfoBoxesConfigPanel::Save([[maybe_unused]] bool &_changed) noexcept
-{
-  InfoBoxSettings &settings = CommonInterface::SetUISettings().info_boxes;
-  SaveValue(InfoBoxSettings::MAX_PANELS, ProfileKeys::UseFinalGlideDisplayMode,
-            settings.use_final_glide);
-
-  return true;
-}
-
+#include <memory>
+#include <string>
 std::unique_ptr<Widget>
 CreateInfoBoxesConfigPanel()
 {
-  return std::make_unique<InfoBoxesConfigPanel>();
+  const InfoBoxSettings &settings =
+    CommonInterface::GetUISettings().info_boxes;
+
+  struct Fields {
+    bool use_final_glide;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    settings.use_final_glide,
+  });
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  GroupedListWidget *page = list.get();
+  list->AddGroup(nullptr);
+
+  for (unsigned i = 0; i < InfoBoxSettings::MAX_PANELS; ++i) {
+    const std::string initial{gettext(settings.panels[i].name)};
+
+    GroupedListWidget::ItemOptions options;
+    options.chevron = true;
+    options.expert = i > 2;
+    options.value_callback =
+      [i, initial](GroupedListWidget::ValueState &state) {
+        const char *name = gettext(CommonInterface::GetUISettings()
+                                   .info_boxes.panels[i].name);
+        if (initial != name)
+          state.text = name;
+      };
+
+    list->AddItem(initial.c_str(), [i, page] {
+      InfoBoxSettings &settings =
+        CommonInterface::SetUISettings().info_boxes;
+      InfoBoxSettings::Panel &data = settings.panels[i];
+
+      const bool changed =
+        dlgConfigInfoboxesShowModal(UIGlobals::GetMainWindow(),
+                                    UIGlobals::GetDialogLook(),
+                                    UIGlobals::GetLook().info_box,
+                                    settings.geometry, data,
+                                    i >= InfoBoxSettings::PREASSIGNED_PANELS);
+      if (!changed)
+        return;
+
+      Profile::Save(Profile::map, data, i);
+      Profile::Save();
+      page->UpdateValues();
+    }, options);
+  }
+
+  list->AddSwitch(_("Use final glide mode"),
+                  _("Controls whether the \"final glide\" InfoBox mode should be used on \"auto\" pages."),
+                  fields->use_final_glide);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    InfoBoxSettings &settings = CommonInterface::SetUISettings().info_boxes;
+    ConfigPanel::CommitSetting(changed, settings.use_final_glide,
+                               fields->use_final_glide,
+                               ProfileKeys::UseFinalGlideDisplayMode);
+    return true;
+  });
+
+  return list;
 }

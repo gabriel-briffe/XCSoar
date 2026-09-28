@@ -2,32 +2,24 @@
 // Copyright The XCSoar Project
 
 #include "AudioVarioConfigPanel.hpp"
-#include "Profile/Keys.hpp"
-#include "Language/Language.hpp"
-#include "Interface.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Float.hpp"
-#include "UIGlobals.hpp"
 #include "Audio/Features.hpp"
 #include "Audio/VarioGlue.hpp"
 #include "Audio/VarioSettings.hpp"
-#include "Units/Units.hpp"
+#include "ConfigPanel.hpp"
+#include "Dialogs/DataField.hpp"
+#include "Form/DataField/Enum.hpp"
+#include "Form/DataField/Float.hpp"
 #include "Formatter/UserUnits.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
+#include "Profile/Keys.hpp"
+#include "UIGlobals.hpp"
+#include "Units/Descriptor.hpp"
+#include "Units/Units.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-enum ControlIndex {
-  ENABLED,
-  VOLUME,
-  SWITCHING_MODE,
-  DEAD_BAND_ENABLED,
-  SPACER,
-  MIN_FREQUENCY,
-  ZERO_FREQUENCY,
-  MAX_FREQUENCY,
-  SPACER2,
-  DEAD_BAND_MIN,
-  DEAD_BAND_MAX,
-};
+#include <cmath>
+#include <memory>
 
 static constexpr StaticEnumChoice switching_modes[] = {
   { VarioSoundSwitchingMode::MANUAL, NC_("Setting", "Manual") },
@@ -35,129 +27,136 @@ static constexpr StaticEnumChoice switching_modes[] = {
   nullptr
 };
 
-
-class AudioVarioConfigPanel final : public RowFormWidget {
-public:
-  AudioVarioConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-AudioVarioConfigPanel::Prepare(ContainerWindow &parent,
-                               const PixelRect &rc) noexcept
+static DataFieldFloat
+MakeDeadband(double min_user, double max_user, double sys_value) noexcept
 {
-  RowFormWidget::Prepare(parent, rc);
-
-  if (!AudioVarioGlue::HaveAudioVario())
-    return;
-
-  const auto &settings = CommonInterface::GetUISettings().sound.vario;
-
-  AddBoolean(_("Audio Vario"),
-             _("Emulate the sound of an electronic vario."),
-             settings.enabled);
-
-  AddInteger(_("Volume"),
-             _("The audio vario sound volume."), "%u %%", "%u",
-             0, 100, 1, settings.volume);
-
-  AddEnum(C_("Setting", "Mode switching"),
-      _("Choose whether the audio vario stays in manual mode or switches automatically between Vario in circling and STF in cruise. Manual mode starts in Vario after each restart and can be changed by external input events. In the built-in simulator, STF audio needs valid airspeed and total-energy vario input; without those, manual STF is silent and auto cruise falls back to vario."),
-          switching_modes, (unsigned)settings.switching_mode);
-
-  AddBoolean(_("Enable Deadband"),
-             _("Mute the audio output in when the current lift is in a "
-               "certain range around zero"), settings.dead_band_enabled);
-
-  AddSpacer();
-  SetExpertRow(SPACER);
-
-  AddInteger(_("Min. Frequency"),
-             _("The tone frequency that is played at maximum sink rate."),
-             "%u Hz", "%u",
-             50, 3000, 50, settings.min_frequency);
-  SetExpertRow(MIN_FREQUENCY);
-
-  AddInteger(_("Zero Frequency"),
-             _("The tone frequency that is played at zero climb rate."),
-             "%u Hz", "%u",
-             50, 3000, 50, settings.zero_frequency);
-  SetExpertRow(ZERO_FREQUENCY);
-
-  AddInteger(_("Max. Frequency"),
-             _("The tone frequency that is played at maximum climb rate."),
-             "%u Hz", "%u",
-             50, 3000, 50, settings.max_frequency);
-  SetExpertRow(MAX_FREQUENCY);
-
-  AddSpacer();
-  SetExpertRow(SPACER2);
-
-  AddFloat(_("Deadband min. lift"),
-           _("Below this lift threshold the vario will start to play sounds if the 'Deadband' feature is enabled."),
-           "%.1f %s", "%.1f",
-           Units::ToUserVSpeed(-5), 0,
-           GetUserVerticalSpeedStep(), false, UnitGroup::VERTICAL_SPEED,
-           settings.min_dead);
-  SetExpertRow(DEAD_BAND_MIN);
-  DataFieldFloat &db_min = (DataFieldFloat &)GetDataField(DEAD_BAND_MIN);
-  db_min.SetFormat(GetUserVerticalSpeedFormat(false, true));
-
-  AddFloat(_("Deadband max. lift"),
-           _("Above this lift threshold the vario will start to play sounds if the 'Deadband' feature is enabled."),
-           "%.1f %s", "%.1f",
-           0, Units::ToUserVSpeed(2),
-           GetUserVerticalSpeedStep(), false, UnitGroup::VERTICAL_SPEED,
-           settings.max_dead);
-  SetExpertRow(DEAD_BAND_MAX);
-  DataFieldFloat &db_max = (DataFieldFloat &)GetDataField(DEAD_BAND_MAX);
-  db_max.SetFormat(GetUserVerticalSpeedFormat(false, true));
+  const Unit unit = Units::GetUserUnitByGroup(UnitGroup::VERTICAL_SPEED);
+  DataFieldFloat df("%.1f", "%.1f %s", min_user, max_user,
+                    Units::ToUserUnit(sys_value, unit),
+                    GetUserVerticalSpeedStep(), false);
+  df.SetUnits(Units::GetUnitName(unit));
+  df.SetFormat(GetUserVerticalSpeedFormat(false, true));
+  return df;
 }
 
-bool
-AudioVarioConfigPanel::Save(bool &changed) noexcept
+static void
+AddDeadband(GroupedListWidget &list, GroupedListWidget *page,
+            const char *caption, const char *help,
+            double min_user, double max_user, double &value) noexcept
 {
-  if (!AudioVarioGlue::HaveAudioVario())
-    return true;
-
-  auto &settings = CommonInterface::SetUISettings().sound.vario;
-
-  changed |= SaveValue(ENABLED, ProfileKeys::SoundAudioVario,
-                       settings.enabled);
-
-  changed |= SaveValueInteger(VOLUME, ProfileKeys::SoundVolume,
-                              settings.volume);
-
-  changed |= SaveValueEnum(SWITCHING_MODE, ProfileKeys::VarioSoundSwitchingMode,
-                           settings.switching_mode);
-
-  changed |= SaveValue(DEAD_BAND_ENABLED, ProfileKeys::VarioDeadBandEnabled,
-                       settings.dead_band_enabled);
-
-  changed |= SaveValueInteger(MIN_FREQUENCY, ProfileKeys::VarioMinFrequency,
-                              settings.min_frequency);
-
-  changed |= SaveValueInteger(ZERO_FREQUENCY, ProfileKeys::VarioZeroFrequency,
-                              settings.zero_frequency);
-
-  changed |= SaveValueInteger(MAX_FREQUENCY, ProfileKeys::VarioMaxFrequency,
-                              settings.max_frequency);
-
-  changed |= SaveValue(DEAD_BAND_MIN, UnitGroup::VERTICAL_SPEED,
-                       ProfileKeys::VarioDeadBandMin, settings.min_dead);
-
-  changed |= SaveValue(DEAD_BAND_MAX, UnitGroup::VERTICAL_SPEED,
-                       ProfileKeys::VarioDeadBandMax, settings.max_dead);
-
-  return true;
+  GroupedListWidget::ItemOptions options;
+  options.help = help;
+  options.expert = true;
+  options.value_callback =
+    [min_user, max_user, &value](GroupedListWidget::ValueState &state) {
+      state.text = MakeDeadband(min_user, max_user, value).GetAsDisplayString();
+    };
+  list.AddValue(caption, [page, caption, help, min_user, max_user, &value] {
+    auto df = MakeDeadband(min_user, max_user, value);
+    const double old_user = df.GetValue();
+    if (!EditDataFieldDialog(caption, df, help))
+      return;
+    if (std::fabs(df.GetValue() - old_user) < df.GetStep() / 100)
+      return;
+    value = Units::ToSysUnit(df.GetValue(), Units::GetUserUnitByGroup(UnitGroup::VERTICAL_SPEED));
+    page->UpdateValues();
+  }, std::move(options));
 }
 
 std::unique_ptr<Widget>
 CreateAudioVarioConfigPanel()
 {
-  return std::make_unique<AudioVarioConfigPanel>();
+  auto list = std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  if (!AudioVarioGlue::HaveAudioVario())
+    return list;
+
+  const auto &settings = CommonInterface::GetUISettings().sound.vario;
+
+  struct Fields {
+    bool enabled;
+    int volume;
+    VarioSoundSwitchingMode switching_mode;
+    bool dead_band_enabled;
+    int min_frequency;
+    int zero_frequency;
+    int max_frequency;
+    double min_dead;
+    double max_dead;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    settings.enabled,
+    settings.volume,
+    settings.switching_mode,
+    settings.dead_band_enabled,
+    static_cast<int>(settings.min_frequency),
+    static_cast<int>(settings.zero_frequency),
+    static_cast<int>(settings.max_frequency),
+    settings.min_dead,
+    settings.max_dead,
+  });
+
+  auto list_page = list.get();
+  list->AddGroup(nullptr);
+  list->AddSwitch(_("Audio Vario"),
+                  _("Emulate the sound of an electronic vario."),
+                  fields->enabled);
+  list->AddInteger(_("Volume"), _("The audio vario sound volume."),
+                   "%u %%", "%u", 0, 100, 1, fields->volume);
+  list->AddEnum(C_("Setting", "Mode switching"),
+                _("Choose whether the audio vario stays in manual mode or switches automatically between Vario in circling and STF in cruise. Manual mode starts in Vario after each restart and can be changed by external input events. In the built-in simulator, STF audio needs valid airspeed and total-energy vario input; without those, manual STF is silent and auto cruise falls back to vario."),
+                switching_modes, fields->switching_mode);
+  list->AddSwitch(_("Enable Deadband"),
+                  _("Mute the audio output in when the current lift is in a " "certain range around zero"),
+                  fields->dead_band_enabled);
+  list->AddInteger(_("Min. Frequency"),
+                   _("The tone frequency that is played at maximum sink rate."),
+                   "%u Hz", "%u", 50, 3000, 50, fields->min_frequency, true);
+  list->AddInteger(_("Zero Frequency"),
+                   _("The tone frequency that is played at zero climb rate."),
+                   "%u Hz", "%u", 50, 3000, 50, fields->zero_frequency, true);
+  list->AddInteger(_("Max. Frequency"),
+                   _("The tone frequency that is played at maximum climb rate."),
+                   "%u Hz", "%u", 50, 3000, 50, fields->max_frequency, true);
+  AddDeadband(*list, list_page, _("Deadband min. lift"),
+              _("Below this lift threshold the vario will start to play sounds if the 'Deadband' feature is enabled."),
+              Units::ToUserVSpeed(-5), 0, fields->min_dead);
+  AddDeadband(*list, list_page, _("Deadband max. lift"),
+              _("Above this lift threshold the vario will start to play sounds if the 'Deadband' feature is enabled."),
+              0, Units::ToUserVSpeed(2), fields->max_dead);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    auto &settings = CommonInterface::SetUISettings().sound.vario;
+
+    ConfigPanel::CommitSetting(changed, settings.enabled, fields->enabled,
+                               ProfileKeys::SoundAudioVario);
+
+    if (fields->volume >= 0)
+      ConfigPanel::CommitSetting(changed, settings.volume,
+                                 static_cast<uint8_t>(fields->volume),
+                                 ProfileKeys::SoundVolume);
+    ConfigPanel::CommitSetting(changed, settings.switching_mode,
+                               fields->switching_mode,
+                               ProfileKeys::VarioSoundSwitchingMode);
+    ConfigPanel::CommitSetting(changed, settings.dead_band_enabled,
+                               fields->dead_band_enabled,
+                               ProfileKeys::VarioDeadBandEnabled);
+    auto hz = [&](unsigned &dest, int value, std::string_view key) {
+      if (value >= 0)
+        ConfigPanel::CommitSetting(changed, dest,
+                                   static_cast<unsigned>(value), key);
+    };
+    hz(settings.min_frequency, fields->min_frequency,
+       ProfileKeys::VarioMinFrequency);
+    hz(settings.zero_frequency, fields->zero_frequency,
+       ProfileKeys::VarioZeroFrequency);
+    hz(settings.max_frequency, fields->max_frequency,
+       ProfileKeys::VarioMaxFrequency);
+    ConfigPanel::CommitSetting(changed, settings.min_dead, fields->min_dead,
+                               ProfileKeys::VarioDeadBandMin);
+    ConfigPanel::CommitSetting(changed, settings.max_dead, fields->max_dead,
+                               ProfileKeys::VarioDeadBandMax);
+    return true;
+  });
+  return list;
 }
