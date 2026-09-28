@@ -2,67 +2,63 @@
 // Copyright The XCSoar Project
 
 #include "HapticsConfigPanel.hpp"
-#include "Profile/Keys.hpp"
+#include "ConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
+#include "Hardware/Vibrator.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "Profile/Keys.hpp"
 #include "UIGlobals.hpp"
-#include "Hardware/Vibrator.hpp"
+#include "UISettings.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-class HapticsConfigPanel final : public RowFormWidget {
-public:
-  HapticsConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
+#include <memory>
 
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
+#ifdef HAVE_VIBRATOR
+static constexpr StaticEnumChoice haptic_feedback_list[] = {
+  { UISettings::HapticFeedback::DEFAULT, N_("OS settings") },
+  { UISettings::HapticFeedback::OFF, N_("Off") },
+  { UISettings::HapticFeedback::ON, N_("On") },
+  nullptr
 };
-
-void
-HapticsConfigPanel::Prepare(ContainerWindow &parent,
-                            const PixelRect &rc) noexcept
-{
-  const UISettings &settings = CommonInterface::GetUISettings();
-
-  RowFormWidget::Prepare(parent, rc);
-
-#ifdef HAVE_VIBRATOR
-  static constexpr StaticEnumChoice haptic_feedback_list[] = {
-    { UISettings::HapticFeedback::DEFAULT, N_("OS settings") },
-    { UISettings::HapticFeedback::OFF, N_("Off") },
-    { UISettings::HapticFeedback::ON, N_("On") },
-    nullptr
-  };
-
-  AddEnum(_("Haptic feedback"),
-          _("Determines if haptic feedback like vibration is used."),
-          haptic_feedback_list, (unsigned)settings.haptic_feedback);
-#else
-  (void)settings;
-  AddReadOnly(_("Haptic feedback"),
-              _("Haptic feedback is not available on this device."),
-              _("Unavailable"));
 #endif
-}
-
-bool
-HapticsConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-#ifdef HAVE_VIBRATOR
-  UISettings &settings = CommonInterface::SetUISettings();
-  changed |= SaveValueEnum(0, ProfileKeys::HapticFeedback,
-                           settings.haptic_feedback);
-#endif
-
-  _changed |= changed;
-  return true;
-}
 
 std::unique_ptr<Widget>
 CreateHapticsConfigPanel()
 {
-  return std::make_unique<HapticsConfigPanel>();
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
+
+#ifdef HAVE_VIBRATOR
+  const UISettings &settings = CommonInterface::GetUISettings();
+
+  struct Fields {
+    UISettings::HapticFeedback haptic_feedback;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    settings.haptic_feedback,
+  });
+
+  list->AddEnum(_("Haptic feedback"),
+                _("Determines if haptic feedback like vibration is used."),
+                haptic_feedback_list, fields->haptic_feedback);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    UISettings &settings = CommonInterface::SetUISettings();
+    ConfigPanel::CommitSetting(changed, settings.haptic_feedback,
+                               fields->haptic_feedback,
+                               ProfileKeys::HapticFeedback);
+    return true;
+  });
+#else
+  list->AddValue(_("Haptic feedback"),
+                 _("Haptic feedback is not available on this device."),
+                 [](GroupedListWidget::ValueState &state) {
+                   state.text = _("Unavailable");
+                 });
+#endif
+
+  return list;
 }

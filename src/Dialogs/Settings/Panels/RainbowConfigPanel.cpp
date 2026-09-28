@@ -5,57 +5,68 @@
 
 #ifdef HAVE_HTTP
 
-#include "Profile/Keys.hpp"
-#include "Profile/Profile.hpp"
-#include "Weather/Settings.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "Dialogs/DataField.hpp"
+#include "Form/DataField/Password.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
+#include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
 #include "UIGlobals.hpp"
+#include "Weather/Settings.hpp"
+#include "Widget/GroupedListWidget.hpp"
+#include "util/StaticString.hxx"
+#include "util/TruncateString.hpp"
 
-enum ControlIndex {
-  RAINBOW_API_KEY,
-};
-
-class RainbowConfigPanel final : public RowFormWidget {
-public:
-  RainbowConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-RainbowConfigPanel::Prepare(ContainerWindow &parent,
-                            const PixelRect &rc) noexcept
-{
-  const auto &settings = CommonInterface::GetComputerSettings().weather;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  AddPassword(C_("Setting", "Rainbow API key"),
-              _("API token from the Rainbow.ai developer portal."),
-              settings.rainbow.api_key);
-}
-
-bool
-RainbowConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-  auto &settings = CommonInterface::SetComputerSettings().weather;
-
-  changed |= SaveValue(RAINBOW_API_KEY, ProfileKeys::RainbowApiKey,
-                       settings.rainbow.api_key);
-
-  _changed |= changed;
-  return true;
-}
+#include <memory>
 
 std::unique_ptr<Widget>
 CreateRainbowConfigPanel()
 {
-  return std::make_unique<RainbowConfigPanel>();
+  const auto &settings = CommonInterface::GetComputerSettings().weather;
+
+  struct Fields {
+    StaticString<128> api_key;
+  };
+
+  auto fields = std::make_shared<Fields>();
+  fields->api_key = settings.rainbow.api_key;
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  auto *page = list.get();
+  list->AddGroup(nullptr);
+
+  const char *const help =
+    _("API token from the Rainbow.ai developer portal.");
+  list->AddValue(C_("Setting", "Rainbow API key"), help,
+                 [fields](GroupedListWidget::ValueState &state) {
+                   PasswordDataField df(fields->api_key.c_str());
+                   state.text = df.GetAsDisplayString();
+                 },
+                 [fields, page, help] {
+                   PasswordDataField df(fields->api_key.c_str());
+                   if (!EditDataFieldDialog(C_("Setting", "Rainbow API key"),
+                                            df, help))
+                     return;
+                   CopyTruncateString(fields->api_key.data(),
+                                      fields->api_key.capacity(),
+                                      df.GetValue());
+                   page->UpdateValues();
+                 });
+
+  list->SetSaveCallback([fields](bool &changed) {
+    auto &settings = CommonInterface::SetComputerSettings().weather;
+
+    if (settings.rainbow.api_key != fields->api_key) {
+      settings.rainbow.api_key = fields->api_key;
+      Profile::Set(ProfileKeys::RainbowApiKey, settings.rainbow.api_key.c_str());
+      changed = true;
+    }
+
+    return true;
+  });
+
+  return list;
 }
 
 #else

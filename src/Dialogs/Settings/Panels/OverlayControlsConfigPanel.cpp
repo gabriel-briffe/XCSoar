@@ -2,24 +2,19 @@
 // Copyright The XCSoar Project
 
 #include "OverlayControlsConfigPanel.hpp"
-#include "Profile/Keys.hpp"
-#include "Profile/Profile.hpp"
+#include "ConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
-#include "MainWindow.hpp"
 #include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "MainWindow.hpp"
+#include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
 #include "UIGlobals.hpp"
 #include "UISettings.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
 #include <cstdint>
-
-enum ControlIndex {
-  ShowMenuButton,
-  ShowZoomButton,
-  ShowQuickMenuButton,
-  TouchAreasTransparency,
-};
+#include <memory>
 
 enum class QuickMenuButtonMode : uint8_t {
   OFF,
@@ -82,90 +77,84 @@ ApplyQuickMenuButtonMode(UISettings &settings,
   }
 }
 
-class OverlayControlsConfigPanel final : public RowFormWidget {
-public:
-  OverlayControlsConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-OverlayControlsConfigPanel::Prepare(ContainerWindow &parent,
-                                    const PixelRect &rc) noexcept
-{
-  const UISettings &ui_settings = CommonInterface::GetUISettings();
-
-  RowFormWidget::Prepare(parent, rc);
-
-  AddBoolean(_("Show Menu button"), _("Show the Menu button"),
-             ui_settings.show_menu_button);
-  SetExpertRow(ShowMenuButton);
-  AddBoolean(_("Show Zoom button"), _("Show the Zoom button"),
-             ui_settings.show_zoom_button);
-  SetExpertRow(ShowZoomButton);
-  AddEnum(C_("Setting", "Show QuickMenu button"),
-          _("Show the QuickMenu button on the map, hide it, or keep an "
-            "invisible touch target."),
-          quick_menu_button_mode_list,
-          (unsigned)QuickMenuButtonModeFromSettings(ui_settings));
-  SetExpertRow(ShowQuickMenuButton);
-  AddEnum(C_("Setting", "Touch areas transparency"),
-          _("Pink markers for invisible map touch targets (QuickMenu when "
-            "transparent, compass, airspace, pan, bottom area).  0 % is "
-            "solid pink; 100 % hides the markers."),
-          touch_areas_transparency_list,
-          ui_settings.touch_areas_transparency);
-  SetExpertRow(TouchAreasTransparency);
-}
-
-bool
-OverlayControlsConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-  UISettings &ui_settings = CommonInterface::SetUISettings();
-
-  bool overlay_buttons_changed = false;
-  if (SaveValue(ShowMenuButton, ProfileKeys::ShowMenuButton,
-                ui_settings.show_menu_button))
-    overlay_buttons_changed = changed = true;
-  if (SaveValue(ShowZoomButton, ProfileKeys::ShowZoomButton,
-                ui_settings.show_zoom_button))
-    overlay_buttons_changed = changed = true;
-
-  {
-    const auto mode = (QuickMenuButtonMode)GetValueEnum(ShowQuickMenuButton);
-    const bool old_show = ui_settings.show_quickmenu_button;
-    const bool old_transparent = ui_settings.transparent_quickmenu_button;
-    ApplyQuickMenuButtonMode(ui_settings, mode);
-    if (ui_settings.show_quickmenu_button != old_show ||
-        ui_settings.transparent_quickmenu_button != old_transparent) {
-      Profile::Set(ProfileKeys::ShowQuickMenuButton,
-                   ui_settings.show_quickmenu_button);
-      Profile::Set(ProfileKeys::TransparentQuickMenuButton,
-                   ui_settings.transparent_quickmenu_button);
-      overlay_buttons_changed = changed = true;
-      CommonInterface::main_window->InvalidateMapOverlayButtons();
-    }
-  }
-
-  if (SaveValueEnum(TouchAreasTransparency,
-                    ProfileKeys::TouchAreasTransparency,
-                    ui_settings.touch_areas_transparency)) {
-    changed = true;
-    CommonInterface::main_window->InvalidateMapOverlayButtons();
-  }
-
-  if (overlay_buttons_changed)
-    CommonInterface::main_window->ReinitialiseMapOverlayButtons();
-
-  _changed |= changed;
-  return true;
-}
-
 std::unique_ptr<Widget>
 CreateOverlayControlsConfigPanel()
 {
-  return std::make_unique<OverlayControlsConfigPanel>();
+  const UISettings &ui_settings = CommonInterface::GetUISettings();
+
+  struct Fields {
+    bool show_menu_button;
+    bool show_zoom_button;
+    QuickMenuButtonMode quick_menu_button;
+    unsigned touch_areas_transparency;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    ui_settings.show_menu_button,
+    ui_settings.show_zoom_button,
+    QuickMenuButtonModeFromSettings(ui_settings),
+    ui_settings.touch_areas_transparency,
+  });
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
+  list->AddSwitch(_("Show Menu button"), _("Show the Menu button"),
+                  fields->show_menu_button, true);
+  list->AddSwitch(_("Show Zoom button"), _("Show the Zoom button"),
+                  fields->show_zoom_button, true);
+  list->AddEnum(C_("Setting", "Show QuickMenu button"),
+                _("Show the QuickMenu button on the map, hide it, or keep an "
+                  "invisible touch target."),
+                quick_menu_button_mode_list,
+                fields->quick_menu_button, true);
+  list->AddEnum(C_("Setting", "Touch areas transparency"),
+                _("Pink markers for invisible map touch targets (QuickMenu when "
+                  "transparent, compass, airspace, pan, bottom area).  0 % is "
+                  "solid pink; 100 % hides the markers."),
+                touch_areas_transparency_list,
+                fields->touch_areas_transparency, true);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    UISettings &ui_settings = CommonInterface::SetUISettings();
+
+    bool overlay_buttons_changed = false;
+
+    if (ConfigPanel::CommitSetting(changed, ui_settings.show_menu_button,
+                                   fields->show_menu_button,
+                                   ProfileKeys::ShowMenuButton))
+      overlay_buttons_changed = true;
+    if (ConfigPanel::CommitSetting(changed, ui_settings.show_zoom_button,
+                                   fields->show_zoom_button,
+                                   ProfileKeys::ShowZoomButton))
+      overlay_buttons_changed = true;
+
+    {
+      const bool old_show = ui_settings.show_quickmenu_button;
+      const bool old_transparent = ui_settings.transparent_quickmenu_button;
+      ApplyQuickMenuButtonMode(ui_settings, fields->quick_menu_button);
+      if (ui_settings.show_quickmenu_button != old_show ||
+          ui_settings.transparent_quickmenu_button != old_transparent) {
+        Profile::Set(ProfileKeys::ShowQuickMenuButton,
+                     ui_settings.show_quickmenu_button);
+        Profile::Set(ProfileKeys::TransparentQuickMenuButton,
+                     ui_settings.transparent_quickmenu_button);
+        overlay_buttons_changed = changed = true;
+        CommonInterface::main_window->InvalidateMapOverlayButtons();
+      }
+    }
+
+    if (ConfigPanel::CommitSetting(changed,
+                                   ui_settings.touch_areas_transparency,
+                                   fields->touch_areas_transparency,
+                                   ProfileKeys::TouchAreasTransparency))
+      CommonInterface::main_window->InvalidateMapOverlayButtons();
+
+    if (overlay_buttons_changed)
+      CommonInterface::main_window->ReinitialiseMapOverlayButtons();
+
+    return true;
+  });
+
+  return list;
 }

@@ -2,54 +2,17 @@
 // Copyright The XCSoar Project
 
 #include "TrafficSymbolsConfigPanel.hpp"
-#include "Profile/Keys.hpp"
+#include "ConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Listener.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "UIGlobals.hpp"
 #include "MapSettings.hpp"
+#include "Profile/Keys.hpp"
+#include "UIGlobals.hpp"
+#include "Widget/GroupedListWidget.hpp"
 #include "util/Macros.hpp"
 
-enum ControlIndex {
-  ENABLE_FLARM_MAP,
-  TRAFFIC_SYMBOL,
-  TRAFFIC_SYMBOL_STYLE,
-  FADE_TRAFFIC,
-  SKYLINES_TRAFFIC_MAP_MODE,
-};
-
-class TrafficSymbolsConfigPanel final
-  : public RowFormWidget, DataFieldListener {
-public:
-  TrafficSymbolsConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void ShowTrafficSymbolStyle(bool show);
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-
-private:
-  void OnModified(DataField &df) noexcept override;
-};
-
-void
-TrafficSymbolsConfigPanel::ShowTrafficSymbolStyle(bool show)
-{
-  SetRowVisible(TRAFFIC_SYMBOL_STYLE, show);
-}
-
-void
-TrafficSymbolsConfigPanel::OnModified(DataField &df) noexcept
-{
-  if (IsDataField(TRAFFIC_SYMBOL, df)) {
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    ShowTrafficSymbolStyle(TrafficSymbol(dfe.GetValue()) ==
-                           TrafficSymbol::AIRCRAFT_TYPE);
-  }
-}
+#include <memory>
 
 static constexpr StaticEnumChoice traffic_symbol_list[] = {
   { TrafficSymbol::ARROW, N_("Arrow"),
@@ -88,68 +51,72 @@ static constexpr StaticEnumChoice online_traffic_map_mode_list[] = {
   nullptr
 };
 
-void
-TrafficSymbolsConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
-                                   [[maybe_unused]] const PixelRect &rc) noexcept
-{
-  const MapSettings &settings_map = CommonInterface::GetMapSettings();
-
-  AddBoolean(_("FLARM Traffic"),
-             _("This enables the display of FLARM traffic on the map window."),
-             settings_map.show_flarm_on_map);
-
-  AddEnum(_("Traffic symbol"),
-          _("Determines how FLARM, ADS-B and online traffic is drawn on the map and the traffic radar."),
-          traffic_symbol_list, (unsigned)settings_map.traffic_symbol, this);
-
-  AddEnum(_("Traffic symbol style"),
-          _("How aircraft-type traffic symbols are coloured (halo and glyph)."),
-          traffic_symbol_style_list,
-          (unsigned)settings_map.traffic_symbol_style);
-
-  AddBoolean(_("Fade traffic"),
-             _("Keep showing traffic for a while after it has disappeared."),
-             settings_map.fade_traffic);
-
-  AddEnum(C_("Setting", "Online traffic on map"),
-          _("Show traffic from SkyLines and XCSoar Cloud on the map."),
-          online_traffic_map_mode_list,
-          (unsigned)settings_map.online_traffic_map_mode);
-
-  ShowTrafficSymbolStyle(settings_map.traffic_symbol ==
-                         TrafficSymbol::AIRCRAFT_TYPE);
-}
-
-bool
-TrafficSymbolsConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-  MapSettings &settings_map = CommonInterface::SetMapSettings();
-
-  changed |= SaveValue(ENABLE_FLARM_MAP, ProfileKeys::EnableFLARMMap,
-                       settings_map.show_flarm_on_map);
-
-  changed |= SaveValueEnum(TRAFFIC_SYMBOL, ProfileKeys::TrafficSymbol,
-                           settings_map.traffic_symbol);
-
-  changed |= SaveValueEnum(TRAFFIC_SYMBOL_STYLE,
-                           ProfileKeys::TrafficSymbolStyle,
-                           settings_map.traffic_symbol_style);
-
-  changed |= SaveValue(FADE_TRAFFIC, ProfileKeys::FadeTraffic,
-                       settings_map.fade_traffic);
-
-  changed |= SaveValueEnum(SKYLINES_TRAFFIC_MAP_MODE,
-                           ProfileKeys::OnlineTrafficMapMode,
-                           settings_map.online_traffic_map_mode);
-
-  _changed |= changed;
-  return true;
-}
-
 std::unique_ptr<Widget>
 CreateTrafficSymbolsConfigPanel()
 {
-  return std::make_unique<TrafficSymbolsConfigPanel>();
+  const MapSettings &settings_map = CommonInterface::GetMapSettings();
+
+  struct Fields {
+    bool show_flarm_on_map;
+    TrafficSymbol traffic_symbol;
+    AircraftTypeSymbolStyle traffic_symbol_style;
+    bool fade_traffic;
+    DisplayOnlineTrafficMapMode online_traffic_map_mode;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    settings_map.show_flarm_on_map,
+    settings_map.traffic_symbol,
+    settings_map.traffic_symbol_style,
+    settings_map.fade_traffic,
+    settings_map.online_traffic_map_mode,
+  });
+
+  const auto style_shown = [fields] {
+    return fields->traffic_symbol == TrafficSymbol::AIRCRAFT_TYPE;
+  };
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
+  list->AddSwitch(_("FLARM Traffic"),
+                  _("This enables the display of FLARM traffic on the map window."),
+                  fields->show_flarm_on_map);
+  list->AddEnum(_("Traffic symbol"),
+                _("Determines how FLARM, ADS-B and online traffic is drawn on the map and the traffic radar."),
+                traffic_symbol_list, fields->traffic_symbol);
+  list->AddEnum(_("Traffic symbol style"),
+                _("How aircraft-type traffic symbols are coloured (halo and glyph)."),
+                traffic_symbol_style_list,
+                fields->traffic_symbol_style, false, style_shown);
+  list->AddSwitch(_("Fade traffic"),
+                  _("Keep showing traffic for a while after it has disappeared."),
+                  fields->fade_traffic);
+  list->AddEnum(C_("Setting", "Online traffic on map"),
+                _("Show traffic from SkyLines and XCSoar Cloud on the map."),
+                online_traffic_map_mode_list,
+                fields->online_traffic_map_mode);
+
+  list->SetSaveCallback([fields](bool &changed) {
+    MapSettings &settings_map = CommonInterface::SetMapSettings();
+
+    ConfigPanel::CommitSetting(changed, settings_map.show_flarm_on_map,
+                               fields->show_flarm_on_map,
+                               ProfileKeys::EnableFLARMMap);
+    ConfigPanel::CommitSetting(changed, settings_map.traffic_symbol,
+                               fields->traffic_symbol,
+                               ProfileKeys::TrafficSymbol);
+    ConfigPanel::CommitSetting(changed, settings_map.traffic_symbol_style,
+                               fields->traffic_symbol_style,
+                               ProfileKeys::TrafficSymbolStyle);
+    ConfigPanel::CommitSetting(changed, settings_map.fade_traffic,
+                               fields->fade_traffic,
+                               ProfileKeys::FadeTraffic);
+    ConfigPanel::CommitSetting(changed, settings_map.online_traffic_map_mode,
+                               fields->online_traffic_map_mode,
+                               ProfileKeys::OnlineTrafficMapMode);
+    return true;
+  });
+
+  return list;
 }

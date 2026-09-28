@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright The XCSoar Project
 
+/* Still RowFormWidget: this page is a TwoWidgets composite
+   (page list + PageLayoutEditWidget editor with live overlay
+   detail rows).  A GroupedListWidget port needs a dedicated
+   design for the list/editor split, not a straight panel rewrite. */
+
 #include "PagesConfigPanel.hpp"
 #include "Dialogs/Message.hpp"
 #include "Look/DialogLook.hpp"
