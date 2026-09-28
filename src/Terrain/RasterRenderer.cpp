@@ -1332,6 +1332,21 @@ RasterRenderer::UploadRampTexture() noexcept
   ramp_texture_dirty = false;
 }
 
+/**
+ * Lat/lon UV on an axis-aligned DEM quad.  Texture space is linear in
+ * geographic coordinates; screen placement must use #GeoToScreen.
+ */
+[[gnu::pure]]
+static GeoPoint
+InterpolateGeoQuad(const GeoPoint &nw, const GeoPoint &ne,
+                   const GeoPoint &sw, const GeoPoint &se,
+                   double u, double v) noexcept
+{
+  const auto north = nw.Interpolate(ne, u);
+  const auto south = sw.Interpolate(se, u);
+  return north.Interpolate(south, v);
+}
+
 void
 RasterRenderer::DrawHillshadeQuad(const WindowProjection &projection,
                                   const GLTexture &height_tex,
@@ -1341,15 +1356,6 @@ RasterRenderer::DrawHillshadeQuad(const WindowProjection &projection,
                                   float alpha) const noexcept
 {
   assert(ramp_texture != nullptr);
-
-  const BulkPixelPoint vertices[] = {
-    projection.GeoToScreen(nw),
-    projection.GeoToScreen(ne),
-    projection.GeoToScreen(sw),
-    projection.GeoToScreen(se),
-  };
-
-  const ScopeVertexPointer vp(vertices);
 
   glActiveTexture(GL_TEXTURE0);
   const_cast<GLTexture &>(height_tex).Bind();
@@ -1363,16 +1369,6 @@ RasterRenderer::DrawHillshadeQuad(const WindowProjection &projection,
   const PixelSize size = height_tex.GetSize();
   const GLfloat x1 = GLfloat(size.width) / allocated.width;
   const GLfloat y1 = GLfloat(size.height) / allocated.height;
-  const GLfloat coord[] = {
-    0, 0,
-    x1, 0,
-    0, y1,
-    x1, y1,
-  };
-
-  glEnableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
-  glVertexAttribPointer(OpenGL::Attribute::TEXCOORD, 2, GL_FLOAT, GL_FALSE,
-                        0, coord);
 
   const unsigned q = std::max(1u, quantisation_effective);
   glUniform2f(OpenGL::hillshade_texel_step,
@@ -1393,11 +1389,52 @@ RasterRenderer::DrawHillshadeQuad(const WindowProjection &projection,
   glUniform1f(OpenGL::hillshade_contour_div,
               GLfloat(contour_div_for_draw));
 
+  /* One stretched quad warps under map rotation/scale.  Subdivide so
+     each cell corner is projected with GeoToScreen (same idea as
+     MapOverlayBitmap).  Same height texture; only placement changes. */
+  static constexpr unsigned MAX_STEPS = 16;
+  const unsigned steps = std::clamp((size.width + 127u) / 128u,
+                                    8u, MAX_STEPS);
+
+  BulkPixelPoint vertices[(MAX_STEPS + 1) * 2];
+  GLfloat coord[(MAX_STEPS + 1) * 2 * 2];
+
+  const ScopeVertexPointer vp(vertices);
+  glEnableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
+  glVertexAttribPointer(OpenGL::Attribute::TEXCOORD, 2, GL_FLOAT, GL_FALSE,
+                        0, coord);
+
+  const auto draw_strips = [&]() noexcept {
+    for (unsigned y = 0; y < steps; ++y) {
+      const double v0 = double(y) / steps;
+      const double v1 = double(y + 1) / steps;
+
+      unsigned i = 0;
+      for (unsigned x = 0; x <= steps; ++x) {
+        const double u = double(x) / steps;
+
+        vertices[i] = projection.GeoToScreen(
+          InterpolateGeoQuad(nw, ne, sw, se, u, v0));
+        coord[i * 2] = GLfloat(u) * x1;
+        coord[i * 2 + 1] = GLfloat(v0) * y1;
+        ++i;
+
+        vertices[i] = projection.GeoToScreen(
+          InterpolateGeoQuad(nw, ne, sw, se, u, v1));
+        coord[i * 2] = GLfloat(u) * x1;
+        coord[i * 2 + 1] = GLfloat(v1) * y1;
+        ++i;
+      }
+
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, (steps + 1) * 2);
+    }
+  };
+
   if (alpha < 1.0f) {
     const GLBlend blend(alpha);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    draw_strips();
   } else {
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    draw_strips();
   }
 
   glDisableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
