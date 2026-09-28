@@ -17,11 +17,14 @@
 
 #include <algorithm>
 
-ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
-                                 const Widget *extra_widget,
-                                 bool with_exit) noexcept
-  :main(rc)
+ArrowBarLayout
+LayoutArrowBar(const ButtonLook &look, PixelRect rc,
+               PixelSize extra_maximum, PixelSize extra_minimum,
+               bool with_exit) noexcept
 {
+  ArrowBarLayout bar;
+  bar.main = rc;
+
   const unsigned width = rc.GetWidth(), height = rc.GetHeight();
   const unsigned button_height = ::Layout::GetMaximumControlHeight();
 
@@ -47,59 +50,82 @@ ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
 
     unsigned left_column_width = std::max(chrome_buttons_width,
                                           arrow_buttons_width);
-    if (extra_widget != nullptr) {
-      const auto max_size = extra_widget->GetMaximumSize();
-      if (max_size.width > left_column_width)
-        left_column_width = max_size.width;
-    }
+    if (extra_maximum.width > left_column_width)
+      left_column_width = extra_maximum.width;
 
-    auto left_column_rect = main.CutLeftSafe(left_column_width + 2 * margin);
+    auto left_column_rect =
+      bar.main.CutLeftSafe(left_column_width + 2 * margin);
     left_column_rect.Grow(-margin);
 
     /* Back (and optional Close) on the bottom left */
 
     auto bottom = left_column_rect.CutBottomSafe(button_height);
     if (with_exit)
-      std::tie(close_button, exit_button) = bottom.VerticalSplit();
+      std::tie(bar.close, bar.exit) = bottom.VerticalSplit();
     else
-      close_button = bottom;
+      bar.close = bottom;
 
     /* previous/next buttons above the close button */
 
-    auto previous_next_buttons = left_column_rect.CutBottomSafe(button_height);
+    auto previous_next_buttons =
+      left_column_rect.CutBottomSafe(button_height);
 
-    std::tie(previous_button, next_button) = previous_next_buttons.VerticalSplit();
+    std::tie(bar.previous, bar.next) =
+      previous_next_buttons.VerticalSplit();
 
     /* the remaining area is "extra" */
 
-    extra = left_column_rect;
+    bar.extra = left_column_rect;
   } else {
     /* portrait */
 
-    auto bottom_row_rect = main.CutBottomSafe(button_height + 2 * margin);
+    auto bottom_row_rect =
+      bar.main.CutBottomSafe(button_height + 2 * margin);
     bottom_row_rect.Grow(-margin);
 
     /* buttons distributed on the bottom line */
 
     const auto [a, b] = bottom_row_rect.VerticalSplit();
 
-    std::tie(previous_button, next_button) = a.VerticalSplit();
+    std::tie(bar.previous, bar.next) = a.VerticalSplit();
     if (with_exit)
-      std::tie(close_button, exit_button) = b.VerticalSplit();
+      std::tie(bar.close, bar.exit) = b.VerticalSplit();
     else
-      close_button = b;
+      bar.close = b;
 
     /* "extra" gets another row, as long as it asks for room */
 
-    if (extra_widget != nullptr &&
-        extra_widget->GetMinimumSize().height > 0) {
-      extra = main.BottomAligned(button_height);
-      main = rc.RemainingAboveSafe(extra);
+    if (extra_minimum.height > 0) {
+      bar.extra = bar.main.BottomAligned(button_height);
+      bar.main = rc.RemainingAboveSafe(bar.extra);
     } else
       /* an empty rectangle, so that the widget is still placed
          somewhere */
-      extra = main.BottomAligned(0);
+      bar.extra = bar.main.BottomAligned(0);
   }
+
+  return bar;
+}
+
+ArrowPagerWidget::Layout::Layout(const ButtonLook &look, PixelRect rc,
+                                 const Widget *extra_widget,
+                                 bool with_exit) noexcept
+{
+  const PixelSize extra_maximum = extra_widget != nullptr
+    ? extra_widget->GetMaximumSize()
+    : PixelSize(0, 0);
+  const PixelSize extra_minimum = extra_widget != nullptr
+    ? extra_widget->GetMinimumSize()
+    : PixelSize(0, 0);
+
+  const auto bar = LayoutArrowBar(look, rc, extra_maximum, extra_minimum,
+                                  with_exit);
+  previous_button = bar.previous;
+  next_button = bar.next;
+  close_button = bar.close;
+  exit_button = bar.exit;
+  main = bar.main;
+  extra = bar.extra;
 }
 
 PixelSize

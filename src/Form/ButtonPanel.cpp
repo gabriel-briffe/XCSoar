@@ -2,6 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "Form/ButtonPanel.hpp"
+#include "Widget/ArrowPagerWidget.hpp"
 #include "Renderer/ButtonRenderer.hpp"
 #include "Renderer/TextButtonRenderer.hpp"
 #include "Renderer/SymbolButtonRenderer.hpp"
@@ -297,6 +298,25 @@ PixelRect
 ButtonPanel::BottomLayout() noexcept
 {
   return BottomLayout(parent.GetClientRect());
+}
+
+PixelRect
+ButtonPanel::BottomArrowLayout(PixelRect rc) noexcept
+{
+  assert(buttons.size() == 3);
+
+  const auto bar = LayoutArrowBar(look, rc, PixelSize(0, 0),
+                                  PixelSize(0, 0), false);
+  buttons[0]->Move(bar.previous);
+  buttons[1]->Move(bar.next);
+  buttons[2]->Move(bar.close);
+  return bar.main;
+}
+
+PixelRect
+ButtonPanel::BottomArrowLayout() noexcept
+{
+  return BottomArrowLayout(parent.GetClientRect());
 }
 
 Button *

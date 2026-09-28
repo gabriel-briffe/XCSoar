@@ -5,12 +5,34 @@
 
 #include "PagerWidget.hpp"
 #include "Form/Button.hpp"
+#include "ui/dim/Size.hpp"
 
 #include <cassert>
 #include <functional>
 #include <memory>
 
 struct ButtonLook;
+
+/**
+ * The button bar shared by the configuration pages and the tiled
+ * menu.  Portrait puts it on the bottom: the arrows share the left
+ * half and Close takes the right half.  Landscape puts it in a
+ * column on the left: the arrows side by side, Close beneath them.
+ *
+ * @param extra_maximum, extra_minimum the size of an optional widget
+ * in the leftover of that bar; zero when there is none
+ * @param with_exit a second Close button beside Back
+ */
+struct ArrowBarLayout {
+  PixelRect previous, next, close, exit;
+  PixelRect main, extra;
+};
+
+[[nodiscard]]
+ArrowBarLayout
+LayoutArrowBar(const ButtonLook &look, PixelRect rc,
+               PixelSize extra_maximum, PixelSize extra_minimum,
+               bool with_exit) noexcept;
 
 /**
  * A wrapper for #PagerWidget that adds arrow buttons on the

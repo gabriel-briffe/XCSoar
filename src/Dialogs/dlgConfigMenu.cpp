@@ -1072,7 +1072,7 @@ public:
     if (IsAutoSize())
       AutoSize();
     else
-      widget.Move(buttons.BottomLayout());
+      widget.Move(buttons.BottomArrowLayout());
 
     widget.Show();
     int result = WndForm::ShowModal();
@@ -1085,7 +1085,7 @@ protected:
     WndForm::OnResize(new_size);
     if (IsAutoSize())
       return;
-    widget.Move(buttons.BottomLayout());
+    widget.Move(buttons.BottomArrowLayout());
   }
 };
 

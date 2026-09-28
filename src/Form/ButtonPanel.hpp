@@ -126,6 +126,13 @@ public:
   PixelRect BottomLayout(PixelRect rc) noexcept;
   PixelRect BottomLayout() noexcept;
 
+  /**
+   * Three buttons laid out by LayoutArrowBar(): a bottom row in
+   * portrait, a column on the left in landscape.
+   */
+  PixelRect BottomArrowLayout(PixelRect rc) noexcept;
+  PixelRect BottomArrowLayout() noexcept;
+
   void ShowAll() noexcept;
   void HideAll() noexcept;
 
