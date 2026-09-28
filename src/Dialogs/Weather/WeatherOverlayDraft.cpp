@@ -97,6 +97,18 @@ State::IsDirty() const noexcept
   return false;
 }
 
+bool
+State::CanAddPage() const noexcept
+{
+  const auto &settings = CommonInterface::GetUISettings().pages;
+  const bool valid_overlay =
+    draft.overlay != PageLayout::Overlay::NONE &&
+    draft.overlay != PageLayout::Overlay::MAX &&
+    (draft.overlay != PageLayout::Overlay::SKYSIGHT ||
+     draft.UsesSkySightOverlay());
+  return valid_overlay && settings.n_pages < PageSettings::MAX_PAGES;
+}
+
 void
 State::SyncButtons(Button *apply_button, Button *add_button) const noexcept
 {

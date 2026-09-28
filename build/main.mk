@@ -20,6 +20,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/CoDialog.cpp \
 	$(SRC)/Dialogs/JobDialog.cpp \
 	$(SRC)/Dialogs/WidgetDialog.cpp \
+	$(SRC)/Dialogs/WidgetDialogFloating.cpp \
 	$(SRC)/Dialogs/GroupedListTestDialog.cpp \
 	$(SRC)/Dialogs/GroupedListMenuDialog.cpp \
 	$(SRC)/Dialogs/FileManager.cpp \
@@ -70,7 +71,6 @@ DIALOG_SOURCES = \
 	$(if $(filter y,$(HAVE_HTTP)),$(SRC)/Dialogs/Airspace/NOTAMList.cpp) \
 	$(SRC)/Dialogs/Settings/WindSettingsDialog.cpp \
 	$(SRC)/Dialogs/Settings/dlgBasicSettings.cpp \
-	$(SRC)/Dialogs/Settings/ConfigTileMenu.cpp \
 	$(SRC)/Dialogs/Settings/dlgConfiguration.cpp \
 	$(SRC)/Dialogs/Settings/dlgConfigInfoboxes.cpp \
 	$(SRC)/Dialogs/Traffic/TrafficList.cpp \
@@ -88,6 +88,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/DataField.cpp \
 	$(SRC)/Dialogs/ComboPicker.cpp \
 	$(SRC)/Dialogs/FilePicker.cpp \
+	$(SRC)/Dialogs/GroupedListPicker.cpp \
 	$(SRC)/Dialogs/EmptyDownloadList.cpp \
 	$(SRC)/Dialogs/MultiFilePicker.cpp \
 	$(SRC)/Dialogs/HelpDialog.cpp \
@@ -137,6 +138,7 @@ DIALOG_SOURCES = \
 	$(SRC)/Dialogs/Settings/Panels/OverlayControlsConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/LoggerConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/SoundsConfigPanel.cpp \
+	$(SRC)/Dialogs/Settings/Panels/ConfigListPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/MapDisplayConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/NetworkConfigPanel.cpp \
 	$(SRC)/Dialogs/Settings/Panels/PagesConfigPanel.cpp \

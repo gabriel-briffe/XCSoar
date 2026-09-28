@@ -2,68 +2,17 @@
 // Copyright The XCSoar Project
 
 #include "AirspaceConfigPanel.hpp"
-#include "ConfigPanel.hpp"
+#include "ConfigListPanel.hpp"
+#include "Airspace/AirspaceComputerSettings.hpp"
 #include "Dialogs/Airspace/Airspace.hpp"
-#include "Dialogs/DataField.hpp"
 #include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Time.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Math/Util.hpp"
 #include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
 #include "Renderer/AirspaceRendererSettings.hpp"
-#include "UIGlobals.hpp"
-#include "Units/Descriptor.hpp"
-#include "Units/Units.hpp"
 #include "UtilsSettings.hpp"
-#include "Widget/GroupedListWidget.hpp"
-#include "util/StaticString.hxx"
 
-#include <cmath>
-#include <functional>
-#include <memory>
-
-using namespace std::chrono;
-
-static void
-AddLinkedSwitch(GroupedListWidget &list, const char *caption,
-                const char *help, bool &field) noexcept
-{
-  GroupedListWidget::ItemOptions options;
-  options.toggle = true;
-  options.checked = field;
-  options.help = help;
-  list.AddItem(caption, [&list, &field] {
-    field = !field;
-    if (list.UpdateValues())
-      list.UpdateLayout();
-  }, options);
-}
-static void
-AddSeconds(GroupedListWidget &list, const char *caption,
-           const char *help, unsigned &value, bool expert,
-           std::function<bool()> shown) noexcept
-{
-  GroupedListWidget::ItemOptions options;
-  options.help = help;
-  options.expert = expert;
-  options.value_callback =
-    [&value, shown = std::move(shown)](GroupedListWidget::ValueState &state) {
-      DataFieldTime df(seconds{10}, seconds{1000}, seconds{value},
-                       seconds{5}, nullptr);
-      state.text = df.GetAsDisplayString();
-      if (shown)
-        state.hidden = !shown();
-    };
-  list.AddValue(caption, [&list, caption, help, &value] {
-    DataFieldTime df(seconds{10}, seconds{1000}, seconds{value},
-                     seconds{5}, nullptr);
-    if (!EditDataFieldDialog(caption, df, help))
-      return;
-    value = static_cast<unsigned>(df.GetValue().count());
-    list.UpdateValues();
-  }, std::move(options));
-}
 static constexpr StaticEnumChoice as_display_list[] = {
   { AirspaceDisplayMode::ALLON, N_("All on"),
     N_("All airspaces are displayed.") },
@@ -97,184 +46,192 @@ static constexpr StaticEnumChoice as_label_selection_list[] = {
   nullptr
 };
 
-std::unique_ptr<Widget>
-CreateAirspaceConfigPanel()
+/**
+ * The display of the airspaces and the warnings about them.  The
+ * views of the filter and of the colours act on the settings and the
+ * profile themselves; Save() writes the values of this page one by
+ * one, so that it does not undo them.
+ */
+class AirspaceConfigPanel final : public ConfigListPanel {
+  AirspaceRendererSettings renderer;
+  AirspaceWarningConfig warnings;
+  bool enable_warnings, warning_dialog;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+AirspaceConfigPanel::LoadSettings() noexcept
 {
   const AirspaceComputerSettings &computer =
     CommonInterface::GetComputerSettings().airspace;
-  const AirspaceRendererSettings &renderer =
-    CommonInterface::GetMapSettings().airspace;
-  const UISettings &ui_settings = CommonInterface::GetUISettings();
 
-  struct Fields {
-    AirspaceDisplayMode altitude_mode;
-    AirspaceRendererSettings::LabelSelection label_selection;
-#ifdef HAVE_HTTP
-    bool show_notam_labels;
-#endif
-    double clip_altitude;
-    double margin;
-    bool warnings;
-    bool warning_dialog;
-    unsigned warning_time;
-    bool repetitive_sound;
-    unsigned acknowledge_time;
-    bool black_outline;
-    AirspaceRendererSettings::FillMode fill_mode;
-    StaticString<24> altitude_format;
-  };
+  renderer = CommonInterface::GetMapSettings().airspace;
+  warnings = computer.warnings;
+  enable_warnings = computer.enable_warnings;
+  warning_dialog =
+    CommonInterface::GetUISettings().enable_airspace_warning_dialog;
+}
 
-  const Unit altitude_unit = Units::GetUserUnitByGroup(UnitGroup::ALTITUDE);
+void
+AirspaceConfigPanel::Fill() noexcept
+{
+  AddGroup();
 
-  auto fields = std::make_shared<Fields>(Fields{
-    renderer.altitude_mode,
-    renderer.label_selection,
-#ifdef HAVE_HTTP
-    renderer.show_notam_labels,
-#endif
-    Units::ToUserUnit(renderer.clip_altitude, altitude_unit),
-    Units::ToUserUnit(computer.warnings.altitude_warning_margin,
-                      altitude_unit),
-    computer.enable_warnings,
-    ui_settings.enable_airspace_warning_dialog,
-    computer.warnings.warning_time.count(),
-    computer.warnings.repetitive_sound,
-    computer.warnings.acknowledgement_time.count(),
-    renderer.black_outline,
-    renderer.fill_mode,
-    {},
-  });
-  fields->altitude_format.Format("%%.0f %s",
-                                 Units::GetUnitName(altitude_unit));
+  AddEnumItem(_("Airspace display"),
+              _("Controls filtering of airspace for display and warnings. The airspace filter button also allows filtering of display and warnings independently for each airspace class."),
+              as_display_list, renderer.altitude_mode);
 
-  const auto warnings_shown = [fields] { return fields->warnings; };
-  const char *const altitude_format = fields->altitude_format.c_str();
+  if (renderer.altitude_mode == AirspaceDisplayMode::CLIP)
+    AddAltitudeItem(_("Clip altitude"),
+                    _("For clip airspace mode, this is the altitude below which airspace is displayed."),
+                    0, 20000, 100, renderer.clip_altitude);
 
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  list->AddGroup(nullptr);
-  list->AddEnum(_("Airspace display"),
-                _("Controls filtering of airspace for display and warnings. The airspace filter button also allows filtering of display and warnings independently for each airspace class."),
-                as_display_list, fields->altitude_mode);
-  list->AddEnum(_("Label visibility"),
+  if (renderer.altitude_mode == AirspaceDisplayMode::AUTO ||
+      renderer.altitude_mode == AirspaceDisplayMode::ALLBELOW)
+    AddAltitudeItem(_("Margin"),
+                    _("For auto and all below airspace mode, this is the altitude above/below which airspace is included."),
+                    0, 10000, 100, warnings.altitude_warning_margin);
+
+  if (IsExpert()) {
+    AddEnumItem(_("Label visibility"),
                 _("Determines what labels are displayed."),
-                as_label_selection_list, fields->label_selection, true);
+                as_label_selection_list, renderer.label_selection);
 
 #ifdef HAVE_HTTP
-  list->AddSwitch(_("Show NOTAM labels"),
+    AddToggleItem(_("Show NOTAM labels"),
                   _("Show brief NOTAM text labels on the map when zoomed in sufficiently."),
-                  fields->show_notam_labels, true);
+                  renderer.show_notam_labels);
 #endif
+  }
 
-  list->AddFloat(_("Clip altitude"),
-                 _("For clip airspace mode, this is the altitude below which airspace is displayed."),
-                 altitude_format, "%.0f", 0, 20000, 100, false,
-                 fields->clip_altitude, false,
-                 [fields] {
-                   return fields->altitude_mode == AirspaceDisplayMode::CLIP;
-                 });
-  list->AddFloat(_("Margin"),
-                 _("For auto and all below airspace mode, this is the altitude above/below which airspace is included."),
-                 altitude_format, "%.0f", 0, 10000, 100, false,
-                 fields->margin, false,
-                 [fields] {
-                   return fields->altitude_mode == AirspaceDisplayMode::AUTO
-                     || fields->altitude_mode ==
-                        AirspaceDisplayMode::ALLBELOW;
-                 });
-  AddLinkedSwitch(*list, _("Warnings"),
-                  _("Enable/disable all airspace warnings."),
-                  fields->warnings);
-  list->AddSwitch(_("Warnings dialog"),
+  /* the display and the warnings of each class */
+  AddGroup();
+
+  AddItem(_("Filter"), [](){
+    dlgAirspaceShowModal(false);
+  }, {.chevron = true});
+
+  AddItem(_("Colours"), [](){
+    dlgAirspaceShowModal(true);
+  }, {.chevron = true});
+
+  AddGroup();
+
+  AddToggleItem(_("Warnings"), _("Enable/disable all airspace warnings."),
+                enable_warnings);
+
+  if (enable_warnings && IsExpert()) {
+    AddToggleItem(_("Warnings dialog"),
                   _("Enable/disable displaying airspaces warnings dialog."),
-                  fields->warning_dialog, true, warnings_shown);
-  AddSeconds(*list, _("Warning time"),
-             _("This is the time before an airspace incursion is estimated at which the system will warn the pilot."),
-             fields->warning_time, true, warnings_shown);
-  list->AddSwitch(_("Repetitive sound"),
+                  warning_dialog);
+
+    AddDurationItem(_("Warning time"),
+                    _("This is the time before an airspace incursion is estimated at which the system will warn the pilot."),
+                    10, 1000, 5, warnings.warning_time);
+
+    AddToggleItem(_("Repetitive sound"),
                   _("Enable/disable repetitive warning sound when airspaces warnings dialog is displayed."),
-                  fields->repetitive_sound, true, warnings_shown);
-  AddSeconds(*list, _("Acknowledge time"),
-             _("This is the time period in which an acknowledged airspace warning will not be repeated."),
-             fields->acknowledge_time, true, warnings_shown);
-  list->AddSwitch(_("Use black outline"),
+                  warnings.repetitive_sound);
+
+    AddDurationItem(_("Acknowledge time"),
+                    _("This is the time period in which an acknowledged airspace warning will not be repeated."),
+                    10, 1000, 5, warnings.acknowledgement_time);
+  }
+
+  if (IsExpert()) {
+    AddGroup();
+
+    AddToggleItem(_("Use black outline"),
                   _("Draw a black outline around each airspace rather than the airspace color."),
-                  fields->black_outline, true);
-  list->AddEnum(_("Airspace fill mode"),
+                  renderer.black_outline);
+
+    AddEnumItem(_("Airspace fill mode"),
                 _("Specifies the mode for filling the airspace area."),
-                as_fill_mode_list, fields->fill_mode, true);
+                as_fill_mode_list, renderer.fill_mode);
+  }
+}
 
-  list->SetVisibilityCallback([](bool visible) {
-    if (visible) {
-      ConfigPanel::BorrowExtraButton(1, _("Colours"),
-                                     [] { dlgAirspaceShowModal(true); });
-      ConfigPanel::BorrowExtraButton(2, _("Filter"),
-                                     [] { dlgAirspaceShowModal(false); });
-    } else {
-      ConfigPanel::ReturnExtraButton(1);
-      ConfigPanel::ReturnExtraButton(2);
-    }
-  });
-  list->SetSaveCallback([fields](bool &changed) {
-    AirspaceComputerSettings &computer =
-      CommonInterface::SetComputerSettings().airspace;
-    AirspaceRendererSettings &renderer =
-      CommonInterface::SetMapSettings().airspace;
-    UISettings &ui_settings = CommonInterface::SetUISettings();
-    const Unit unit = Units::GetUserUnitByGroup(UnitGroup::ALTITUDE);
+bool
+AirspaceConfigPanel::Save(bool &_changed) noexcept
+{
+  bool changed = false;
 
-    changed |= ConfigPanel::CommitSetting(
-      changed, renderer.altitude_mode, fields->altitude_mode,
-      ProfileKeys::AltMode);
-    changed |= ConfigPanel::CommitSetting(
-      changed, renderer.label_selection, fields->label_selection,
-      ProfileKeys::AirspaceLabelSelection);
+  AirspaceComputerSettings &computer =
+    CommonInterface::SetComputerSettings().airspace;
+  AirspaceRendererSettings &settings_renderer =
+    CommonInterface::SetMapSettings().airspace;
+  UISettings &ui_settings = CommonInterface::SetUISettings();
+
+  changed |= Profile::Update(ProfileKeys::AltMode,
+                             settings_renderer.altitude_mode,
+                             renderer.altitude_mode);
+
+  changed |= Profile::Update(ProfileKeys::AirspaceLabelSelection,
+                             settings_renderer.label_selection,
+                             renderer.label_selection);
+
 #ifdef HAVE_HTTP
-    changed |= ConfigPanel::CommitSetting(
-      changed, renderer.show_notam_labels, fields->show_notam_labels,
-      ProfileKeys::AirspaceShowNOTAMLabels);
+  changed |= Profile::Update(ProfileKeys::AirspaceShowNOTAMLabels,
+                             settings_renderer.show_notam_labels,
+                             renderer.show_notam_labels);
 #endif
-    if (std::fabs(fields->clip_altitude -
-                  Units::ToUserUnit(renderer.clip_altitude, unit)) >= 1.)
-      ConfigPanel::CommitSetting(
-        changed, renderer.clip_altitude,
-        static_cast<unsigned>(iround(Units::ToSysUnit(
-          fields->clip_altitude, unit))),
-        ProfileKeys::ClipAlt);
-    if (std::fabs(fields->margin -
-                  Units::ToUserUnit(
-                    computer.warnings.altitude_warning_margin, unit)) >= 1.)
-      ConfigPanel::CommitSetting(
-        changed, computer.warnings.altitude_warning_margin,
-        static_cast<unsigned>(iround(Units::ToSysUnit(fields->margin, unit))),
-        ProfileKeys::AltMargin);
-    changed |= ConfigPanel::CommitSetting(
-      changed, computer.enable_warnings, fields->warnings,
-      ProfileKeys::AirspaceWarning);
-    changed |= ConfigPanel::CommitSetting(
-      changed, ui_settings.enable_airspace_warning_dialog,
-      fields->warning_dialog, ProfileKeys::AirspaceWarningDialog);
-    if (ConfigPanel::CommitSetting(
-          changed, computer.warnings.warning_time,
-          AirspaceWarningConfig::Duration{fields->warning_time},
-          ProfileKeys::WarningTime))
-      require_restart = true;
-    changed |= ConfigPanel::CommitSetting(
-      changed, computer.warnings.repetitive_sound, fields->repetitive_sound,
-      ProfileKeys::RepetitiveSound);
-    if (ConfigPanel::CommitSetting(
-          changed, computer.warnings.acknowledgement_time,
-          AirspaceWarningConfig::Duration{fields->acknowledge_time},
-          ProfileKeys::AcknowledgementTime))
-      require_restart = true;
-    changed |= ConfigPanel::CommitSetting(
-      changed, renderer.black_outline, fields->black_outline,
-      ProfileKeys::AirspaceBlackOutline);
-    changed |= ConfigPanel::CommitSetting(
-      changed, renderer.fill_mode, fields->fill_mode,
-      ProfileKeys::AirspaceFillMode);
-    return true;
-  });
 
-  return list;
+  changed |= Profile::Update(ProfileKeys::ClipAlt,
+                             settings_renderer.clip_altitude,
+                             renderer.clip_altitude);
+
+  changed |= Profile::Update(ProfileKeys::AltMargin,
+                             computer.warnings.altitude_warning_margin,
+                             warnings.altitude_warning_margin);
+
+  changed |= Profile::Update(ProfileKeys::AirspaceWarning,
+                             computer.enable_warnings, enable_warnings);
+
+  changed |= Profile::Update(ProfileKeys::AirspaceWarningDialog,
+                             ui_settings.enable_airspace_warning_dialog,
+                             warning_dialog);
+
+  if (Profile::Update(ProfileKeys::WarningTime,
+                      computer.warnings.warning_time,
+                      warnings.warning_time)) {
+    changed = true;
+    require_restart = true;
+  }
+
+  changed |= Profile::Update(ProfileKeys::RepetitiveSound,
+                             computer.warnings.repetitive_sound,
+                             warnings.repetitive_sound);
+
+  if (Profile::Update(ProfileKeys::AcknowledgementTime,
+                      computer.warnings.acknowledgement_time,
+                      warnings.acknowledgement_time)) {
+    changed = true;
+    require_restart = true;
+  }
+
+  changed |= Profile::Update(ProfileKeys::AirspaceBlackOutline,
+                             settings_renderer.black_outline,
+                             renderer.black_outline);
+
+  changed |= Profile::Update(ProfileKeys::AirspaceFillMode,
+                             settings_renderer.fill_mode,
+                             renderer.fill_mode);
+
+  _changed |= changed;
+
+  return true;
+}
+
+std::unique_ptr<Widget>
+CreateAirspaceConfigPanel()
+{
+  return std::make_unique<AirspaceConfigPanel>();
 }

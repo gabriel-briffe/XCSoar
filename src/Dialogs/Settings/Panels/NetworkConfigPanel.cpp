@@ -42,6 +42,12 @@
 #include "net/IPv4Address.hxx"
 #endif
 
+/** The switches the platform offers on this page. */
+struct NetworkConfigToggles {
+  bool have_radio{false};
+  bool have_persist_wifi{false};
+};
+
 struct NetworkConfigState {
   NetState connectivity{NetState::UNKNOWN};
   StaticString<256> status{_("Unknown")};
@@ -138,64 +144,24 @@ GetBackendHelp() noexcept
 #endif
 }
 
-static bool
-PlatformHasRadio() noexcept
+static NetworkConfigToggles
+QueryPlatformToggles() noexcept
 {
-#if defined(KOBO)
-  return true;
-#elif defined(HAVE_LINUX_NET_WIFI)
-  try {
-    return HasLinuxWifiRadioToggle(QueryLinuxWifiBackendKind());
-  } catch (...) {
-    return false;
-  }
-#else
-  return false;
-#endif
-}
+  NetworkConfigToggles toggles;
 
-static void
-ApplyRadio(bool enabled, const std::function<void()> &refresh) noexcept
-{
 #if defined(KOBO)
-  try {
-    const bool success = enabled ? KoboWifiOn() : KoboWifiOff();
-    if (!success)
-      throw std::runtime_error{enabled
-        ? _("Failed to enable WiFi.")
-        : _("Failed to disable WiFi.")};
-  } catch (...) {
-    const auto message = WifiError::Format(std::current_exception());
-    ShowMessageBox(message.c_str(), _("Network"), MB_OK);
-  }
+  toggles.have_radio = true;
+  toggles.have_persist_wifi = true;
 #elif defined(HAVE_LINUX_NET_WIFI)
   try {
     const auto backend_kind = QueryLinuxWifiBackendKind();
-    if (backend_kind != LinuxWifiBackendKind::None)
-      SetLinuxWifiRadioEnabled(backend_kind, enabled);
+    toggles.have_radio = HasLinuxWifiRadioToggle(backend_kind);
   } catch (...) {
-    const auto message = WifiError::Format(std::current_exception());
-    ShowMessageBox(message.c_str(), _("Network"), MB_OK);
+    toggles.have_radio = false;
   }
-#else
-  (void)enabled;
 #endif
-  refresh();
-}
 
-static void
-ApplyPersistWifi(bool enabled, const std::function<void()> &refresh) noexcept
-{
-#if defined(KOBO)
-  if (!SetKoboWifiAutoOn(enabled)) {
-    ShowMessageBox(_("Failed to store the WiFi startup setting."),
-                   _("Network"), MB_OK);
-    refresh();
-  }
-#else
-  (void)enabled;
-  (void)refresh;
-#endif
+  return toggles;
 }
 
 static void
@@ -259,7 +225,8 @@ OpenPlatformWifiList(std::function<void()> refresh) noexcept
 }
 
 static void
-BuildPlatformState(NetworkConfigState &state, bool have_radio) noexcept
+BuildPlatformState(NetworkConfigState &state,
+                   const NetworkConfigToggles &toggles) noexcept
 {
 #if defined(KOBO)
   state.connectivity = GetNetState();
@@ -303,7 +270,7 @@ BuildPlatformState(NetworkConfigState &state, bool have_radio) noexcept
       state.ip = WifiBackendStatus::FormatIpAddress(status);
     }
 
-    if (have_radio) {
+    if (toggles.have_radio) {
       state.have_radio_enabled = true;
       state.radio_enabled = GetLinuxWifiRadioEnabled(backend_kind);
     }
@@ -330,116 +297,156 @@ BuildPlatformState(NetworkConfigState &state, bool have_radio) noexcept
   if (!ios_ip.empty())
     state.ip = ios_ip;
 #else
-  (void)have_radio;
-  state.backend = C_("Status", "Unavailable");
+  (void)toggles;
   state.status = _("In-app network settings are not available in this build.");
 #endif
 
 #if defined(KOBO) || defined(ANDROID) || defined(_WIN32) || (defined(__APPLE__) && TARGET_OS_IPHONE)
-  (void)have_radio;
+  (void)toggles;
 #endif
 }
 
+/** Turn the WiFi radio on or off; errors are shown to the user. */
 static void
-AddToggle(GroupedListWidget &list, unsigned index,
-          const char *caption, const char *help, bool checked,
-          std::function<void(bool enabled)> apply) noexcept
+SetPlatformRadio([[maybe_unused]] bool enabled) noexcept
 {
-  GroupedListWidget::ItemOptions options;
-  options.toggle = true;
-  options.checked = checked;
-  options.help = help;
-  list.AddItem(caption, [&list, index, apply = std::move(apply)] {
-    apply(list.IsItemChecked(index));
-  }, options);
+#if defined(KOBO)
+  try {
+    const bool success = enabled ? KoboWifiOn() : KoboWifiOff();
+    if (!success)
+      throw std::runtime_error{enabled
+        ? _("Failed to enable WiFi.")
+        : _("Failed to disable WiFi.")};
+  } catch (...) {
+    const auto message = WifiError::Format(std::current_exception());
+    ShowMessageBox(message.c_str(), _("Network"), MB_OK);
+  }
+#elif defined(HAVE_LINUX_NET_WIFI)
+  try {
+    const auto backend_kind = QueryLinuxWifiBackendKind();
+    if (backend_kind == LinuxWifiBackendKind::None)
+      return;
+
+    SetLinuxWifiRadioEnabled(backend_kind, enabled);
+  } catch (...) {
+    const auto message = WifiError::Format(std::current_exception());
+    ShowMessageBox(message.c_str(), _("Network"), MB_OK);
+  }
+#endif
+}
+
+/** Enable or disable WiFi at startup; errors are shown to the user. */
+static void
+SetPlatformAutoWifi([[maybe_unused]] bool enabled) noexcept
+{
+#if defined(KOBO)
+  if (!SetKoboWifiAutoOn(enabled))
+    ShowMessageBox(_("Failed to store the WiFi startup setting."),
+                   _("Network"), MB_OK);
+#endif
+}
+
+/**
+ * The network of the device: what it is connected to, and the
+ * switches of its WiFi.  The page is read again whenever it is
+ * shown or a switch was flipped.
+ */
+class NetworkConfigWidget final : public GroupedListWidget {
+  const NetworkConfigToggles toggles = QueryPlatformToggles();
+
+public:
+  NetworkConfigWidget() noexcept
+    :GroupedListWidget(UIGlobals::GetDialogLook()) {}
+
+private:
+  void Fill() noexcept;
+  void Refresh() noexcept;
+
+public:
+  /* virtual methods from class Widget */
+  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
+  void Show(const PixelRect &rc) noexcept override;
+};
+
+void
+NetworkConfigWidget::Fill() noexcept
+{
+  NetworkConfigState state;
+  BuildPlatformState(state, toggles);
+
+  AddGroup(_("Status"));
+
+  AddItem(_("Status"), {.value = state.status.c_str(),
+                        .value_below = true,
+                        .help = GetStatusHelp()});
+  AddItem(C_("Setting", "Connectivity"),
+          {.value = NetStateText::ToString(state.connectivity),
+           .help = _("Current network connectivity state.")});
+  AddItem(_("IP address"),
+          {.value = state.ip.c_str(),
+           .help = _("IPv4 address of the active WiFi interface.")});
+  AddItem(C_("Setting", "Backend"),
+          {.value = state.backend.c_str(), .help = GetBackendHelp()});
+
+  AddGroup();
+
+  if (toggles.have_radio) {
+    const unsigned item = GetItemCount();
+    AddItem(C_("Setting", "WiFi Enabled"), [this, item](){
+      SetPlatformRadio(IsItemChecked(item));
+      Refresh();
+    }, {.toggle = true,
+        .checked = state.have_radio_enabled && state.radio_enabled,
+#if defined(KOBO)
+        .help = _("Turns the Kobo WiFi interface on or off."),
+#endif
+    });
+  }
+
+  if (toggles.have_persist_wifi) {
+    const unsigned item = GetItemCount();
+    AddItem(C_("Setting", "Auto WiFi"), [this, item](){
+      SetPlatformAutoWifi(IsItemChecked(item));
+      Refresh();
+    }, {.toggle = true,
+        .checked = state.have_persist_wifi_enabled &&
+        state.persist_wifi_enabled,
+        .help = _("Enable WiFi automatically at startup.")});
+  }
+
+  AddButton(C_("Button", "WiFi List"), [this](){
+    OpenPlatformWifiList([this](){ Refresh(); });
+  });
+}
+
+void
+NetworkConfigWidget::Refresh() noexcept
+{
+  Clear();
+  Fill();
+  UpdateLayout();
+}
+
+void
+NetworkConfigWidget::Prepare(ContainerWindow &parent,
+                             const PixelRect &rc) noexcept
+{
+  Fill();
+
+  GroupedListWidget::Prepare(parent, rc);
+}
+
+void
+NetworkConfigWidget::Show(const PixelRect &rc) noexcept
+{
+  /* the connection may have changed since the last time */
+  Refresh();
+
+  GroupedListWidget::Show(rc);
 }
 
 std::unique_ptr<Widget>
 CreateNetworkConfigPanel()
 {
-  struct Fields {
-    NetworkConfigState state;
-    bool have_radio = false;
-    bool have_persist = false;
-    unsigned radio_index = 0;
-    unsigned persist_index = 0;
-  };
-
-  auto fields = std::make_shared<Fields>();
-  fields->have_radio = PlatformHasRadio();
-#if defined(KOBO)
-  fields->have_persist = true;
-#endif
-  BuildPlatformState(fields->state, fields->have_radio);
-
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  GroupedListWidget *page = list.get();
-
-  auto refresh = std::make_shared<std::function<void()>>();
-  *refresh = [fields, page] {
-    BuildPlatformState(fields->state, fields->have_radio);
-    page->UpdateValues();
-    if (fields->have_radio && fields->state.have_radio_enabled)
-      page->SetItemChecked(fields->radio_index, fields->state.radio_enabled);
-    if (fields->have_persist && fields->state.have_persist_wifi_enabled)
-      page->SetItemChecked(fields->persist_index,
-                           fields->state.persist_wifi_enabled);
-  };
-
-  list->AddGroup(nullptr);
-  list->AddValue(_("Status"), GetStatusHelp(),
-                 [fields](GroupedListWidget::ValueState &state) {
-                   state.text = fields->state.status.c_str();
-                 });
-  list->AddValue(C_("Setting", "Connectivity"),
-                 _("Current network connectivity state."),
-                 [fields](GroupedListWidget::ValueState &state) {
-                   state.text = NetStateText::ToString(fields->state.connectivity);
-                 });
-  list->AddValue(_("IP address"),
-                 _("IPv4 address of the active WiFi interface."),
-                 [fields](GroupedListWidget::ValueState &state) {
-                   state.text = fields->state.ip.c_str();
-                 });
-  list->AddValue(C_("Setting", "Backend"), GetBackendHelp(),
-                 [fields](GroupedListWidget::ValueState &state) {
-                   state.text = fields->state.backend.c_str();
-                 });
-
-  if (fields->have_radio) {
-    fields->radio_index = list->GetItemCount();
-    AddToggle(*list, fields->radio_index,
-              C_("Setting", "WiFi Enabled"),
-#if defined(KOBO)
-              _("Turns the Kobo WiFi interface on or off."),
-#else
-              nullptr,
-#endif
-              fields->state.radio_enabled,
-              [refresh](bool enabled) { ApplyRadio(enabled, *refresh); });
-  }
-
-  if (fields->have_persist) {
-    fields->persist_index = list->GetItemCount();
-    AddToggle(*list, fields->persist_index,
-              C_("Setting", "Auto WiFi"),
-              _("Enable WiFi automatically at startup."),
-              fields->state.persist_wifi_enabled,
-              [refresh](bool enabled) {
-                ApplyPersistWifi(enabled, *refresh);
-              });
-  }
-
-  list->AddButton(C_("Button", "WiFi List"), [refresh] {
-    OpenPlatformWifiList(*refresh);
-  });
-
-  list->SetVisibilityCallback([refresh](bool visible) {
-    if (visible)
-      (*refresh)();
-  });
-
-  (*refresh)();
-  return list;
+  return std::make_unique<NetworkConfigWidget>();
 }

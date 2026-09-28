@@ -2,48 +2,16 @@
 // Copyright The XCSoar Project
 
 #include "MapDisplayConfigPanel.hpp"
-#include "ConfigPanel.hpp"
-#include "Dialogs/ComboPicker.hpp"
+#include "ConfigListPanel.hpp"
 #include "Form/DataField/Enum.hpp"
+#include "Formatter/UserUnits.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "Profile/Keys.hpp"
-#include "UIGlobals.hpp"
-#include "Units/Descriptor.hpp"
+#include "Profile/Profile.hpp"
 #include "Units/Units.hpp"
-#include "Widget/GroupedListWidget.hpp"
-#include "util/StaticString.hxx"
 
 #include <cmath>
-#include <memory>
-template<typename T>
-static void
-AddLinkedEnum(GroupedListWidget &list, const char *caption,
-              const char *help, const StaticEnumChoice *choices,
-              T &value) noexcept
-{
-  GroupedListWidget::ItemOptions options;
-  options.help = help;
-  options.value_callback =
-    [choices, &value](GroupedListWidget::ValueState &state) {
-      state.text.clear();
-      for (auto i = choices; i->display_string != nullptr; ++i)
-        if (i->id == static_cast<unsigned>(value))
-          state.text = gettext(i->display_string);
-    };
-  list.AddValue(caption, [&list, caption, help, choices, &value] {
-    DataFieldEnum df;
-    df.EnableItemHelp(choices->help != nullptr);
-    df.AddChoices(choices);
-    df.SetValue(static_cast<unsigned>(value));
-    if (!ComboPicker(caption, df, help) ||
-        df.GetValue() == static_cast<unsigned>(value))
-      return;
-    value = static_cast<T>(df.GetValue());
-    if (list.UpdateValues())
-      list.UpdateLayout();
-  }, std::move(options));
-}
 
 static constexpr StaticEnumChoice orientation_list[] = {
   { MapOrientation::TRACK_UP, N_("Track up"),
@@ -68,107 +36,179 @@ static constexpr StaticEnumChoice shift_bias_list[] = {
   nullptr
 };
 
+/* the maximum auto zoom distance, in the unit of the user */
+static constexpr int AUTO_ZOOM_DISTANCE_MIN = 20;
+static constexpr int AUTO_ZOOM_DISTANCE_MAX = 250;
+static constexpr int AUTO_ZOOM_DISTANCE_STEP = 10;
+
+/**
+ * Let the user pick the maximum auto zoom distance, one choice per
+ * step in the unit of the user.
+ *
+ * @param value the distance in system units
+ * @return true if the value has changed
+ */
+static bool
+PickAutoZoomDistance(const char *caption, const char *help,
+                     double &value) noexcept
+{
+  constexpr unsigned n =
+    (AUTO_ZOOM_DISTANCE_MAX - AUTO_ZOOM_DISTANCE_MIN)
+    / AUTO_ZOOM_DISTANCE_STEP + 1;
+
+  BasicStringBuffer<char, 32> captions[n];
+  PickerChoice choices[n];
+  int current = -1;
+
+  const double user_value = Units::ToUserDistance(value);
+
+  for (unsigned i = 0; i < n; ++i) {
+    const int distance = AUTO_ZOOM_DISTANCE_MIN + AUTO_ZOOM_DISTANCE_STEP * i;
+    captions[i] = FormatUserDistance(Units::ToSysDistance(distance));
+    choices[i] = {captions[i].c_str()};
+
+    if (std::fabs(user_value - distance) < AUTO_ZOOM_DISTANCE_STEP / 2.)
+      current = i;
+  }
+
+  const int picked = PickChoice(caption, help, choices, current);
+  if (picked < 0 || picked == current)
+    return false;
+
+  value = Units::ToSysDistance(AUTO_ZOOM_DISTANCE_MIN
+                               + AUTO_ZOOM_DISTANCE_STEP * picked);
+  return true;
+}
+
+/**
+ * The orientation and the zoom of the map.  An item which opens the
+ * choice explains itself there; a switch explains itself here, while
+ * the cursor is on it.
+ */
+class MapDisplayConfigPanel final : public ConfigListPanel {
+  MapOrientation cruise_orientation, circling_orientation;
+  bool circle_zoom;
+  MapShiftBias map_shift_bias;
+  int glider_screen_position;
+  double max_auto_zoom_distance;
+  bool distinct_zoom;
+
+protected:
+  /* virtual methods from class ConfigListPanel */
+  void LoadSettings() noexcept override;
+  void Fill() noexcept override;
+
+public:
+  /* virtual methods from class Widget */
+  bool Save(bool &changed) noexcept override;
+};
+
+void
+MapDisplayConfigPanel::LoadSettings() noexcept
+{
+  const MapSettings &settings_map = CommonInterface::GetMapSettings();
+  const PageSettings &page_settings = CommonInterface::GetUISettings().pages;
+
+  cruise_orientation = settings_map.cruise_orientation;
+  circling_orientation = settings_map.circling_orientation;
+  circle_zoom = settings_map.circle_zoom_enabled;
+  map_shift_bias = settings_map.map_shift_bias;
+  glider_screen_position = settings_map.glider_screen_position;
+  max_auto_zoom_distance = settings_map.max_auto_zoom_distance;
+  distinct_zoom = page_settings.distinct_zoom;
+}
+
+void
+MapDisplayConfigPanel::Fill() noexcept
+{
+  AddGroup(_("Orientation"));
+
+  AddEnumItem(_("Cruise orientation"),
+              _("Determines how the screen is rotated with the glider"),
+              orientation_list, cruise_orientation);
+
+  AddEnumItem(_("Circling orientation"),
+              _("Determines how the screen is rotated with the glider while circling"),
+              orientation_list, circling_orientation);
+
+  /* the map is only shifted from the centre while it does not turn
+     with the glider */
+  if (IsExpert() &&
+      (cruise_orientation == MapOrientation::NORTH_UP ||
+       cruise_orientation == MapOrientation::WIND_UP))
+    AddEnumItem(_("Map shift reference"),
+                _("Determines what is used to shift the glider from the map center"),
+                shift_bias_list, map_shift_bias);
+
+  if (IsExpert())
+    AddPercentItem(_("Glider position offset"),
+                   _("Defines the location of the glider drawn on the screen in percent from the screen edge."),
+                   10, 50, 5, glider_screen_position);
+
+  AddGroup(_("Zoom"));
+
+  AddToggleItem(_("Circling zoom"),
+                _("If enabled, then the map will zoom in automatically when entering circling mode and zoom out automatically when leaving circling mode."),
+                circle_zoom);
+
+  if (IsExpert()) {
+    static constexpr const char *distance_help =
+      N_("The upper limit for auto zoom distance.");
+
+    AddItem(_("Max. auto zoom distance"), [this](){
+      if (PickAutoZoomDistance(_("Max. auto zoom distance"),
+                               gettext(distance_help),
+                               max_auto_zoom_distance))
+        Refresh();
+    }, {.value = FormatUserDistance(max_auto_zoom_distance).c_str(),
+        .chevron = true});
+
+    AddToggleItem(_("Distinct page zoom"),
+                  _("Maintain one map zoom level on each page."),
+                  distinct_zoom);
+  }
+}
+
+bool
+MapDisplayConfigPanel::Save(bool &_changed) noexcept
+{
+  bool changed = false;
+
+  MapSettings &settings_map = CommonInterface::SetMapSettings();
+  PageSettings &page_settings = CommonInterface::SetUISettings().pages;
+
+  changed |= Profile::Update(ProfileKeys::OrientationCruise,
+                             settings_map.cruise_orientation,
+                             cruise_orientation);
+
+  changed |= Profile::Update(ProfileKeys::OrientationCircling,
+                             settings_map.circling_orientation,
+                             circling_orientation);
+
+  changed |= Profile::Update(ProfileKeys::MapShiftBias,
+                             settings_map.map_shift_bias, map_shift_bias);
+
+  changed |= Profile::Update(ProfileKeys::GliderScreenPosition,
+                             settings_map.glider_screen_position,
+                             glider_screen_position);
+
+  changed |= Profile::Update(ProfileKeys::CircleZoom,
+                             settings_map.circle_zoom_enabled, circle_zoom);
+
+  changed |= Profile::Update(ProfileKeys::MaxAutoZoomDistance,
+                             settings_map.max_auto_zoom_distance,
+                             max_auto_zoom_distance);
+
+  changed |= Profile::Update(ProfileKeys::PagesDistinctZoom,
+                             page_settings.distinct_zoom, distinct_zoom);
+
+  _changed |= changed;
+
+  return true;
+}
+
 std::unique_ptr<Widget>
 CreateMapDisplayConfigPanel()
 {
-  const MapSettings &settings_map = CommonInterface::GetMapSettings();
-  const PageSettings &page_settings =
-    CommonInterface::GetUISettings().pages;
-
-  struct Fields {
-    MapOrientation cruise;
-    MapOrientation circling;
-    bool circle_zoom;
-    MapShiftBias shift_bias;
-    int glider_position;
-    double max_auto_zoom;
-    bool distinct_zoom;
-    StaticString<24> zoom_format;
-  };
-
-  auto fields = std::make_shared<Fields>(Fields{
-    settings_map.cruise_orientation,
-    settings_map.circling_orientation,
-    settings_map.circle_zoom_enabled,
-    settings_map.map_shift_bias,
-    settings_map.glider_screen_position,
-    settings_map.max_auto_zoom_distance,
-    page_settings.distinct_zoom,
-    {},
-  });
-
-  const Unit distance_unit =
-    Units::GetUserUnitByGroup(UnitGroup::DISTANCE);
-  fields->max_auto_zoom =
-    Units::ToUserUnit(fields->max_auto_zoom, distance_unit);
-  fields->zoom_format.Format("%%.0f %s",
-                             Units::GetUnitName(distance_unit));
-
-  auto list =
-    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
-  list->AddGroup(nullptr);
-  AddLinkedEnum(*list, _("Cruise orientation"),
-                _("Determines how the screen is rotated with the glider"),
-                orientation_list, fields->cruise);
-  list->AddEnum(_("Circling orientation"),
-                _("Determines how the screen is rotated with the glider while circling"),
-                orientation_list, fields->circling);
-  list->AddSwitch(_("Circling zoom"),
-                  _("If enabled, then the map will zoom in automatically when entering circling mode and zoom out automatically when leaving circling mode."),
-                  fields->circle_zoom);
-  list->AddEnum(_("Map shift reference"),
-                _("Determines what is used to shift the glider from the map center"),
-                shift_bias_list, fields->shift_bias, true,
-                [fields] {
-                  return fields->cruise == MapOrientation::NORTH_UP ||
-                         fields->cruise == MapOrientation::WIND_UP;
-                });
-  list->AddInteger(_("Glider position offset"),
-                   _("Defines the location of the glider drawn on the screen in percent from the screen edge."),
-                   "%d %%", "%d", 10, 50, 5,
-                   fields->glider_position, true);
-  list->AddFloat(_("Max. auto zoom distance"),
-                 _("The upper limit for auto zoom distance."),
-                 fields->zoom_format.c_str(), "%.0f",
-                 20, 250, 10, false, fields->max_auto_zoom, true);
-  list->AddSwitch(_("Distinct page zoom"),
-                  _("Maintain one map zoom level on each page."),
-                  fields->distinct_zoom, true);
-
-  list->SetSaveCallback([fields](bool &changed) {
-    MapSettings &settings_map = CommonInterface::SetMapSettings();
-    PageSettings &page_settings = CommonInterface::SetUISettings().pages;
-
-    changed |= ConfigPanel::CommitSetting(
-      changed, settings_map.cruise_orientation, fields->cruise,
-      ProfileKeys::OrientationCruise);
-    changed |= ConfigPanel::CommitSetting(
-      changed, settings_map.circling_orientation, fields->circling,
-      ProfileKeys::OrientationCircling);
-    changed |= ConfigPanel::CommitSetting(
-      changed, settings_map.map_shift_bias, fields->shift_bias,
-      ProfileKeys::MapShiftBias);
-    changed |= ConfigPanel::CommitSetting(
-      changed, settings_map.glider_screen_position,
-      fields->glider_position, ProfileKeys::GliderScreenPosition);
-    changed |= ConfigPanel::CommitSetting(
-      changed, settings_map.circle_zoom_enabled, fields->circle_zoom,
-      ProfileKeys::CircleZoom);
-
-    const Unit unit = Units::GetUserUnitByGroup(UnitGroup::DISTANCE);
-    if (std::fabs(fields->max_auto_zoom -
-                  Units::ToUserUnit(settings_map.max_auto_zoom_distance,
-                                    unit)) >= 0.1)
-      ConfigPanel::CommitSetting(
-        changed, settings_map.max_auto_zoom_distance,
-        Units::ToSysUnit(fields->max_auto_zoom, unit),
-        ProfileKeys::MaxAutoZoomDistance);
-
-    changed |= ConfigPanel::CommitSetting(
-      changed, page_settings.distinct_zoom, fields->distinct_zoom,
-      ProfileKeys::PagesDistinctZoom);
-    return true;
-  });
-
-  return list;
+  return std::make_unique<MapDisplayConfigPanel>();
 }
