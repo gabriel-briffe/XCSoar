@@ -67,26 +67,17 @@ static constexpr StaticEnumChoice wind_arrow_list[] = {
   nullptr
 };
 
-static constexpr StaticEnumChoice online_traffic_map_mode_list[] = {
-  { DisplayOnlineTrafficMapMode::OFF, N_("Off"), N_("No online traffic is drawn.") },
-  { DisplayOnlineTrafficMapMode::SYMBOL, N_("Symbol"), N_("Draws the traffic symbol only.") },
-  { DisplayOnlineTrafficMapMode::SYMBOL_NAME, N_("Symbol and Name"), N_("Draws the traffic symbol with name.") },
-  nullptr
-};
-
 /**
- * The symbols the map draws: the aircraft, the traffic and the
- * trail.
+ * The symbols the map draws for the ownship aircraft and its trail.
+ * Traffic symbols are on the Traffic page.
  */
 class SymbolsConfigPanel final : public ConfigListPanel {
   DisplayGroundTrack display_ground_track;
-  bool show_flarm_on_map, fade_traffic;
   bool show_thermal_marker;
   TrailSettings trail;
   bool detour_cost_markers_enabled;
   AircraftSymbol aircraft_symbol;
   WindArrowStyle wind_arrow_style;
-  DisplayOnlineTrafficMapMode online_traffic_map_mode;
   bool distance_rings_enabled;
 
 protected:
@@ -105,14 +96,11 @@ SymbolsConfigPanel::LoadSettings() noexcept
   const MapSettings &settings_map = CommonInterface::GetMapSettings();
 
   display_ground_track = settings_map.display_ground_track;
-  show_flarm_on_map = settings_map.show_flarm_on_map;
-  fade_traffic = settings_map.fade_traffic;
   show_thermal_marker = settings_map.show_thermal_marker;
   trail = settings_map.trail;
   detour_cost_markers_enabled = settings_map.detour_cost_markers_enabled;
   aircraft_symbol = settings_map.aircraft_symbol;
   wind_arrow_style = settings_map.wind_arrow_style;
-  online_traffic_map_mode = settings_map.online_traffic_map_mode;
   distance_rings_enabled = settings_map.distance_rings_enabled;
 }
 
@@ -148,20 +136,6 @@ SymbolsConfigPanel::Fill() noexcept
                     "at points ahead of the aircraft. The value of each marker is the extra distance "
                     "required to reach that point as a percentage of straight-line distance to the waypoint."),
                   detour_cost_markers_enabled);
-
-  AddGroup(_("Traffic"));
-
-  AddToggleItem(_("FLARM Traffic"),
-                _("This enables the display of FLARM traffic on the map window."),
-                show_flarm_on_map);
-
-  AddToggleItem(_("Fade traffic"),
-                _("Keep showing traffic for a while after it has disappeared."),
-                fade_traffic);
-
-  AddEnumItem(C_("Setting", "Online traffic on map"),
-              _("Show traffic from SkyLines and XCSoar Cloud on the map."),
-              online_traffic_map_mode_list, online_traffic_map_mode);
 
   if (IsExpert()) {
     AddGroup(_("Trail"));
@@ -206,13 +180,6 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
                              settings_map.display_ground_track,
                              display_ground_track);
 
-  changed |= Profile::Update(ProfileKeys::EnableFLARMMap,
-                             settings_map.show_flarm_on_map,
-                             show_flarm_on_map);
-
-  changed |= Profile::Update(ProfileKeys::FadeTraffic,
-                             settings_map.fade_traffic, fade_traffic);
-
   changed |= Profile::Update(ProfileKeys::SnailTrail,
                              settings_map.trail.length, trail.length);
 
@@ -244,10 +211,6 @@ SymbolsConfigPanel::Save(bool &_changed) noexcept
   changed |= Profile::Update(ProfileKeys::WindArrowStyle,
                              settings_map.wind_arrow_style,
                              wind_arrow_style);
-
-  changed |= Profile::Update(ProfileKeys::OnlineTrafficMapMode,
-                             settings_map.online_traffic_map_mode,
-                             online_traffic_map_mode);
 
   changed |= Profile::Update(ProfileKeys::DistanceRingsEnabled,
                              settings_map.distance_rings_enabled,
