@@ -532,10 +532,70 @@ ConfigPanel::ReturnExtraButton(unsigned i)
   extra.Return(i);
 }
 
+/**
+ * The settings page at @p index in pager order: every page of
+ * #groups, switches skipped.  nullptr when @p index is past the end.
+ */
+[[gnu::pure]]
+static const ConfigPage *
+SettingsPagerPageAt(unsigned index) noexcept
+{
+  unsigned n = 0;
+  for (const ConfigGroup &group : groups) {
+    for (const ConfigPage *page = group.pages;
+         page->caption != nullptr; ++page) {
+      if (page->toggle != nullptr)
+        continue;
+      if (n == index)
+        return page;
+      ++n;
+    }
+  }
+  return nullptr;
+}
+
+/**
+ * Index of @p create in the settings pager, or -1 when that panel
+ * is not one of the pages the arrows walk.
+ */
+[[gnu::pure]]
+static int
+SettingsPagerIndex(std::unique_ptr<Widget> (*create)()) noexcept
+{
+  unsigned n = 0;
+  for (const ConfigGroup &group : groups) {
+    for (const ConfigPage *page = group.pages;
+         page->caption != nullptr; ++page) {
+      if (page->toggle != nullptr || page->create == nullptr)
+        continue;
+      if (page->create == create)
+        return int(n);
+      ++n;
+    }
+  }
+  return -1;
+}
+
+/** Add every settings page, in pager order. */
+static void
+AddSettingsPagerPages(ArrowPagerWidget &dest) noexcept
+{
+  for (const ConfigGroup &group : groups) {
+    for (const ConfigPage *page = group.pages;
+         page->caption != nullptr; ++page) {
+      if (page->toggle != nullptr || page->create == nullptr)
+        continue;
+      dest.Add(page->create());
+    }
+  }
+}
+
 void
 ShowConfigPanel(const char *title,
                 std::unique_ptr<Widget> (*create_panel)())
 {
+  const int index = SettingsPagerIndex(create_panel);
+
   const UISettings old_ui_settings = CommonInterface::GetUISettings();
   SettingsEnter();
 
@@ -543,13 +603,39 @@ ShowConfigPanel(const char *title,
 
   try {
     const DialogLook &look = UIGlobals::GetDialogLook();
+    const char *caption = title;
+    if (index >= 0)
+      caption = gettext(SettingsPagerPageAt(unsigned(index))->caption);
+
     WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
-                        look, title);
+                        look, caption);
 
     pager = new ArrowPagerWidget(look.button,
                                  [&dialog](){ dialog.SetModalResult(mrOK); },
                                  std::make_unique<ConfigurationExtraButtons>(look));
-    pager->Add(create_panel());
+    if (index < 0) {
+      pager->Add(create_panel());
+    } else {
+      AddSettingsPagerPages(*pager);
+      pager->SetCurrent(unsigned(index));
+
+      /* the row of the extra buttons comes and goes with the page
+         which borrows them */
+      bool extra_row = false;
+      pager->SetPageFlippedCallback([&dialog, &extra_row](){
+        const bool need_extra_row =
+          ((const ConfigurationExtraButtons &)pager->GetExtra()).HasButtons();
+        if (need_extra_row != extra_row) {
+          extra_row = need_extra_row;
+          pager->Move(dialog.GetClientAreaWindow().GetClientRect());
+        }
+
+        const ConfigPage *page =
+          SettingsPagerPageAt(pager->GetCurrentIndex());
+        if (page != nullptr)
+          dialog.SetCaption(gettext(page->caption));
+      });
+    }
     dialog.FinishPreliminary(pager);
     dialog.ShowModal();
 
