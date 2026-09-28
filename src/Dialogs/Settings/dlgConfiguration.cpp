@@ -16,10 +16,12 @@
 #include "Form/TabMenuData.hpp"
 #include "Form/CheckBox.hpp"
 #include "Form/Button.hpp"
+#include "Renderer/ButtonRenderer.hpp"
 #include "Screen/Layout.hpp"
 #include "Profile/Profile.hpp"
 #include "util/Macros.hpp"
 #include "Panels/ConfigPanel.hpp"
+#include "ConfigTileMenu.hpp"
 #include "Panels/PagesConfigPanel.hpp"
 #include "Panels/UnitsConfigPanel.hpp"
 #include "Panels/TimeConfigPanel.hpp"
@@ -105,6 +107,7 @@ static unsigned current_page;
 
 // TODO: eliminate global variables
 static ArrowPagerWidget *pager;
+static ConfigTileMenu *tile_menu;
 
 static constexpr TabMenuPage files_pages[] = {
   { N_("Site Files"), CreateSiteConfigPanel },
@@ -250,7 +253,13 @@ class ConfigurationExtraButtons final
   struct Layout {
     PixelRect expert, button2, button1;
 
-    Layout(const PixelRect &rc):expert(rc), button2(rc), button1(rc) {
+    Layout(const PixelRect &_rc) {
+      /* the controls keep the gap to the edges that the buttons have
+         between each other */
+      PixelRect rc = _rc;
+      rc.Grow(-(int)ButtonFrameRenderer::GetEdgeMargin(rc));
+      expert = button2 = button1 = rc;
+
       const unsigned height = rc.GetHeight();
       const unsigned max_control_height = ::Layout::GetMaximumControlHeight();
 
@@ -388,81 +397,60 @@ OnUserLevel(bool expert) noexcept
 }
 
 /**
- * Back on the menu page commits (mrOK).  On a settings page, return
- * to the menu.  Close (exit button) always commits.
+ * Close on the menu page commits (mrOK).  On a settings page, return
+ * to the menu (Back).  From a tiled submenu, return to the group
+ * tiles first.
  */
 static void
 OnCloseClicked(WidgetDialog &dialog)
 {
-  if (pager->GetCurrentIndex() == 0)
+  if (pager->GetCurrentIndex() == 0) {
+    if (tile_menu != nullptr && tile_menu->GoBackToMain()) {
+      dialog.SetCaption(_("Configuration"));
+      pager->SetCloseButtonCaption(_("Close"));
+      return;
+    }
     dialog.SetModalResult(mrOK);
-  else
+  } else
     pager->ClickPage(0);
 }
 
 static void
-OnPageFlipped(WidgetDialog &dialog, TabMenuDisplay &menu)
+SetConfigurationCaption(WidgetDialog &dialog, const char *caption) noexcept
+{
+  if (caption == nullptr)
+    caption = _("Configuration");
+  dialog.SetCaption(caption);
+
+  const bool on_menu = pager->GetCurrentIndex() == 0;
+  const bool tiled_submenu =
+    on_menu && tile_menu != nullptr && !tile_menu->IsShowingMain();
+  pager->SetCloseButtonCaption(on_menu && !tiled_submenu
+                               ? _("Close")
+                               : _("Back"));
+}
+
+static void
+OnPageFlippedList(WidgetDialog &dialog, TabMenuDisplay &menu)
 {
   menu.OnPageFlipped();
 
   char buffer[128];
-  const char *caption = menu.GetCaption(buffer, ARRAY_SIZE(buffer));
-  if (caption == nullptr)
-    caption = _("Configuration");
-  dialog.SetCaption(caption);
+  SetConfigurationCaption(dialog, menu.GetCaption(buffer, ARRAY_SIZE(buffer)));
 }
 
-void dlgConfigurationShowModal()
+static void
+OnPageFlippedTiles(WidgetDialog &dialog, ConfigTileMenu &menu)
 {
-  const DialogLook &look = UIGlobals::GetDialogLook();
+  menu.OnPageFlipped();
 
-  WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
-                      look, _("Configuration"));
+  char buffer[128];
+  SetConfigurationCaption(dialog, menu.GetCaption(buffer, ARRAY_SIZE(buffer)));
+}
 
-  pager = new ArrowPagerWidget(look.button,
-                               [&dialog](){ OnCloseClicked(dialog); },
-                               std::make_unique<ConfigurationExtraButtons>(look),
-                               [&dialog](){ dialog.SetModalResult(mrOK); });
-
-  auto _menu = std::make_unique<TabMenuDisplay>(*pager, look);
-  auto &menu = *_menu;
-  pager->Add(std::make_unique<CreateWindowWidget>([&_menu](ContainerWindow &parent,
-                                                           const PixelRect &rc,
-                                                           WindowStyle style) {
-    style.TabStop();
-    _menu->Create(parent, rc, style);
-    return std::move(_menu);
-  }));
-
-  menu.InitMenu(main_menu_captions, ARRAY_SIZE(main_menu_captions));
-
-  /* restore last selected menu item */
-  menu.SetCursor(current_page);
-
-  pager->SetPageFlippedCallback([&dialog, &menu](){
-    OnPageFlipped(dialog, menu);
-  });
-
-  dialog.FinishPreliminary(pager);
-
-  /* Esc on a settings panel returns to the menu (same as Back);
-     on the menu itself, leave Esc to cancel the dialog. */
-  dialog.SetKeyDownFunction([&dialog](unsigned key_code) {
-    if (key_code != KEY_ESCAPE || pager->GetCurrentIndex() == 0)
-      return false;
-
-    OnCloseClicked(dialog);
-    return true;
-  });
-
-  const int result = dialog.ShowModal();
-
-  /* save page number for next time this dialog is opened */
-  current_page = menu.GetCursor();
-
-  /* Persist Expert only on OK. Missing UserLevel means beginner —
-     write "1" when enabling Expert; remove the key when returning to
-     beginner (do not leave UserLevel=0 cruft) (#1793). */
+static void
+PersistExpertAndSave(WidgetDialog &dialog, int result) noexcept
+{
   bool expert_changed = false;
   if (result == mrOK) {
     const bool expert = CommonInterface::GetUISettings().dialog.expert;
@@ -528,4 +516,103 @@ ShowConfigPanel(const char *title,
 
   pager = previous_pager;
   SettingsLeave(old_ui_settings);
+}
+
+void dlgConfigurationShowModal()
+{
+  const DialogLook &look = UIGlobals::GetDialogLook();
+  const bool use_tiles =
+    CommonInterface::GetUISettings().dialog.tiled_menu;
+
+  tile_menu = nullptr;
+
+  WidgetDialog dialog(WidgetDialog::Full{}, UIGlobals::GetMainWindow(),
+                      look, _("Configuration"));
+
+  pager = new ArrowPagerWidget(look.button,
+                               [&dialog](){ OnCloseClicked(dialog); },
+                               std::make_unique<ConfigurationExtraButtons>(look));
+
+  if (use_tiles) {
+    auto _menu = std::make_unique<ConfigTileMenu>(*pager, look);
+    auto &menu = *_menu;
+    tile_menu = &menu;
+    pager->Add(std::make_unique<CreateWindowWidget>(
+                 [&_menu](ContainerWindow &parent, const PixelRect &rc,
+                          WindowStyle style) {
+      style.TabStop();
+      _menu->Create(parent, rc, style);
+      return std::move(_menu);
+    }));
+
+    menu.InitMenu(main_menu_captions, ARRAY_SIZE(main_menu_captions));
+    menu.SetCursor(current_page);
+
+    pager->SetPageFlippedCallback([&dialog, &menu](){
+      OnPageFlippedTiles(dialog, menu);
+    });
+
+    dialog.FinishPreliminary(pager);
+
+    dialog.SetKeyDownFunction([&dialog](unsigned key_code) {
+      if (key_code != KEY_ESCAPE)
+        return false;
+
+      if (pager->GetCurrentIndex() == 0) {
+        if (tile_menu != nullptr && tile_menu->GoBackToMain()) {
+          dialog.SetCaption(_("Configuration"));
+          pager->SetCloseButtonCaption(_("Close"));
+          return true;
+        }
+        return false;
+      }
+
+      OnCloseClicked(dialog);
+      return true;
+    });
+
+    const int result = dialog.ShowModal();
+    current_page = menu.GetCursor();
+    tile_menu = nullptr;
+    PersistExpertAndSave(dialog, result);
+    return;
+  }
+
+  auto _menu = std::make_unique<TabMenuDisplay>(*pager, look);
+  auto &menu = *_menu;
+  pager->Add(std::make_unique<CreateWindowWidget>([&_menu](ContainerWindow &parent,
+                                                           const PixelRect &rc,
+                                                           WindowStyle style) {
+    style.TabStop();
+    _menu->Create(parent, rc, style);
+    return std::move(_menu);
+  }));
+
+  menu.InitMenu(main_menu_captions, ARRAY_SIZE(main_menu_captions));
+
+  /* restore last selected menu item */
+  menu.SetCursor(current_page);
+
+  pager->SetPageFlippedCallback([&dialog, &menu](){
+    OnPageFlippedList(dialog, menu);
+  });
+
+  dialog.FinishPreliminary(pager);
+
+  /* Esc on a settings panel returns to the menu (same as Back);
+     on the menu itself, leave Esc to cancel the dialog. */
+  dialog.SetKeyDownFunction([&dialog](unsigned key_code) {
+    if (key_code != KEY_ESCAPE || pager->GetCurrentIndex() == 0)
+      return false;
+
+    OnCloseClicked(dialog);
+    return true;
+  });
+
+  const int result = dialog.ShowModal();
+
+  /* save page number for next time this dialog is opened */
+  current_page = menu.GetCursor();
+
+  PersistExpertAndSave(dialog, result);
 }

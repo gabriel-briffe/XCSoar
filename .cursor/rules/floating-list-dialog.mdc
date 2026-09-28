@@ -1,0 +1,93 @@
+---
+description: Short settings pages as a grouped list — floating dialog or configuration page
+globs:
+  - "src/Dialogs/**/*.cpp"
+  - "src/Dialogs/**/*.hpp"
+  - "src/Widget/GroupedListWidget.cpp"
+  - "src/Widget/GroupedListWidget.hpp"
+  - "src/Dialogs/WidgetDialog.cpp"
+  - "src/Dialogs/WidgetDialog.hpp"
+alwaysApply: false
+---
+
+# Floating list pages
+
+A short page of captions, values, badges and switches is a
+`GroupedListWidget`. Copy an existing page. Do not add another way
+to size, refresh or measure it.
+
+Models: `ReplayDialog.cpp` (shortest floating dialog),
+`WindSettingsDialog.cpp` (live values and switches),
+`Panels/WindConfigPanel.cpp` (configuration page).
+
+## Floating dialog
+
+`WidgetDialog::Floating` takes the list and no width. Add the
+buttons, call `PrepareFloatingList()`, fill the values, then
+`ShowModal()`. `RefitList()` reads `PreferredTextWidth()`.
+
+```cpp
+auto *list = new GroupedListWidget(look);
+WidgetDialog dialog(WidgetDialog::Floating{}, parent, look,
+                    _("Title"), list);
+dialog.AddButton(_("Close"), mrOK);
+dialog.PrepareFloatingList();
+setup.Refresh();
+dialog.ShowModal();
+```
+
+## Rows, added once
+
+`AddValue(caption, help, value, edit)` stores the row.
+`UpdateValues()` calls `value` again. Call `RefitList()` only when
+that returns true. A value that still fits is redrawn in place.
+
+`value` fills a `ValueState`. Assign `state.text` before the call
+returns; the list copies it. A badge pointer is a `_()` literal.
+`state.help == nullptr` leaves the explanation passed to
+`AddValue`. That text sits below the settings when the rows and
+the text both fit. When the page scrolls, or the text does not
+fit there, it sits under the selected row. A floating dialog
+keeps room for a short explanation, so a shorter text does not
+shrink it. A longer one scrolls inside that room. `state.hidden`
+drops the row. `state.disabled` greys a row that has `edit`.
+
+No `edit`: the row stays grey and the cursor may rest so the
+explanation can be read. With `edit`: the label selects, the value
+opens, and Enter still opens the row.
+
+A status row the cursor must skip (the wind source) is `AddItem`
+with `.disabled = true` and a `value_callback`. `AddValue` would
+leave it selectable.
+
+A switch is `AddItem` once, with `.toggle = true`. The callback
+flips the model bool and does not rebuild the list. Keep those
+bools until Close or `Save()`.
+
+## Configuration page
+
+The page is the list. `Create*()` returns a `GroupedListWidget`
+with `SetSaveCallback`. That callback writes the settings when
+the configuration dialogue closes. There is no forwarding wrapper.
+
+`AddSwitch(caption, help, field)` flips `field`. Pass `expert`
+to hide the row until expert mode is on, and `shown` to hide it
+while a predicate is false. `AddEnum` and `AddText` store the
+value and open the existing picker. A number is `AddInteger` or
+`AddFloat`. A file or password stays `AddValue` with the dialog
+that page already used.
+
+`ConfigPanel::CommitSetting` writes one setting and, with a key,
+its profile entry. Keep the values in a `shared_ptr` until the
+save callback runs.
+
+The configuration dialogue already wraps the page in
+`VScrollWidget`. Leave the list's minimum and maximum size as
+they are. That outer scroller stays idle, and the list draws a
+bar only when the rows, including an open explanation, do not fit.
+
+## Leave the shared list alone
+
+`Clear()` still rebuilds device and weather lists. These pages do
+not use it to change a value. An explanation that already exists
+in `po/xcsoar.pot` stays that msgid.

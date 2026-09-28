@@ -2,82 +2,45 @@
 // Copyright The XCSoar Project
 
 #include "RouteConfigPanel.hpp"
-#include "Profile/Keys.hpp"
+#include "ConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Listener.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Form/DataField/Base.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "Profile/Keys.hpp"
 #include "UIGlobals.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-enum ControlIndex {
-  RoutePlannerMode,
-  RoutePlannerAllowClimb,
-  RoutePlannerUseCeiling,
-  empty_spacer,
-  TurningReach,
-  ReachPolarMode,
-  FinalGlideTerrain,
-};
+#include <memory>
 
-class RouteConfigPanel final
-  : public RowFormWidget, DataFieldListener {
-public:
-  RouteConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void ShowRouteControls(bool show);
-  void ShowReachControls(bool show);
-
-  /* methods from Widget */
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-
-private:
-  /* methods from DataFieldListener */
-  void OnModified(DataField &df) noexcept override;
-};
-
-void
-RouteConfigPanel::ShowRouteControls(bool show)
+std::unique_ptr<Widget>
+CreateRouteConfigPanel()
 {
-  SetRowVisible(RoutePlannerAllowClimb, show);
-  SetRowVisible(RoutePlannerUseCeiling, show);
-}
+  const ComputerSettings &settings_computer =
+    CommonInterface::GetComputerSettings();
+  const RoutePlannerConfig &route_planner =
+    settings_computer.task.route_planner;
 
-void
-RouteConfigPanel::ShowReachControls(bool show)
-{
-  SetRowVisible(FinalGlideTerrain, show);
-  SetRowVisible(ReachPolarMode, show);
-}
+  struct Fields {
+    RoutePlannerConfig::Mode mode;
+    bool allow_climb;
+    bool use_ceiling;
+    RoutePlannerConfig::ReachMode reach_mode;
+    RoutePlannerConfig::Polar reach_polar;
+    FeaturesSettings::FinalGlideTerrain final_glide_terrain;
+  };
 
-void
-RouteConfigPanel::OnModified(DataField &df) noexcept
-{
-  if (IsDataField(RoutePlannerMode, df)) {
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    RoutePlannerConfig::Mode mode =
-      (RoutePlannerConfig::Mode)dfe.GetValue();
-    ShowRouteControls(mode != RoutePlannerConfig::Mode::NONE);
-  } else if (IsDataField(TurningReach, df)) {
-    const DataFieldEnum &dfe = (const DataFieldEnum &)df;
-    RoutePlannerConfig::ReachMode mode =
-      (RoutePlannerConfig::ReachMode)dfe.GetValue();
-    ShowReachControls(mode != RoutePlannerConfig::ReachMode::OFF);
-  }
-}
+  auto fields = std::make_shared<Fields>(Fields{
+    route_planner.mode,
+    route_planner.allow_climb,
+    route_planner.use_ceiling,
+    route_planner.reach_calc_mode,
+    route_planner.reach_polar_mode,
+    settings_computer.features.final_glide_terrain,
+  });
 
-void
-RouteConfigPanel::Prepare(ContainerWindow &parent,
-                          const PixelRect &rc) noexcept
-{
-  const ComputerSettings &settings_computer = CommonInterface::GetComputerSettings();
-  const RoutePlannerConfig &route_planner = settings_computer.task.route_planner;
-
-  RowFormWidget::Prepare(parent, rc);
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
 
   static constexpr StaticEnumChoice route_mode_list[] = {
     { RoutePlannerConfig::Mode::NONE, N_("None"),
@@ -91,21 +54,22 @@ RouteConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddEnum(_("Route mode"), nullptr, route_mode_list,
-          (unsigned)route_planner.mode, this);
-
-  AddBoolean(_("Route climb"),
-             _("When enabled and MC is positive, route planning allows climbs between the aircraft "
-                 "location and destination."),
-             route_planner.allow_climb);
-  SetExpertRow(RoutePlannerAllowClimb);
-
-  AddBoolean(_("Route ceiling"),
-             _("When enabled, route planning climbs are limited to ceiling defined by greater of "
-                 "current aircraft altitude plus 500 m and the thermal ceiling. If disabled, "
-                 "climbs are unlimited."),
-             route_planner.use_ceiling);
-  SetExpertRow(RoutePlannerUseCeiling);
+  list->AddEnum(_("Route mode"), nullptr, route_mode_list, fields->mode);
+  list->AddSwitch(_("Route climb"),
+                  _("When enabled and MC is positive, route planning allows climbs between the aircraft "
+                      "location and destination."),
+                  fields->allow_climb, true,
+                  [fields] {
+                    return fields->mode != RoutePlannerConfig::Mode::NONE;
+                  });
+  list->AddSwitch(_("Route ceiling"),
+                  _("When enabled, route planning climbs are limited to ceiling defined by greater of "
+                      "current aircraft altitude plus 500 m and the thermal ceiling. If disabled, "
+                      "climbs are unlimited."),
+                  fields->use_ceiling, true,
+                  [fields] {
+                    return fields->mode != RoutePlannerConfig::Mode::NONE;
+                  });
 
   static constexpr StaticEnumChoice turning_reach_list[] = {
     { RoutePlannerConfig::ReachMode::OFF, N_("Off"),
@@ -117,12 +81,9 @@ RouteConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddSpacer(); // Spacer
-
-  AddEnum(_("Reach mode"),
-          _("How calculations are performed of the reach of the glider with respect to terrain."),
-          turning_reach_list, (unsigned)route_planner.reach_calc_mode,
-          this);
+  list->AddEnum(_("Reach mode"),
+                _("How calculations are performed of the reach of the glider with respect to terrain."),
+                turning_reach_list, fields->reach_mode);
 
   static constexpr StaticEnumChoice reach_polar_list[] = {
     { RoutePlannerConfig::Polar::TASK, N_("Task"),
@@ -132,10 +93,13 @@ RouteConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddEnum(_("Reach polar"),
-          _("This determines the glide performance used in reach, landable arrival, abort and alternate calculations."),
-          reach_polar_list, (unsigned)route_planner.reach_polar_mode);
-  SetExpertRow(ReachPolarMode);
+  list->AddEnum(_("Reach polar"),
+                _("This determines the glide performance used in reach, landable arrival, abort and alternate calculations."),
+                reach_polar_list, fields->reach_polar, true,
+                [fields] {
+                  return fields->reach_mode !=
+                         RoutePlannerConfig::ReachMode::OFF;
+                });
 
   static constexpr StaticEnumChoice final_glide_terrain_list[] = {
     { FeaturesSettings::FinalGlideTerrain::OFF, N_("Off"),
@@ -153,44 +117,38 @@ RouteConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddEnum(_("Reach display"), nullptr, final_glide_terrain_list,
-          (unsigned)settings_computer.features.final_glide_terrain);
+  list->AddEnum(_("Reach display"), nullptr, final_glide_terrain_list,
+                fields->final_glide_terrain, false,
+                [fields] {
+                  return fields->reach_mode !=
+                         RoutePlannerConfig::ReachMode::OFF;
+                });
 
-  ShowRouteControls(route_planner.mode != RoutePlannerConfig::Mode::NONE);
-  ShowReachControls(route_planner.reach_calc_mode != RoutePlannerConfig::ReachMode::OFF);
-}
+  list->SetSaveCallback([fields](bool &changed) {
+    ComputerSettings &settings_computer =
+      CommonInterface::SetComputerSettings();
+    RoutePlannerConfig &route_planner =
+      settings_computer.task.route_planner;
 
-bool
-RouteConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-  ComputerSettings &settings_computer = CommonInterface::SetComputerSettings();
-  RoutePlannerConfig &route_planner = settings_computer.task.route_planner;
+    ConfigPanel::CommitSetting(changed, route_planner.mode, fields->mode,
+                               ProfileKeys::RoutePlannerMode);
+    ConfigPanel::CommitSetting(changed, route_planner.reach_polar_mode,
+                               fields->reach_polar,
+                               ProfileKeys::ReachPolarMode);
+    ConfigPanel::CommitSetting(changed,
+                               settings_computer.features.final_glide_terrain,
+                               fields->final_glide_terrain,
+                               ProfileKeys::FinalGlideTerrain);
+    ConfigPanel::CommitSetting(changed, route_planner.allow_climb,
+                               fields->allow_climb,
+                               ProfileKeys::RoutePlannerAllowClimb);
+    ConfigPanel::CommitSetting(changed, route_planner.use_ceiling,
+                               fields->use_ceiling,
+                               ProfileKeys::RoutePlannerUseCeiling);
+    ConfigPanel::CommitSetting(changed, route_planner.reach_calc_mode,
+                               fields->reach_mode, ProfileKeys::TurningReach);
+    return true;
+  });
 
-  changed |= SaveValueEnum(RoutePlannerMode, ProfileKeys::RoutePlannerMode,
-                           route_planner.mode);
-
-  changed |= SaveValueEnum(ReachPolarMode, ProfileKeys::ReachPolarMode,
-                           route_planner.reach_polar_mode);
-
-  changed |= SaveValueEnum(FinalGlideTerrain, ProfileKeys::FinalGlideTerrain,
-                           settings_computer.features.final_glide_terrain);
-
-  changed |= SaveValue(RoutePlannerAllowClimb, ProfileKeys::RoutePlannerAllowClimb,
-                       route_planner.allow_climb);
-
-  changed |= SaveValue(RoutePlannerUseCeiling, ProfileKeys::RoutePlannerUseCeiling,
-                       route_planner.use_ceiling);
-
-  changed |= SaveValueEnum(TurningReach, ProfileKeys::TurningReach,
-                           route_planner.reach_calc_mode);
-  _changed |= changed;
-
-  return true;
-}
-
-std::unique_ptr<Widget>
-CreateRouteConfigPanel()
-{
-  return std::make_unique<RouteConfigPanel>();
+  return list;
 }

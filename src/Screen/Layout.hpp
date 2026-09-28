@@ -292,6 +292,14 @@ GetMaximumControlHeight() noexcept
 static constexpr unsigned inflight_button_pt = 56;
 
 /**
+ * Corner diameter of a button, a dialog, and a value box, in points.
+ * Canvas::DrawRoundRectangle() takes this as the ellipse size.
+ * A face smaller than the diameter is capped so it does not
+ * become a pill.
+ */
+static constexpr unsigned corner_diameter_pt = 14;
+
+/**
  * Pixel size of #inflight_button_pt.
  */
 [[gnu::pure]]
@@ -299,6 +307,35 @@ static inline unsigned
 GetInflightButtonHeight() noexcept
 {
   return PtScale(inflight_button_pt);
+}
+
+/**
+ * Columns × rows for a full-screen (or dialog) tile menu.
+ *
+ * Portrait → 3×4, landscape → 4×3, square-ish → 3×3.  Cell size should
+ * be derived from this fixed capacity, not from the number of tiles.
+ */
+struct TileGridGeometry {
+  unsigned columns;
+  unsigned rows;
+};
+
+/**
+ * Choose a tile grid for the given area (client size of the menu).
+ */
+[[gnu::const]]
+static inline TileGridGeometry
+GetTileGridGeometry(PixelSize area) noexcept
+{
+  if (area.width == 0 || area.height == 0)
+    return {3, 3};
+
+  /* Avoid float: portrait if w/h < 0.85, landscape if w/h > 1.18. */
+  if (area.width * 100 < area.height * 85)
+    return {3, 4};
+  if (area.width * 100 > area.height * 118)
+    return {4, 3};
+  return {3, 3};
 }
 
 /**

@@ -2,70 +2,71 @@
 // Copyright The XCSoar Project
 
 #include "WaypointDisplayConfigPanel.hpp"
-#include "Profile/Keys.hpp"
+#include "ConfigPanel.hpp"
 #include "Form/DataField/Enum.hpp"
-#include "Form/DataField/Listener.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
+#include "Profile/Keys.hpp"
 #include "UIGlobals.hpp"
-#include "ConfigPanel.hpp"
 #include "Dialogs/Waypoint/WaypointDialogs.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-enum ControlIndex {
-  WaypointLabels,
-  WaypointArrivalHeightDisplay,
-  WaypointLabelStyle,
-  WaypointLabelSelection,
-  AppIndLandable,
-  MapWaypointIconScale,
-  AppUseSWLandablesRendering,
-  AppLandableRenderingScale,
-  AppScaleRunwayLength
-};
+#include <memory>
 
-class WaypointDisplayConfigPanel final
-  : public RowFormWidget, DataFieldListener {
-public:
-  WaypointDisplayConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-public:
-  void UpdateVisibilities();
-
-  /* methods from Widget */
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  void Show(const PixelRect &rc) noexcept override;
-  void Hide() noexcept override;
-  bool Save(bool &changed) noexcept override;
-
-private:
-  /* methods from DataFieldListener */
-  void OnModified(DataField &df) noexcept override;
-};
-
-void
-WaypointDisplayConfigPanel::UpdateVisibilities()
+/* AddSwitch does not re-read shown() on the other rows. */
+static void
+AddLinkedSwitch(GroupedListWidget &list, const char *caption,
+                const char *help, bool &field, bool expert) noexcept
 {
-  bool visible = GetValueBoolean(AppUseSWLandablesRendering);
-  SetRowVisible(AppLandableRenderingScale, visible);
-  SetRowVisible(AppScaleRunwayLength, visible);
+  GroupedListWidget::ItemOptions options;
+  options.toggle = true;
+  options.checked = field;
+  options.help = help;
+  options.expert = expert;
+  list.AddItem(caption, [&list, &field] {
+    field = !field;
+    if (list.UpdateValues())
+      list.UpdateLayout();
+  }, options);
 }
 
-void
-WaypointDisplayConfigPanel::OnModified(DataField &df) noexcept
+std::unique_ptr<Widget>
+CreateWaypointDisplayConfigPanel()
 {
-  if (IsDataField(AppUseSWLandablesRendering, df))
-    UpdateVisibilities();
-}
+  const WaypointRendererSettings &settings =
+    CommonInterface::GetMapSettings().waypoint;
 
-void
-WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
-                                    const PixelRect &rc) noexcept
-{
-  const WaypointRendererSettings &settings = CommonInterface::GetMapSettings().waypoint;
+  struct Fields {
+    WaypointRendererSettings::DisplayTextType display_text_type;
+    WaypointRendererSettings::ArrivalHeightDisplay arrival_height;
+    LabelShape label_style;
+    WaypointRendererSettings::LabelSelection label_selection;
+    WaypointRendererSettings::LandableStyle landable_style;
+    int icon_scale;
+    bool detailed_landables;
+    int landable_scale;
+    bool scale_runway;
+  };
 
-  RowFormWidget::Prepare(parent, rc);
+  auto fields = std::make_shared<Fields>(Fields{
+    settings.display_text_type,
+    settings.arrival_height_display,
+    settings.landable_render_mode,
+    settings.label_selection,
+    settings.landable_style,
+    settings.map_waypoint_icon_scale,
+    settings.vector_landable_rendering,
+    settings.landable_rendering_scale,
+    settings.scale_runway_length,
+  });
+
+  const auto detailed = [fields] {
+    return fields->detailed_landables;
+  };
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
 
   static constexpr StaticEnumChoice wp_labels_list[] = {
     { WaypointRendererSettings::DisplayTextType::NAME,
@@ -87,8 +88,9 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
       N_("The short name of each waypoint is displayed. If unavailable, the first five letters of the full name are displayed.") },
     nullptr
   };
-  AddEnum(_("Label format"), _("Determines how labels are displayed with each waypoint"),
-          wp_labels_list, (unsigned)settings.display_text_type);
+  list->AddEnum(_("Label format"),
+                _("Determines how labels are displayed with each waypoint"),
+                wp_labels_list, fields->display_text_type);
 
   static constexpr StaticEnumChoice wp_arrival_list[] = {
     { WaypointRendererSettings::ArrivalHeightDisplay::NONE,
@@ -114,9 +116,9 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddEnum(_("Arrival height"), _("Determines how arrival height is displayed in waypoint labels"),
-          wp_arrival_list, (unsigned)settings.arrival_height_display);
-  SetExpertRow(WaypointArrivalHeightDisplay);
+  list->AddEnum(_("Arrival height"),
+                _("Determines how arrival height is displayed in waypoint labels"),
+                wp_arrival_list, fields->arrival_height, true);
 
   static constexpr StaticEnumChoice wp_label_list[] = {
     { LabelShape::ROUNDED_BLACK, N_("Rounded rectangle") },
@@ -124,9 +126,8 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddEnum(_("Label style"), nullptr, wp_label_list,
-          (unsigned)settings.landable_render_mode);
-  SetExpertRow(WaypointLabelStyle);
+  list->AddEnum(_("Label style"), nullptr, wp_label_list,
+                fields->label_style, true);
 
   static constexpr StaticEnumChoice wp_selection_list[] = {
     { WaypointRendererSettings::LabelSelection::ALL,
@@ -145,10 +146,9 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
     nullptr
   };
 
-  AddEnum(_("Label visibility"),
-          _("Determines what labels are displayed."),
-          wp_selection_list, (unsigned)settings.label_selection);
-  SetExpertRow(WaypointLabelSelection);
+  list->AddEnum(_("Label visibility"),
+                _("Determines what labels are displayed."),
+                wp_selection_list, fields->label_selection, true);
 
   static constexpr StaticEnumChoice wp_style_list[] = {
     { WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE,
@@ -171,93 +171,70 @@ WaypointDisplayConfigPanel::Prepare(ContainerWindow &parent,
           "Reachability is not calculated or shown for landables.") },
     nullptr
   };
-  AddEnum(_("Landable symbols"),
-          _("Purple circles (WinPilot style), high-contrast monochrome, traffic lights, "
-              "or purple circles without reach marking. The first three styles mark "
-              "waypoints within reach green."),
-          wp_style_list, (unsigned)settings.landable_style);
+  list->AddEnum(_("Landable symbols"),
+                _("Purple circles (WinPilot style), high-contrast monochrome, traffic lights, "
+                  "or purple circles without reach marking. The first three styles mark "
+                  "waypoints within reach green."),
+                wp_style_list, fields->landable_style);
+  list->AddInteger(_("Waypoint icon size"),
+                   _("Size of waypoint symbols on the map as a percentage of the "
+                     "built-in artwork (list dialogs keep a fixed row icon size)."),
+                   "%u %%", "%u", 50, 200, 10, fields->icon_scale);
+  AddLinkedSwitch(*list, _("Detailed landables"),
+                  _("[Off] Display fixed icons for landables.\n"
+                    "[On] Show landables with variable information like runway length and heading."),
+                  fields->detailed_landables, true);
+  list->AddInteger(_("Landable size"),
+                   _("A percentage to select the size landables are displayed on the map."),
+                   "%u %%", "%u", 50, 200, 10, fields->landable_scale,
+                   true, detailed);
+  list->AddSwitch(_("Scale runway length"),
+                  _("[Off] Display fixed length for runways.\n"
+                    "[On] Scale displayed runway length based on real length."),
+                  fields->scale_runway, true, detailed);
 
-  AddInteger(_("Waypoint icon size"),
-             _("Size of waypoint symbols on the map as a percentage of the "
-               "built-in artwork (list dialogs keep a fixed row icon size)."),
-             "%u %%", "%u", 50, 200, 10, settings.map_waypoint_icon_scale);
-
-  AddBoolean(_("Detailed landables"),
-             _("[Off] Display fixed icons for landables.\n"
-                 "[On] Show landables with variable information like runway length and heading."),
-             settings.vector_landable_rendering, this);
-  SetExpertRow(AppUseSWLandablesRendering);
-
-  AddInteger(_("Landable size"),
-             _("A percentage to select the size landables are displayed on the map."),
-             "%u %%", "%u", 50, 200, 10, settings.landable_rendering_scale);
-  SetExpertRow(AppLandableRenderingScale);
-
-  AddBoolean(_("Scale runway length"),
-             _("[Off] Display fixed length for runways.\n"
-                 "[On] Scale displayed runway length based on real length."),
-             settings.scale_runway_length);
-  SetExpertRow(AppScaleRunwayLength);
-
-  UpdateVisibilities();
-}
-
-void
-WaypointDisplayConfigPanel::Show(const PixelRect &rc) noexcept
-{
-  ConfigPanel::BorrowExtraButton(2, _("Filter"), [](){
-    dlgWaypointFilterShowModal();
+  list->SetVisibilityCallback([](bool visible) {
+    if (visible)
+      ConfigPanel::BorrowExtraButton(2, _("Filter"), [](){
+        dlgWaypointFilterShowModal();
+      });
+    else
+      ConfigPanel::ReturnExtraButton(2);
   });
 
-  RowFormWidget::Show(rc);
-}
+  list->SetSaveCallback([fields](bool &changed) {
+    WaypointRendererSettings &settings =
+      CommonInterface::SetMapSettings().waypoint;
 
-void
-WaypointDisplayConfigPanel::Hide() noexcept
-{
-  RowFormWidget::Hide();
-  ConfigPanel::ReturnExtraButton(2);
-}
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.display_text_type, fields->display_text_type,
+      ProfileKeys::DisplayText);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.arrival_height_display, fields->arrival_height,
+      ProfileKeys::WaypointArrivalHeightDisplay);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.landable_render_mode, fields->label_style,
+      ProfileKeys::WaypointLabelStyle);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.label_selection, fields->label_selection,
+      ProfileKeys::WaypointLabelSelection);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.landable_style, fields->landable_style,
+      ProfileKeys::AppIndLandable);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.map_waypoint_icon_scale, fields->icon_scale,
+      ProfileKeys::MapWaypointIconScale);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.vector_landable_rendering, fields->detailed_landables,
+      ProfileKeys::AppUseSWLandablesRendering);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.landable_rendering_scale, fields->landable_scale,
+      ProfileKeys::AppLandableRenderingScale);
+    changed |= ConfigPanel::CommitSetting(
+      changed, settings.scale_runway_length, fields->scale_runway,
+      ProfileKeys::AppScaleRunwayLength);
+    return true;
+  });
 
-bool
-WaypointDisplayConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-  WaypointRendererSettings &settings = CommonInterface::SetMapSettings().waypoint;
-
-  changed |= SaveValueEnum(WaypointLabels, ProfileKeys::DisplayText, settings.display_text_type);
-
-  changed |= SaveValueEnum(WaypointArrivalHeightDisplay, ProfileKeys::WaypointArrivalHeightDisplay,
-                           settings.arrival_height_display);
-
-  changed |= SaveValueEnum(WaypointLabelStyle, ProfileKeys::WaypointLabelStyle,
-                           settings.landable_render_mode);
-
-  changed |= SaveValueEnum(WaypointLabelSelection, ProfileKeys::WaypointLabelSelection,
-                           settings.label_selection);
-
-  changed |= SaveValueEnum(AppIndLandable, ProfileKeys::AppIndLandable, settings.landable_style);
-
-  changed |= SaveValueInteger(MapWaypointIconScale, ProfileKeys::MapWaypointIconScale,
-                              settings.map_waypoint_icon_scale);
-
-  changed |= SaveValue(AppUseSWLandablesRendering, ProfileKeys::AppUseSWLandablesRendering,
-                       settings.vector_landable_rendering);
-
-  changed |= SaveValueInteger(AppLandableRenderingScale, ProfileKeys::AppLandableRenderingScale,
-                              settings.landable_rendering_scale);
-
-  changed |= SaveValue(AppScaleRunwayLength, ProfileKeys::AppScaleRunwayLength,
-                       settings.scale_runway_length);
-
-  _changed |= changed;
-
-  return true;
-}
-
-std::unique_ptr<Widget>
-CreateWaypointDisplayConfigPanel()
-{
-  return std::make_unique<WaypointDisplayConfigPanel>();
+  return list;
 }

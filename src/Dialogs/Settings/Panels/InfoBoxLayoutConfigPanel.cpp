@@ -2,23 +2,18 @@
 // Copyright The XCSoar Project
 
 #include "InfoBoxLayoutConfigPanel.hpp"
-#include "Profile/Keys.hpp"
-#include "Interface.hpp"
-#include "MainWindow.hpp"
-#include "Language/Language.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "UIGlobals.hpp"
-#include "Form/DataField/Enum.hpp"
-#include "InfoBoxes/InfoBoxGeometryList.hpp"
 #include "Asset.hpp"
+#include "ConfigPanel.hpp"
+#include "InfoBoxes/InfoBoxGeometryList.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
+#include "MainWindow.hpp"
+#include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
+#include "UIGlobals.hpp"
+#include "Widget/GroupedListWidget.hpp"
 
-enum ControlIndex {
-  AppInfoBoxGeom,
-  InfoBoxTitleScale,
-  AppInfoBoxColors,
-  AppInfoBoxTheme,
-  AppInfoBoxBorder,
-};
+#include <memory>
 
 static constexpr StaticEnumChoice infobox_border_list[] = {
   { InfoBoxSettings::BorderStyle::BOX,
@@ -42,120 +37,95 @@ static constexpr StaticEnumChoice infobox_theme_list[] = {
   nullptr
 };
 
-class InfoBoxLayoutConfigPanel final : public RowFormWidget {
-  /** Geometry when this panel was opened; restored if Settings is cancelled. */
-  InfoBoxSettings::Geometry original_geometry{};
-  bool saved = false;
-
-public:
-  InfoBoxLayoutConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  void Unprepare() noexcept override;
-  bool Leave() noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-InfoBoxLayoutConfigPanel::Prepare(ContainerWindow &parent,
-                                   const PixelRect &rc) noexcept
-{
-  const UISettings &ui_settings = CommonInterface::GetUISettings();
-
-  original_geometry = ui_settings.info_boxes.geometry;
-  saved = false;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  AddEnum(_("InfoBox geometry"),
-          _("A list of possible InfoBox layouts. Do some trials to find the best for your screen size."),
-          info_box_geometry_list, (unsigned)ui_settings.info_boxes.geometry);
-
-  AddInteger(_("InfoBox title size"), _("Zoom factor for InfoBox title and comment text"),
-             "%d %%", "%d", 50, 150, 5,
-             ui_settings.info_boxes.scale_title_font);
-  SetExpertRow(InfoBoxTitleScale);
-
-  if (HasColors()) {
-    AddBoolean(_("Colored InfoBoxes"),
-               _("If true, certain InfoBoxes will have coloured text. For example, the active waypoint "
-                 "InfoBox will be blue when the glider is above final glide."),
-               ui_settings.info_boxes.use_colors);
-    SetExpertRow(AppInfoBoxColors);
-  } else
-    AddDummy();
-
-  AddEnum(_("InfoBox theme"), nullptr, infobox_theme_list,
-          (unsigned)ui_settings.info_boxes.theme);
-  SetExpertRow(AppInfoBoxTheme);
-
-  AddEnum(_("InfoBox border"), nullptr, infobox_border_list,
-          unsigned(ui_settings.info_boxes.border_style));
-  SetExpertRow(AppInfoBoxBorder);
-}
-
-void
-InfoBoxLayoutConfigPanel::Unprepare() noexcept
-{
-  if (!saved)
-    CommonInterface::SetUISettings().info_boxes.geometry = original_geometry;
-
-  RowFormWidget::Unprepare();
-}
-
-bool
-InfoBoxLayoutConfigPanel::Leave() noexcept
-{
-  /* Switching to another settings page (still inside Configuration):
-     copy geometry so InfoBox Sets can read settings.geometry. */
-  SaveValueEnum(AppInfoBoxGeom,
-                CommonInterface::SetUISettings().info_boxes.geometry);
-  return true;
-}
-
-bool
-InfoBoxLayoutConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-  UISettings &ui_settings = CommonInterface::SetUISettings();
-  saved = true;
-
-  bool info_box_geometry_changed = false;
-
-  /* Leave() may already have synced the DataField into ui_settings;
-     re-base so SaveValueEnum still writes the profile when needed. */
-  ui_settings.info_boxes.geometry = original_geometry;
-  info_box_geometry_changed |=
-    SaveValueEnum(AppInfoBoxGeom, ProfileKeys::InfoBoxGeometry,
-                  ui_settings.info_boxes.geometry);
-  info_box_geometry_changed |=
-    SaveValueInteger(InfoBoxTitleScale, ProfileKeys::InfoBoxTitleScale,
-                  ui_settings.info_boxes.scale_title_font);
-
-  changed |= info_box_geometry_changed;
-
-  if (HasColors())
-    changed |= SaveValue(AppInfoBoxColors, ProfileKeys::AppInfoBoxColors,
-                         ui_settings.info_boxes.use_colors);
-
-  changed |= SaveValueEnum(AppInfoBoxTheme, ProfileKeys::AppInfoBoxTheme,
-                           ui_settings.info_boxes.theme);
-
-  changed |= SaveValueEnum(AppInfoBoxBorder, ProfileKeys::AppInfoBoxBorder,
-                           ui_settings.info_boxes.border_style);
-
-  if (info_box_geometry_changed)
-    CommonInterface::main_window->ReinitialiseLayout();
-
-  _changed |= changed;
-
-  return true;
-}
-
 std::unique_ptr<Widget>
 CreateInfoBoxLayoutConfigPanel()
 {
-  return std::make_unique<InfoBoxLayoutConfigPanel>();
+  const UISettings &ui_settings = CommonInterface::GetUISettings();
+
+  struct Fields {
+    InfoBoxSettings::Geometry geometry;
+    InfoBoxSettings::Geometry original;
+    int title_scale;
+    bool use_colors;
+    InfoBoxSettings::Theme theme;
+    InfoBoxSettings::BorderStyle border;
+    bool saved = false;
+  };
+
+  auto fields = std::make_shared<Fields>(Fields{
+    ui_settings.info_boxes.geometry,
+    ui_settings.info_boxes.geometry,
+    static_cast<int>(ui_settings.info_boxes.scale_title_font),
+    ui_settings.info_boxes.use_colors,
+    ui_settings.info_boxes.theme,
+    ui_settings.info_boxes.border_style,
+  });
+
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  list->AddGroup(nullptr);
+  list->AddEnum(_("InfoBox geometry"),
+                _("A list of possible InfoBox layouts. Do some trials to find the best for your screen size."),
+                info_box_geometry_list, fields->geometry);
+  list->AddInteger(_("InfoBox title size"),
+                   _("Zoom factor for InfoBox title and comment text"),
+                   "%d %%", "%d", 50, 150, 5, fields->title_scale, true);
+
+  if (HasColors())
+    list->AddSwitch(_("Colored InfoBoxes"),
+                    _("If true, certain InfoBoxes will have coloured text. For example, the active waypoint "
+                      "InfoBox will be blue when the glider is above final glide."),
+                    fields->use_colors, true);
+
+  list->AddEnum(_("InfoBox theme"), nullptr,
+                infobox_theme_list, fields->theme, true);
+  list->AddEnum(_("InfoBox border"), nullptr,
+                infobox_border_list, fields->border, true);
+
+  /* Another page, such as InfoBox sets, reads the live geometry.
+     Cancel restores the value from when the page was opened. */
+  list->SetLeaveCallback([fields] {
+    CommonInterface::SetUISettings().info_boxes.geometry =
+      fields->geometry;
+    return true;
+  });
+  list->SetUnprepareCallback([fields] {
+    if (!fields->saved)
+      CommonInterface::SetUISettings().info_boxes.geometry =
+        fields->original;
+  });
+
+  list->SetSaveCallback([fields](bool &changed) {
+    fields->saved = true;
+    UISettings &ui_settings = CommonInterface::SetUISettings();
+    auto &info_boxes = ui_settings.info_boxes;
+    bool layout_changed = false;
+
+    if (fields->geometry != fields->original) {
+      info_boxes.geometry = fields->geometry;
+      Profile::Set(ProfileKeys::InfoBoxGeometry,
+                   static_cast<unsigned>(fields->geometry));
+      changed = layout_changed = true;
+    }
+
+    if (ConfigPanel::CommitSetting(changed, info_boxes.scale_title_font,
+          static_cast<unsigned>(fields->title_scale),
+          ProfileKeys::InfoBoxTitleScale))
+      layout_changed = true;
+
+    if (HasColors())
+      ConfigPanel::CommitSetting(changed, info_boxes.use_colors,
+        fields->use_colors, ProfileKeys::AppInfoBoxColors);
+
+    ConfigPanel::CommitSetting(changed, info_boxes.theme,
+      fields->theme, ProfileKeys::AppInfoBoxTheme);
+    ConfigPanel::CommitSetting(changed, info_boxes.border_style,
+      fields->border, ProfileKeys::AppInfoBoxBorder);
+
+    if (layout_changed)
+      CommonInterface::main_window->ReinitialiseLayout();
+    return true;
+  });
+
+  return list;
 }

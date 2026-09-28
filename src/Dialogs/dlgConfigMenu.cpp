@@ -220,7 +220,6 @@ public:
   {
     text_renderer.SetCenter();
     text_renderer.SetVCenter();
-    text_renderer.SetControl();
   }
 
   [[gnu::pure]]

@@ -7,122 +7,124 @@
 
 #include "ActionInterface.hpp"
 #include "DataGlobals.hpp"
+#include "Dialogs/DataField.hpp"
 #include "Form/DataField/Enum.hpp"
+#include "Form/DataField/Password.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
+#include "UIGlobals.hpp"
 #include "Weather/Settings.hpp"
 #include "Weather/SkySight/Regions.hpp"
 #include "Weather/SkySight/SkySightClient.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "Interface.hpp"
-#include "Language/Language.hpp"
-#include "UIGlobals.hpp"
+#include "Widget/GroupedListWidget.hpp"
+#include "util/StaticString.hxx"
+#include "util/TruncateString.hpp"
 
-enum ControlIndex {
-  SKYSIGHT_EMAIL,
-  SKYSIGHT_PASSWORD,
-  SKYSIGHT_REGION,
-  SKYSIGHT_OPACITY,
-};
+#include <memory>
 
-class SkySightConfigPanel final : public RowFormWidget {
-public:
-  SkySightConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  bool Save(bool &changed) noexcept override;
-};
-
-void
-SkySightConfigPanel::Prepare(ContainerWindow &parent,
-                             const PixelRect &rc) noexcept
+static void
+FillSkySightRegion(DataFieldEnum &df, const char *region) noexcept
 {
-  const auto &settings = CommonInterface::GetComputerSettings().weather;
-
-  RowFormWidget::Prepare(parent, rc);
-
-  AddText(C_("Setting", "SkySight Email"),
-          _("The e-mail address you use to sign in to skysight.io."),
-          settings.skysight.email);
-  AddPassword(C_("Setting", "SkySight Password"),
-              _("Your SkySight password."),
-              settings.skysight.password);
-
-  auto *region = AddEnum(C_("Setting", "SkySight Region"),
-                         _("Select the SkySight region used for live weather layers."));
-  if (region == nullptr)
-    return;
-
-  auto &df = *(DataFieldEnum *)region->GetDataField();
   if (const auto skysight = DataGlobals::GetSkySight(); skysight != nullptr) {
     for (const auto &candidate : skysight->GetRegions())
       df.addEnumText(candidate.id.c_str(), gettext(candidate.name.c_str()));
-
-    if (!df.SetValue(settings.skysight.region.c_str()))
+    if (!df.SetValue(region))
       df.SetValue(skysight->GetRegion().data());
   } else {
     for (const auto &candidate : SKYSIGHT_REGIONS)
       df.addEnumText(candidate.id, gettext(candidate.name));
-
-    df.SetValue(FindSkySightRegionById(settings.skysight.region.c_str()).id);
+    df.SetValue(FindSkySightRegionById(region).id);
   }
-
-  region->RefreshDisplay();
-
-  AddInteger(_("Overlay opacity"),
-             /* xgettext:no-c-format */
-             _("Sets the opacity of the SkySight overlay on the map.  "
-               "50% is more transparent, 100% is fully opaque."),
-             "%d %%", "%d", 50, 100, 5,
-             settings.skysight.opacity_percent);
-}
-
-bool
-SkySightConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-  auto &settings = CommonInterface::SetComputerSettings().weather;
-
-  changed |= SaveValue(SKYSIGHT_EMAIL, ProfileKeys::SkySightEmail,
-                       settings.skysight.email);
-  changed |= SaveValue(SKYSIGHT_PASSWORD, ProfileKeys::SkySightPassword,
-                       settings.skysight.password);
-  changed |= SaveValue(SKYSIGHT_REGION, ProfileKeys::SkySightRegion,
-                       settings.skysight.region);
-
-  if (SaveValueInteger(SKYSIGHT_OPACITY, ProfileKeys::SkySightOpacity,
-                       settings.skysight.opacity_percent)) {
-    if (settings.skysight.opacity_percent < 50)
-      settings.skysight.opacity_percent = 50;
-    else if (settings.skysight.opacity_percent > 100)
-      settings.skysight.opacity_percent = 100;
-    if (auto skysight = DataGlobals::GetSkySight())
-      skysight->ApplyOverlayOpacityFromSettings();
-    ActionInterface::SendUIState(true);
-    changed = true;
-  }
-
-  if (changed)
-    if (auto skysight = DataGlobals::GetSkySight())
-      skysight->Init();
-
-  _changed |= changed;
-  return true;
 }
 
 std::unique_ptr<Widget>
 CreateSkySightConfigPanel()
 {
-  return std::make_unique<SkySightConfigPanel>();
+  const auto &src = CommonInterface::GetComputerSettings().weather.skysight;
+  struct Fields {
+    StaticString<64> email, password;
+    StaticString<32> region;
+    int opacity_percent;
+  };
+  auto fields = std::make_shared<Fields>();
+  fields->email = src.email;
+  fields->password = src.password;
+  fields->region = src.region;
+  fields->opacity_percent = static_cast<int>(src.opacity_percent);
+  auto list = std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+  auto *page = list.get();
+  list->AddGroup(nullptr);
+  list->AddText(C_("Setting", "SkySight Email"),
+                _("The e-mail address you use to sign in to skysight.io."),
+                fields->email.data(), fields->email.capacity());
+  list->AddValue(C_("Setting", "SkySight Password"),
+                 _("Your SkySight password."),
+                 [fields](GroupedListWidget::ValueState &state) {
+                   PasswordDataField df(fields->password.c_str());
+                   state.text = df.GetAsDisplayString();
+                 }, [fields, page] {
+                   PasswordDataField df(fields->password.c_str());
+                   if (!EditDataFieldDialog(C_("Setting", "SkySight Password"), df, _("Your SkySight password.")))
+                     return;
+                   CopyTruncateString(fields->password.data(),
+                                      fields->password.capacity(), df.GetValue());
+                   page->UpdateValues();
+                 });
+  const char *region_help = _("Select the SkySight region used for live weather layers.");
+  list->AddValue(C_("Setting", "SkySight Region"), region_help,
+                 [fields](GroupedListWidget::ValueState &state) {
+                   DataFieldEnum df;
+                   FillSkySightRegion(df, fields->region.c_str());
+                   state.text = df.GetAsDisplayString();
+                 }, [fields, page, region_help] {
+                   DataFieldEnum df;
+                   FillSkySightRegion(df, fields->region.c_str());
+                   if (!EditDataFieldDialog(C_("Setting", "SkySight Region"), df, region_help))
+                     return;
+                   fields->region = df.GetAsString();
+                   page->UpdateValues();
+                 });
+  list->AddInteger(_("Overlay opacity"),
+                   /* xgettext:no-c-format */
+                   _("Sets the opacity of the SkySight overlay on the map.  "
+                     "50% is more transparent, 100% is fully opaque."),
+                   "%d %%", "%d", 50, 100, 5, fields->opacity_percent);
+  list->SetSaveCallback([fields](bool &changed) {
+    auto &skysight = CommonInterface::SetComputerSettings().weather.skysight;
+    bool skysight_changed = false;
+    auto save = [&](auto &dest, const auto &value, std::string_view key) {
+      if (dest == value) return;
+      dest = value;
+      Profile::Set(key, dest.c_str());
+      skysight_changed = true;
+    };
+    save(skysight.email, fields->email, ProfileKeys::SkySightEmail);
+    save(skysight.password, fields->password, ProfileKeys::SkySightPassword);
+    save(skysight.region, fields->region, ProfileKeys::SkySightRegion);
+    unsigned opacity = static_cast<unsigned>(fields->opacity_percent);
+    if (opacity < 50)
+      opacity = 50;
+    else if (opacity > 100)
+      opacity = 100;
+    if (skysight.opacity_percent != opacity) {
+      skysight.opacity_percent = opacity;
+      Profile::Set(ProfileKeys::SkySightOpacity, opacity);
+      if (auto client = DataGlobals::GetSkySight())
+        client->ApplyOverlayOpacityFromSettings();
+      ActionInterface::SendUIState(true);
+      skysight_changed = true;
+    }
+    if (skysight_changed)
+      if (auto client = DataGlobals::GetSkySight())
+        client->Init();
+    changed |= skysight_changed;
+    return true;
+  });
+  return list;
 }
-
 #else
-
 std::unique_ptr<Widget>
-CreateSkySightConfigPanel()
-{
-  return {};
-}
-
+CreateSkySightConfigPanel() { return {}; }
 #endif

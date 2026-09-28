@@ -24,6 +24,7 @@ enum ControlIndex {
   DarkMode,
   TabDialogStyle,
   AppStatusMessageAlignment,
+  TiledMenu,
 };
 
 static constexpr StaticEnumChoice tabdialog_style_list[] = {
@@ -96,6 +97,11 @@ AppearanceConfigPanel::Prepare(ContainerWindow &parent,
           popup_msg_position_list,
           (unsigned)ui_settings.popup_message_position);
   SetExpertRow(AppStatusMessageAlignment);
+
+  AddBoolean(_("Tiled menu"),
+             _("Show Configuration as a tile grid instead of the "
+               "two-column list."),
+             ui_settings.dialog.tiled_menu);
 }
 
 bool
@@ -130,6 +136,9 @@ AppearanceConfigPanel::Save(bool &_changed) noexcept
   DialogSettings &dialog_settings = CommonInterface::SetUISettings().dialog;
   changed |= SaveValueEnum(TabDialogStyle, ProfileKeys::AppDialogTabStyle,
                            dialog_settings.tab_style);
+
+  changed |= SaveValue(TiledMenu, ProfileKeys::AppDialogTiledMenu,
+                       dialog_settings.tiled_menu);
 
   _changed |= changed;
   return true;

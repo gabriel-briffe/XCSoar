@@ -2,428 +2,144 @@
 // Copyright The XCSoar Project
 
 #include "NOTAMConfigPanel.hpp"
-#include "LogFile.hpp"
-#include "ConfigPanel.hpp"
-#include "Widget/RowFormWidget.hpp"
-#include "Form/DataField/Listener.hpp"
-#include "Form/DataField/Boolean.hpp"
-#include "Profile/Keys.hpp"
-#include "Profile/Profile.hpp"
-#include "Language/Language.hpp"
-#include "Airspace/AirspaceGlue.hpp"
 #include "Airspace/AirspaceComputerSettings.hpp"
-#include "Interface.hpp"
-#include "UIGlobals.hpp"
-#include "net/http/Features.hpp"
-#include "NetComponents.hpp"
+#include "Airspace/AirspaceGlue.hpp"
 #include "Components.hpp"
+#include "ConfigPanel.hpp"
 #include "DataComponents.hpp"
+#include "Dialogs/Airspace/NOTAMList.hpp"
+#include "Dialogs/Message.hpp"
+#include "Interface.hpp"
+#include "Language/Language.hpp"
+#include "LogFile.hpp"
+#include "Message.hpp"
+#include "NOTAM/Config.hpp"
 #include "NOTAM/Filter.hpp"
 #include "NOTAM/NOTAMGlue.hpp"
-#include "NOTAM/Config.hpp"
+#include "NetComponents.hpp"
+#include "Profile/Keys.hpp"
+#include "Profile/Profile.hpp"
 #include "Protection.hpp"
-#include "Dialogs/Airspace/NOTAMList.hpp"
-#include <Dialogs/Message.hpp>
-#include <Message.hpp>
-#include "Formatter/UserUnits.hpp"
-#include "Units/Units.hpp"
+#include "UIGlobals.hpp"
 #include "Units/Descriptor.hpp"
+#include "Units/Units.hpp"
+#include "Widget/GroupedListWidget.hpp"
+#include "net/http/Features.hpp"
 #include "ui/event/Notify.hpp"
 #include "util/Macros.hpp"
 #include "util/StringFormat.hpp"
+#include "util/UTF8.hpp"
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <exception>
+#include <memory>
 
-enum ControlIndex {
 #ifdef HAVE_HTTP
-  ENABLE_NOTAM,
-  NOTICE,
-  API_URL,
-  NOTAM_RADIUS,
-  REFRESH_INTERVAL,
-  FILTER_SPACER,
-  SHOW_IFR,
-  IFR_FILTERED,
-  SHOW_ONLY_EFFECTIVE,
-  TIME_FILTERED,
-  MAX_RADIUS,
-  RADIUS_FILTERED,
-  HIDDEN_QCODES,
-  QCODE_FILTERED,
-#endif
+
+struct NotamFields {
+  bool enabled;
+  StaticString<128> api_url;
+  double radius_user;
+  int refresh_min;
+  bool show_ifr;
+  bool show_only_effective;
+  double max_radius_user;
+  StaticString<256> hidden_qcodes;
+  char distance_format[32];
+  double search_min = 0;
+  double search_max = 0;
+  double search_step = 0;
+  bool loading = false;
+  bool saving_for_manual = false;
 };
 
-class NOTAMConfigPanel : public RowFormWidget, 
-                         public DataFieldListener,
-                         public NOTAMListener {
-  // UI thread notification for async updates
-  UI::Notify notify{[this]() { UpdateFilterCounts(); }};
-  bool saving_for_manual_update = false;
-
-public:
-  NOTAMConfigPanel()
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
-
-  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
-  void Show(const PixelRect &rc) noexcept override;
-  void Hide() noexcept override;
-  bool Save(bool &changed) noexcept override;
-
-private:
-  void OnUpdateButton() noexcept;
-  void SetFilterRowCount(unsigned control, unsigned count) noexcept;
-  void SetFilterRowLoading(unsigned control) noexcept;
-  void UpdateVisibility() noexcept;
-  void UpdateFilterCounts() noexcept;
-  void ShowLoadingStatus() noexcept;
-  
-  /* methods from DataFieldListener */
-  void OnModified(DataField &df) noexcept override;
-  
-  /* methods from NOTAMListener */
-  void OnNOTAMsUpdated() noexcept override;
-  void OnNOTAMsLoadComplete(NOTAMLoadNotification notification) noexcept override;
+enum class NotamCount {
+  IFR,
+  TIME,
+  RADIUS,
+  QCODE,
 };
 
-void
-NOTAMConfigPanel::Prepare([[maybe_unused]] ContainerWindow &parent, 
-                          [[maybe_unused]] const PixelRect &rc) noexcept
+static unsigned
+FilteredCount(NotamCount kind)
 {
-#ifdef HAVE_HTTP
-  const AirspaceComputerSettings &computer =
-    CommonInterface::GetComputerSettings().airspace;
-
-  AddBoolean(_("NOTAM Support"),
-             _("Enable downloading and display of NOTAMs from aviation authorities."),
-             computer.notam.enabled, this);
-  AddMultiLine(_("Notice: NOTAM display is for situational awareness only\n"
-                 "and does not replace proper pre-flight NOTAM briefing."));
-
-  AddText(_("API URL"),
-          _("Base URL of the NOTAM proxy API. Must be configured before NOTAMs can be fetched."),
-          computer.notam.api_base_url.c_str());
-
-  Unit distance_unit = Units::GetUserDistanceUnit();
-  double radius_user = Units::ToUserDistance(computer.notam.radius_km * 1000.0);
-  const char *unit_name = Units::GetUnitName(distance_unit);
-
-  char radius_format_display[32];
-  const char radius_format_edit[] = "%.0f";
-  StringFormat(radius_format_display,
-               ARRAY_SIZE(radius_format_display),
-               _("%%.0f %s"), unit_name);
-
-  const double min_search_radius_user = Units::ToUserDistance(1000.0);
-  const double max_search_radius_user =
-    Units::ToUserDistance(MAX_NOTAM_REQUEST_RADIUS_KM * 1000.0);
-  const double step_search_radius_user = Units::ToUserDistance(10000.0);
-
-  AddFloat(_("Search Radius"),
-           _("Radius around current location to fetch NOTAMs."),
-           radius_format_display, radius_format_edit,
-           min_search_radius_user, max_search_radius_user, step_search_radius_user, 0,
-           radius_user);
-
-  AddInteger(_("Auto-Refresh (minutes)"),
-             _("Automatically refresh NOTAMs every X minutes. Set to 0 to disable."),
-             _("%d min"), "%d", 0, MAX_NOTAM_REFRESH_INTERVAL_MIN, 15,
-             computer.notam.refresh_interval_min);
-
-  // Get NOTAM statistics for filter counts
-  NOTAMFilter::FilterStats stats = {};
-  if (net_components && net_components->notam) {
+  NOTAMFilter::FilterStats stats{};
+  if (net_components != nullptr && net_components->notam != nullptr)
     stats = net_components->notam->GetFilterStats();
+
+  switch (kind) {
+  case NotamCount::IFR:
+    return stats.filtered_by_ifr;
+  case NotamCount::TIME:
+    return stats.filtered_by_time;
+  case NotamCount::RADIUS:
+    return stats.filtered_by_radius;
+  case NotamCount::QCODE:
+    return stats.filtered_by_qcode;
   }
 
-  AddSpacer();
-  
-  char buffer[64];
-
-  AddBoolean(_("Show IFR-Only NOTAMs"),
-             _("Include NOTAMs for IFR traffic only."),
-             computer.notam.show_ifr);
-  StringFormat(buffer, ARRAY_SIZE(buffer),
-               _("%u filtered"), stats.filtered_by_ifr);
-  AddReadOnly("", nullptr, buffer);
-
-  AddBoolean(_("Show Only Currently Effective"),
-             _("Filter out NOTAMs not currently in effect."),
-             computer.notam.show_only_effective);
-  StringFormat(buffer, ARRAY_SIZE(buffer),
-               _("%u filtered"), stats.filtered_by_time);
-  AddReadOnly("", nullptr, buffer);
-
-  // Radius filter with user units
-  double max_radius_user = Units::ToUserDistance(computer.notam.max_radius_m);
-  const double min_max_radius_user = Units::ToUserDistance(0.0);
-  const double max_max_radius_user = max_search_radius_user;
-  const double step_max_radius_user = step_search_radius_user;
-  
-  char format_display[32];
-  const char format_edit[] = "%.0f";
-  StringFormat(format_display, ARRAY_SIZE(format_display),
-               _("%%.0f %s"), unit_name);
-  
-  AddFloat(_("Maximum NOTAM Radius"),
-           _("Filter out NOTAMs with radius larger than this. Set to 0 to disable."),
-           format_display, format_edit,
-           min_max_radius_user, max_max_radius_user, step_max_radius_user, 0,
-           max_radius_user);
-  StringFormat(buffer, ARRAY_SIZE(buffer),
-               _("%u filtered"), stats.filtered_by_radius);
-  AddReadOnly("", nullptr, buffer);
-
-  AddText(_("Hidden Q-Codes"),
-          _("Space-separated Q-code prefixes to hide (e.g., QA QK QN QOA QOL)."),
-          computer.notam.hidden_qcodes.c_str());
-  StringFormat(buffer, ARRAY_SIZE(buffer),
-               _("%u filtered"), stats.filtered_by_qcode);
-  AddReadOnly("", nullptr, buffer);
-
-  UpdateVisibility();
-#endif
+  return 0;
 }
 
-void
-NOTAMConfigPanel::Show(const PixelRect &rc) noexcept
+static void
+AddCount(GroupedListWidget &list, const std::shared_ptr<NotamFields> &fields,
+         NotamCount kind) noexcept
 {
-#ifdef HAVE_HTTP
-  // Register as listener for NOTAM updates
-  if (net_components && net_components->notam) {
-    try {
-      net_components->notam->AddListener(*this);
-    } catch (const std::exception &e) {
-      LogFmt("Failed to register NOTAM config listener: {}", e.what());
-    } catch (...) {
-      LogError(std::current_exception(),
-               "Failed to register NOTAM config listener");
-    }
-  }
-  
-  ConfigPanel::BorrowExtraButton(1, _("Refresh"), [this](){
-    OnUpdateButton();
-  });
-  
-  ConfigPanel::BorrowExtraButton(2, _("List"), [this](){
-    ShowNOTAMListDialog(UIGlobals::GetMainWindow());
+  list.AddValue("", nullptr,
+                [fields, kind](GroupedListWidget::ValueState &state) {
+                  state.hidden = !fields->enabled;
+                  if (fields->loading) {
+                    state.text = C_("Status", "Loading...");
+                    return;
+                  }
 
-    // Filtering from the list changes the shared settings directly.  This
-    // panel remains alive while the list dialog is open, so reload the text
-    // field to avoid saving its stale value on the next refresh.
-    LoadValue(HIDDEN_QCODES,
-              CommonInterface::GetComputerSettings().airspace.notam
-                .hidden_qcodes.c_str());
-  });
-#endif
-
-  RowFormWidget::Show(rc);
+                  char buffer[64];
+                  StringFormat(buffer, ARRAY_SIZE(buffer),
+                               _("%u filtered"), FilteredCount(kind));
+                  state.text = buffer;
+                });
 }
 
-void
-NOTAMConfigPanel::Hide() noexcept
+static void
+AddToggle(GroupedListWidget &list, GroupedListWidget *page,
+          const char *caption, const char *help, bool &field) noexcept
 {
-#ifdef HAVE_HTTP
-  // Unregister as listener
-  if (net_components && net_components->notam) {
-    net_components->notam->RemoveListener(*this);
-  }
-
-  notify.ClearNotification();
-  
-  ConfigPanel::ReturnExtraButton(1);
-  ConfigPanel::ReturnExtraButton(2);
-#endif
-
-  RowFormWidget::Hide();
+  GroupedListWidget::ItemOptions options;
+  options.toggle = true;
+  options.checked = field;
+  options.help = help;
+  list.AddItem(caption, [&field, page] {
+    field = !field;
+    page->UpdateValues();
+  }, options);
 }
 
-void
-NOTAMConfigPanel::OnUpdateButton() noexcept
+static void
+SaveNotam(NotamFields &fields, bool &changed)
 {
-#ifdef HAVE_HTTP
-  LogFormat("NOTAM: Manual update triggered from settings panel");
-  const unsigned old_radius_km =
-    CommonInterface::GetComputerSettings().airspace.notam.radius_km;
-  const auto old_api_url =
-    CommonInterface::GetComputerSettings().airspace.notam.api_base_url;
-
-  // Save current settings first so the update uses the new values
-  bool dummy_changed = false;
-  struct SavingForManualUpdate {
-    bool &flag;
-
-    explicit SavingForManualUpdate(bool &_flag) noexcept
-      :flag(_flag) {
-      flag = true;
-    }
-
-    ~SavingForManualUpdate() noexcept {
-      flag = false;
-    }
-  } saving_guard{saving_for_manual_update};
-
-  Save(dummy_changed);
-
-  const auto &computer_settings = CommonInterface::GetComputerSettings();
-  const bool notam_enabled =
-    computer_settings.airspace.notam.enabled;
-  const bool radius_changed =
-    old_radius_km != computer_settings.airspace.notam.radius_km;
-  const bool api_url_changed =
-    old_api_url != computer_settings.airspace.notam.api_base_url;
-
-  if (net_components && net_components->notam && notam_enabled) {
-    const auto &basic = CommonInterface::Basic();
-    if (!basic.location_available || !basic.location.IsValid()) {
-      UpdateFilterCounts();
-      ShowMessageBox(_("No valid location."), C_("Menu", "NOTAM"),
-                     MB_OK | MB_ICONEXCLAMATION);
-      return;
-    }
-
-    net_components->notam->ResetFetchFailureNotification();
-
-    if (net_components->notam->ForceUpdateLocation(basic.location,
-                                                   radius_changed ||
-                                                   api_url_changed)) {
-      ShowLoadingStatus();
-      net_components->notam->MarkManualRefreshRequested();
-    }
-  }
-#endif
-}
-
-void
-NOTAMConfigPanel::SetFilterRowCount(const unsigned control,
-                                    const unsigned count) noexcept
-{
-#ifdef HAVE_HTTP
-  char buffer[64];
-  StringFormat(buffer, ARRAY_SIZE(buffer), _("%u filtered"), count);
-  SetText(control, buffer);
-#else
-  (void)control;
-  (void)count;
-#endif
-}
-
-void
-NOTAMConfigPanel::SetFilterRowLoading(const unsigned control) noexcept
-{
-#ifdef HAVE_HTTP
-  SetText(control, C_("Status", "Loading..."));
-#else
-  (void)control;
-#endif
-}
-
-void
-NOTAMConfigPanel::UpdateFilterCounts() noexcept
-{
-#ifdef HAVE_HTTP
-  if (!net_components || !net_components->notam) {
-    return;
-  }
-
-  // Get current filter statistics
-  NOTAMFilter::FilterStats stats = net_components->notam->GetFilterStats();
-  
-  SetFilterRowCount(IFR_FILTERED, stats.filtered_by_ifr);
-  SetFilterRowCount(TIME_FILTERED, stats.filtered_by_time);
-  SetFilterRowCount(RADIUS_FILTERED, stats.filtered_by_radius);
-  SetFilterRowCount(QCODE_FILTERED, stats.filtered_by_qcode);
-#endif
-}
-
-void
-NOTAMConfigPanel::ShowLoadingStatus() noexcept
-{
-#ifdef HAVE_HTTP
-  SetFilterRowLoading(IFR_FILTERED);
-  SetFilterRowLoading(TIME_FILTERED);
-  SetFilterRowLoading(RADIUS_FILTERED);
-  SetFilterRowLoading(QCODE_FILTERED);
-#endif
-}
-
-void
-NOTAMConfigPanel::OnNOTAMsUpdated() noexcept
-{
-#ifdef HAVE_HTTP
-  // Called from background thread - dispatch UI update to main thread
-  notify.SendNotification();
-#endif
-}
-
-void
-NOTAMConfigPanel::OnNOTAMsLoadComplete(
-  [[maybe_unused]] NOTAMLoadNotification notification) noexcept
-{
-#ifdef HAVE_HTTP
-  // Always refresh panel state when a load attempt finishes.
-  notify.SendNotification();
-#endif
-}
-
-void
-NOTAMConfigPanel::UpdateVisibility() noexcept
-{
-#ifdef HAVE_HTTP
-  const DataFieldBoolean &df =
-    static_cast<const DataFieldBoolean &>(GetDataField(ENABLE_NOTAM));
-  const bool enabled = df.GetValue();
-  
-  SetRowAvailable(NOTICE, enabled);
-  SetRowAvailable(API_URL, enabled);
-  SetRowAvailable(NOTAM_RADIUS, enabled);
-  SetRowAvailable(REFRESH_INTERVAL, enabled);
-  SetRowAvailable(FILTER_SPACER, enabled);
-  SetRowAvailable(SHOW_IFR, enabled);
-  SetRowAvailable(IFR_FILTERED, enabled);
-  SetRowAvailable(SHOW_ONLY_EFFECTIVE, enabled);
-  SetRowAvailable(TIME_FILTERED, enabled);
-  SetRowAvailable(MAX_RADIUS, enabled);
-  SetRowAvailable(RADIUS_FILTERED, enabled);
-  SetRowAvailable(HIDDEN_QCODES, enabled);
-  SetRowAvailable(QCODE_FILTERED, enabled);
-#endif
-}
-
-void
-NOTAMConfigPanel::OnModified(DataField &df) noexcept
-{
-#ifdef HAVE_HTTP
-  if (IsDataField(ENABLE_NOTAM, df)) {
-    UpdateVisibility();
-
-    const auto &enabled_field =
-      static_cast<const DataFieldBoolean &>(df);
-    if (enabled_field.GetValue())
-      UpdateFilterCounts();
-  }
-#endif
-}
-
-bool
-NOTAMConfigPanel::Save(bool &_changed) noexcept
-{
-  bool changed = false;
-
-#ifdef HAVE_HTTP
   AirspaceComputerSettings &computer =
     CommonInterface::SetComputerSettings().airspace;
   const bool was_enabled = computer.notam.enabled;
   const unsigned old_radius_km = computer.notam.radius_km;
   const auto old_api_url = computer.notam.api_base_url;
 
-  changed |= SaveValue(ENABLE_NOTAM, ProfileKeys::NOTAMEnabled, computer.notam.enabled);
-  changed |= SaveValue(API_URL, ProfileKeys::NOTAMApiUrl, computer.notam.api_base_url);
-  changed |= SaveValueInteger(REFRESH_INTERVAL,
-                              ProfileKeys::NOTAMRefreshInterval,
-                              computer.notam.refresh_interval_min);
+  ConfigPanel::CommitSetting(changed, computer.notam.enabled, fields.enabled,
+                             ProfileKeys::NOTAMEnabled);
+  if (computer.notam.api_base_url != fields.api_url) {
+    computer.notam.api_base_url = fields.api_url;
+    Profile::Set(ProfileKeys::NOTAMApiUrl,
+                 computer.notam.api_base_url.c_str());
+    changed = true;
+  }
+
+  if (fields.refresh_min >= 0) {
+    const auto refresh = static_cast<unsigned>(fields.refresh_min);
+    ConfigPanel::CommitSetting(changed, computer.notam.refresh_interval_min,
+                               refresh, ProfileKeys::NOTAMRefreshInterval);
+  }
+
   const unsigned clamped_refresh_interval =
     std::clamp(computer.notam.refresh_interval_min, 0u,
                MAX_NOTAM_REFRESH_INTERVAL_MIN);
@@ -433,10 +149,8 @@ NOTAMConfigPanel::Save(bool &_changed) noexcept
     changed = true;
   }
 
-  // Search radius - convert from user units to kilometers
-  double radius_user = GetValueFloat(NOTAM_RADIUS);
   unsigned radius_km = static_cast<unsigned>(
-    std::lround(Units::ToSysDistance(radius_user) / 1000.0));
+    std::lround(Units::ToSysDistance(fields.radius_user) / 1000.0));
   if (radius_km < 1)
     radius_km = 1;
   if (radius_km > MAX_NOTAM_REQUEST_RADIUS_KM)
@@ -447,20 +161,18 @@ NOTAMConfigPanel::Save(bool &_changed) noexcept
     changed = true;
   }
 
-  // Filter settings
   const bool show_ifr_changed =
-    SaveValue(SHOW_IFR, ProfileKeys::NOTAMShowIFR, computer.notam.show_ifr);
+    ConfigPanel::CommitSetting(changed, computer.notam.show_ifr,
+                               fields.show_ifr, ProfileKeys::NOTAMShowIFR);
   const bool show_only_effective_changed =
-    SaveValue(SHOW_ONLY_EFFECTIVE, ProfileKeys::NOTAMShowOnlyEffective,
-              computer.notam.show_only_effective);
+    ConfigPanel::CommitSetting(changed, computer.notam.show_only_effective,
+                               fields.show_only_effective,
+                               ProfileKeys::NOTAMShowOnlyEffective);
   const bool filter_flags_changed =
     show_ifr_changed || show_only_effective_changed;
-  changed |= filter_flags_changed;
-  
-  // Radius filter - convert from user units to meters
-  double max_radius_user = GetValueFloat(MAX_RADIUS);
-  unsigned max_radius_m =
-    static_cast<unsigned>(std::lround(Units::ToSysDistance(max_radius_user)));
+
+  const unsigned max_radius_m = static_cast<unsigned>(
+    std::lround(Units::ToSysDistance(fields.max_radius_user)));
   bool max_radius_changed = false;
   if (computer.notam.max_radius_m != max_radius_m) {
     computer.notam.max_radius_m = max_radius_m;
@@ -468,11 +180,15 @@ NOTAMConfigPanel::Save(bool &_changed) noexcept
     changed = true;
     max_radius_changed = true;
   }
-  
-  const bool qcodes_changed =
-    SaveValue(HIDDEN_QCODES, ProfileKeys::NOTAMHiddenQCodes,
-              computer.notam.hidden_qcodes);
-  changed |= qcodes_changed;
+
+  bool qcodes_changed = false;
+  if (computer.notam.hidden_qcodes != fields.hidden_qcodes) {
+    computer.notam.hidden_qcodes = fields.hidden_qcodes;
+    Profile::Set(ProfileKeys::NOTAMHiddenQCodes,
+                 computer.notam.hidden_qcodes.c_str());
+    qcodes_changed = true;
+    changed = true;
+  }
 
   const bool radius_changed = old_radius_km != computer.notam.radius_km;
   const bool api_url_changed = old_api_url != computer.notam.api_base_url;
@@ -512,11 +228,10 @@ NOTAMConfigPanel::Save(bool &_changed) noexcept
       try {
         const bool enabled_changed = !was_enabled && computer.notam.enabled;
         if ((enabled_changed || radius_changed || api_url_changed) &&
-            !saving_for_manual_update) {
+            !fields.saving_for_manual) {
           const auto &basic = CommonInterface::Basic();
-          if (basic.location_available && basic.location.IsValid()) {
+          if (basic.location_available && basic.location.IsValid())
             net_components->notam->ForceUpdateLocation(basic.location, true);
-          }
         }
 
         if (filters_changed) {
@@ -534,15 +249,217 @@ NOTAMConfigPanel::Save(bool &_changed) noexcept
       }
     }
   }
-#endif
-
-  _changed |= changed;
-
-  return true;
 }
+
+struct NotamWatch final : NOTAMListener {
+  std::shared_ptr<NotamFields> fields;
+  GroupedListWidget *page = nullptr;
+  UI::Notify notify;
+  bool registered = false;
+
+  explicit NotamWatch(std::shared_ptr<NotamFields> _fields) noexcept
+    :fields(std::move(_fields)),
+     notify([this] {
+       fields->loading = false;
+       if (page != nullptr)
+         page->UpdateValues();
+     }) {}
+
+  ~NotamWatch() noexcept override {
+    Unregister();
+  }
+
+  void Register() noexcept {
+    if (registered || net_components == nullptr ||
+        net_components->notam == nullptr)
+      return;
+
+    try {
+      net_components->notam->AddListener(*this);
+      registered = true;
+    } catch (const std::exception &e) {
+      LogFmt("Failed to register NOTAM config listener: {}", e.what());
+    } catch (...) {
+      LogError(std::current_exception(),
+               "Failed to register NOTAM config listener");
+    }
+  }
+
+  void Unregister() noexcept {
+    if (!registered)
+      return;
+
+    if (net_components != nullptr && net_components->notam != nullptr)
+      net_components->notam->RemoveListener(*this);
+    registered = false;
+    notify.ClearNotification();
+  }
+
+  void OnNOTAMsUpdated() noexcept override {
+    notify.SendNotification();
+  }
+
+  void OnNOTAMsLoadComplete(NOTAMLoadNotification) noexcept override {
+    notify.SendNotification();
+  }
+};
+
+static void
+OnUpdateButton(NotamFields &fields, GroupedListWidget &page)
+{
+  LogFormat("NOTAM: Manual update triggered from settings panel");
+  const unsigned old_radius_km =
+    CommonInterface::GetComputerSettings().airspace.notam.radius_km;
+  const auto old_api_url =
+    CommonInterface::GetComputerSettings().airspace.notam.api_base_url;
+
+  fields.saving_for_manual = true;
+  bool dummy_changed = false;
+  page.Save(dummy_changed);
+  fields.saving_for_manual = false;
+
+  const auto &computer_settings = CommonInterface::GetComputerSettings();
+  const bool notam_enabled = computer_settings.airspace.notam.enabled;
+  const bool radius_changed =
+    old_radius_km != computer_settings.airspace.notam.radius_km;
+  const bool api_url_changed =
+    old_api_url != computer_settings.airspace.notam.api_base_url;
+
+  if (net_components == nullptr || net_components->notam == nullptr ||
+      !notam_enabled)
+    return;
+
+  const auto &basic = CommonInterface::Basic();
+  if (!basic.location_available || !basic.location.IsValid()) {
+    page.UpdateValues();
+    ShowMessageBox(_("No valid location."), C_("Menu", "NOTAM"),
+                   MB_OK | MB_ICONEXCLAMATION);
+    return;
+  }
+
+  net_components->notam->ResetFetchFailureNotification();
+  if (net_components->notam->ForceUpdateLocation(basic.location,
+                                                 radius_changed ||
+                                                 api_url_changed)) {
+    fields.loading = true;
+    page.UpdateValues();
+    net_components->notam->MarkManualRefreshRequested();
+  }
+}
+
+#endif
 
 std::unique_ptr<Widget>
 CreateNOTAMConfigPanel()
 {
-  return std::make_unique<NOTAMConfigPanel>();
+  auto list =
+    std::make_unique<GroupedListWidget>(UIGlobals::GetDialogLook());
+
+#ifdef HAVE_HTTP
+  const auto &computer = CommonInterface::GetComputerSettings().airspace;
+  const Unit distance_unit = Units::GetUserDistanceUnit();
+  const char *unit_name = Units::GetUnitName(distance_unit);
+
+  auto fields = std::make_shared<NotamFields>();
+  fields->enabled = computer.notam.enabled;
+  fields->api_url = computer.notam.api_base_url;
+  fields->radius_user =
+    Units::ToUserDistance(computer.notam.radius_km * 1000.0);
+  fields->refresh_min = static_cast<int>(computer.notam.refresh_interval_min);
+  fields->show_ifr = computer.notam.show_ifr;
+  fields->show_only_effective = computer.notam.show_only_effective;
+  fields->max_radius_user = Units::ToUserDistance(computer.notam.max_radius_m);
+  fields->hidden_qcodes = computer.notam.hidden_qcodes;
+  fields->search_min = Units::ToUserDistance(1000.0);
+  fields->search_max =
+    Units::ToUserDistance(MAX_NOTAM_REQUEST_RADIUS_KM * 1000.0);
+  fields->search_step = Units::ToUserDistance(10000.0);
+  StringFormat(fields->distance_format, sizeof(fields->distance_format),
+               _("%%.0f %s"), unit_name);
+
+  auto watch = std::make_shared<NotamWatch>(fields);
+  GroupedListWidget *page = list.get();
+  watch->page = page;
+  const auto shown = [fields] { return fields->enabled; };
+
+  list->AddGroup(nullptr);
+  AddToggle(*list, page, _("NOTAM Support"),
+            _("Enable downloading and display of NOTAMs from aviation authorities."),
+            fields->enabled);
+
+  GroupedListWidget::ItemOptions notice;
+  notice.description =
+    _("Notice: NOTAM display is for situational awareness only\n"
+      "and does not replace proper pre-flight NOTAM briefing.");
+  notice.value_callback = [fields](GroupedListWidget::ValueState &state) {
+    state.hidden = !fields->enabled;
+  };
+  list->AddItem(nullptr, notice);
+
+  list->AddText(_("API URL"),
+                _("Base URL of the NOTAM proxy API. Must be configured before NOTAMs can be fetched."),
+                fields->api_url.data(), fields->api_url.capacity(),
+                false, shown);
+  list->AddFloat(_("Search Radius"),
+                 _("Radius around current location to fetch NOTAMs."),
+                 fields->distance_format, "%.0f",
+                 fields->search_min, fields->search_max, fields->search_step,
+                 false, fields->radius_user, false, shown);
+  list->AddInteger(_("Auto-Refresh (minutes)"),
+                   _("Automatically refresh NOTAMs every X minutes. Set to 0 to disable."),
+                   _("%d min"), "%d", 0, MAX_NOTAM_REFRESH_INTERVAL_MIN, 15,
+                   fields->refresh_min, false, shown);
+
+  list->AddGroup(nullptr);
+  list->AddSwitch(_("Show IFR-Only NOTAMs"),
+                  _("Include NOTAMs for IFR traffic only."),
+                  fields->show_ifr, false, shown);
+  AddCount(*list, fields, NotamCount::IFR);
+  list->AddSwitch(_("Show Only Currently Effective"),
+                  _("Filter out NOTAMs not currently in effect."),
+                  fields->show_only_effective, false, shown);
+  AddCount(*list, fields, NotamCount::TIME);
+  list->AddFloat(_("Maximum NOTAM Radius"),
+                 _("Filter out NOTAMs with radius larger than this. Set to 0 to disable."),
+                 fields->distance_format, "%.0f",
+                 0, fields->search_max, fields->search_step,
+                 false, fields->max_radius_user, false, shown);
+  AddCount(*list, fields, NotamCount::RADIUS);
+  list->AddText(_("Hidden Q-Codes"),
+                _("Space-separated Q-code prefixes to hide (e.g., QA QK QN QOA QOL)."),
+                fields->hidden_qcodes.data(), fields->hidden_qcodes.capacity(),
+                false, shown);
+  AddCount(*list, fields, NotamCount::QCODE);
+
+  list->SetVisibilityCallback([watch, page](bool visible) {
+    if (!visible) {
+      watch->Unregister();
+      ConfigPanel::ReturnExtraButton(1);
+      ConfigPanel::ReturnExtraButton(2);
+      return;
+    }
+
+    watch->Register();
+    ConfigPanel::BorrowExtraButton(1, _("Refresh"), [watch, page] {
+      OnUpdateButton(*watch->fields, *page);
+    });
+    ConfigPanel::BorrowExtraButton(2, _("List"), [watch, page] {
+      ShowNOTAMListDialog(UIGlobals::GetMainWindow());
+
+      /* Filtering from the list changes the shared settings directly.
+         This panel remains alive while the list dialog is open, so
+         reload the text field to avoid saving its stale value. */
+      watch->fields->hidden_qcodes =
+        CommonInterface::GetComputerSettings().airspace.notam.hidden_qcodes;
+      page->UpdateValues();
+    });
+  });
+
+  list->SetSaveCallback([fields](bool &changed) {
+    SaveNotam(*fields, changed);
+    return true;
+  });
+#endif
+
+  return list;
 }
