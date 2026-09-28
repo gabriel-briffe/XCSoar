@@ -51,12 +51,13 @@ CreateWindConfigPanel()
     WindSettings &settings =
       CommonInterface::SetComputerSettings().wind;
 
-    const bool auto_changed =
+    const bool circling_changed =
       ConfigPanel::CommitSetting(changed, settings.circling_wind,
-                                 fields->circling) |
+                                 fields->circling);
+    const bool zig_zag_changed =
       ConfigPanel::CommitSetting(changed, settings.zig_zag_wind,
                                  fields->zig_zag);
-    if (auto_changed)
+    if (circling_changed || zig_zag_changed)
       Profile::Set(ProfileKeys::AutoWind,
                    settings.GetLegacyAutoWindMode());
 

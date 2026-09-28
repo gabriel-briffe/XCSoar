@@ -171,14 +171,17 @@ CreateGaugesConfigPanel()
                                fields->auto_close_dialog,
                                ProfileKeys::AutoCloseFlarmDialog);
 
-    if (ConfigPanel::CommitSetting(changed,
-                                   ui_settings.thermal_assistant_position,
-                                   fields->thermal_assistant_position,
-                                   ProfileKeys::TAPosition) |
-        ConfigPanel::CommitSetting(changed,
-                                   ui_settings.traffic.gauge_location,
-                                   fields->gauge_location,
-                                   ProfileKeys::FlarmLocation))
+    const bool ta_changed =
+      ConfigPanel::CommitSetting(changed,
+                                 ui_settings.thermal_assistant_position,
+                                 fields->thermal_assistant_position,
+                                 ProfileKeys::TAPosition);
+    const bool flarm_loc_changed =
+      ConfigPanel::CommitSetting(changed,
+                                 ui_settings.traffic.gauge_location,
+                                 fields->gauge_location,
+                                 ProfileKeys::FlarmLocation);
+    if (ta_changed || flarm_loc_changed)
       CommonInterface::main_window->ReinitialiseLayout();
 
     ConfigPanel::CommitSetting(changed, map_settings.show_thermal_profile,

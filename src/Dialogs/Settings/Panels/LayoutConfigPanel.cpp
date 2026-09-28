@@ -161,15 +161,17 @@ CreateLayoutConfigPanel()
     ConfigPanel::CommitSetting(changed, info_boxes.border_style,
       fields->border, ProfileKeys::AppInfoBoxBorder);
 
-    const bool buttons =
+    const bool menu_changed =
       ConfigPanel::CommitSetting(changed, ui_settings.show_menu_button,
-        fields->show_menu, ProfileKeys::ShowMenuButton) |
+        fields->show_menu, ProfileKeys::ShowMenuButton);
+    const bool zoom_changed =
       ConfigPanel::CommitSetting(changed, ui_settings.show_zoom_button,
-        fields->show_zoom, ProfileKeys::ShowZoomButton) |
+        fields->show_zoom, ProfileKeys::ShowZoomButton);
+    const bool quickmenu_changed =
       ConfigPanel::CommitSetting(changed,
         ui_settings.show_quickmenu_button, fields->show_quickmenu,
         ProfileKeys::ShowQuickMenuButton);
-    if (buttons)
+    if (menu_changed || zoom_changed || quickmenu_changed)
       CommonInterface::main_window->ReinitialiseMapOverlayButtons();
 
     ConfigPanel::CommitSetting(changed, ui_settings.dialog.tab_style,
