@@ -26,6 +26,14 @@
 #include "ui/window/ContainerWindow.hpp"
 #include "Form/ButtonPanel.hpp"
 #include "Form/Button.hpp"
+#include "Form/DataField/Enum.hpp"
+#include "Dialogs/ComboPicker.hpp"
+#include "Dialogs/DataField.hpp"
+#include "Dialogs/TextEntry.hpp"
+#include "Form/DataField/Float.hpp"
+#include "Form/DataField/Integer.hpp"
+#include "Dialogs/DialogSettings.hpp"
+#include "UIGlobals.hpp"
 #include "Renderer/ButtonRenderer.hpp"
 #include "Renderer/TextButtonRenderer.hpp"
 
@@ -47,6 +55,13 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+[[nodiscard]]
+static bool
+ExpertShown() noexcept
+{
+  return UIGlobals::GetDialogSettings().expert;
+}
 
 /**
  * Can the user scroll with pixel precision?  Fast displays get
@@ -451,6 +466,9 @@ private:
     /** only for Type::ITEM: left out, as if it had not been added */
     bool hidden = false;
 
+    /** only for Type::ITEM: shown only in expert mode */
+    bool expert_only = false;
+
     /** only for Type::ITEM: a switch which shows #checked */
     bool toggle = false;
 
@@ -462,6 +480,15 @@ private:
 
     /** only for Type::WIDGET: its height; 0 asks the view itself */
     unsigned widget_height_pt = 0;
+
+    /** only for Type::WIDGET: use the room left in the page */
+    bool fill_view = false;
+
+    /**
+     * only for Type::WIDGET: hide the view while this is false.
+     * Empty means the view stays.
+     */
+    std::function<bool()> shown;
 
     /** has #widget been prepared for the list window? */
     bool widget_prepared = false;
@@ -681,7 +708,8 @@ public:
   void AddButtons(std::span<const ButtonDefinition> buttons,
                   const ButtonOptions &options) noexcept;
   void AddWidget(std::unique_ptr<Widget> widget,
-                 unsigned height_pt) noexcept;
+                 unsigned height_pt, bool fill_view,
+                 std::function<bool()> shown) noexcept;
 
   /**
    * Remove all elements, but remember where the user was: a list
@@ -821,6 +849,9 @@ public:
 
   /** Recalculate the layout and repaint. */
   void UpdateLayout() noexcept;
+
+  /** Hide expert rows while expert mode is off. */
+  void ApplyExpert() noexcept;
 
   [[gnu::pure]]
   unsigned GetItemHeight() const noexcept {
@@ -1893,6 +1924,7 @@ GroupedListControl::AddItem(const char *caption, Callback callback,
     .disabled = options.disabled,
     .selectable_when_disabled = options.selectable_when_disabled,
     .hidden = options.hidden,
+    .expert_only = options.expert,
     .toggle = options.toggle,
     .toggle_hit_area = options.toggle_hit_area,
     .selection_mode = group_options.selection_mode,
@@ -1905,6 +1937,8 @@ GroupedListControl::AddItem(const char *caption, Callback callback,
 
   Element &element = elements.back();
   element.value_callback = options.value_callback;
+  if (element.expert_only && !ExpertShown())
+    element.hidden = true;
   element.badges[0] = {GetBadge(options), options.badge_style};
   if (!options.disabled && options.badge2 != nullptr)
     element.badges[1] = {options.badge2, options.badge_style2};
@@ -1959,7 +1993,8 @@ GroupedListControl::AddButtons(std::span<const ButtonDefinition> definitions,
 
 void
 GroupedListControl::AddWidget(std::unique_ptr<Widget> widget,
-                              unsigned height_pt) noexcept
+                              unsigned height_pt, bool fill_view,
+                              std::function<bool()> shown) noexcept
 {
   assert(widget != nullptr);
 
@@ -1970,6 +2005,10 @@ GroupedListControl::AddWidget(std::unique_ptr<Widget> widget,
 
   element.widget = std::move(widget);
   element.widget_height_pt = height_pt;
+  element.fill_view = fill_view;
+  if (shown && !shown())
+    element.hidden = true;
+  element.shown = std::move(shown);
 }
 
 unsigned
@@ -2065,6 +2104,14 @@ GroupedListControl::MoveWidgets() noexcept
     if (element.type != Element::Type::WIDGET || !element.widget_prepared)
       continue;
 
+    if (element.hidden || element.height == 0) {
+      if (element.widget_visible) {
+        element.widget->Hide();
+        element.widget_visible = false;
+      }
+      continue;
+    }
+
     const PixelRect rc = GetWidgetRect(element);
 
     if (rc.bottom <= 0 || rc.top >= bottom) {
@@ -2158,7 +2205,10 @@ GroupedListControl::SetItemChecked(unsigned i, bool checked) noexcept
   else
     elements[j].checked = checked;
 
-  Invalidate();
+  /* the network page sets the switch while the list is still being
+     built, before the window exists */
+  if (IsDefined())
+    Invalidate();
 }
 
 bool
@@ -2166,6 +2216,18 @@ GroupedListControl::UpdateValues() noexcept
 {
   bool layout = false;
   bool invalidate = false;
+
+  for (Element &element : elements) {
+    if (element.type != Element::Type::WIDGET || !element.shown)
+      continue;
+
+    const bool hide = !element.shown();
+    if (element.hidden == hide)
+      continue;
+
+    element.hidden = hide;
+    layout = true;
+  }
 
   for (Element &element : elements) {
     if (!element.IsItem() || !element.value_callback)
@@ -2208,8 +2270,11 @@ GroupedListControl::UpdateValues() noexcept
       layout = true;
     }
 
-    if (element.hidden != state.hidden) {
-      element.hidden = state.hidden;
+    /* an expert row stays hidden until expert mode is on */
+    const bool hide = state.hidden ||
+      (element.expert_only && !ExpertShown());
+    if (element.hidden != hide) {
+      element.hidden = hide;
       layout = true;
     }
 
@@ -2858,6 +2923,35 @@ GroupedListControl::DrawWrappedText(Canvas &canvas, const Font &font,
 }
 
 void
+GroupedListControl::ApplyExpert() noexcept
+{
+  const bool expert = ExpertShown();
+  bool layout = false;
+
+  /* switches have no value callback, so expert mode is applied
+     here.  Rows with a callback do it in UpdateValues(), which also
+     honours a visibility predicate. */
+  for (Element &element : elements) {
+    if (!element.IsItem() || !element.expert_only ||
+        element.value_callback)
+      continue;
+
+    const bool hide = !expert;
+    if (element.hidden == hide)
+      continue;
+
+    element.hidden = hide;
+    layout = true;
+  }
+
+  if (UpdateValues())
+    layout = true;
+
+  if (layout && IsDefined())
+    UpdateLayout();
+}
+
+void
 GroupedListControl::UpdateLayout() noexcept
 {
   FinishGroup();
@@ -3117,15 +3211,27 @@ GroupedListControl::UpdateLayout() noexcept
 
         break;
 
-      case Element::Type::WIDGET:
-        element.height = GetWidgetHeight(element);
+      case Element::Type::WIDGET: {
+        if (element.hidden) {
+          element.height = 0;
+          break;
+        }
 
         /* the caption of the group carries the gap above it; without
            one, the view keeps the distance itself */
-        if (i == 0 || elements[i - 1].type != Element::Type::CAPTION)
-          element.height += GetLeadingGap(i);
+        const unsigned gap =
+          i == 0 || elements[i - 1].type != Element::Type::CAPTION
+          ? GetLeadingGap(i) : 0;
+
+        if (element.fill_view) {
+          const int remain = (int)GetViewHeight() - y - (int)gap;
+          const int body = std::max(remain, (int)Layout::VptScale(120));
+          element.height = (unsigned)body + gap;
+        } else
+          element.height = GetWidgetHeight(element) + gap;
 
         break;
+      }
 
       case Element::Type::FOOTER: {
         const auto footer = GetFooter(i);
@@ -5112,13 +5218,208 @@ GroupedListWidget::AddValue(const char *caption, const char *help,
 bool
 GroupedListWidget::UpdateValues() noexcept
 {
-  return control.UpdateValues();
+  const bool layout = control.UpdateValues();
+  if (layout && control.IsDefined())
+    UpdateLayout();
+  return layout;
 }
 
 unsigned
 GroupedListWidget::PreferredTextWidth() const noexcept
 {
   return control.PreferredTextWidth();
+}
+
+void
+GroupedListWidget::SetSaveCallback(SaveCallback callback) noexcept
+{
+  save_callback = std::move(callback);
+}
+
+void
+GroupedListWidget::SetVisibilityCallback(std::function<void(bool visible)>
+                                         callback) noexcept
+{
+  visibility_callback = std::move(callback);
+}
+
+void
+GroupedListWidget::SetLeaveCallback(std::function<bool()> callback) noexcept
+{
+  leave_callback = std::move(callback);
+}
+
+void
+GroupedListWidget::SetUnprepareCallback(std::function<void()>
+                                        callback) noexcept
+{
+  unprepare_callback = std::move(callback);
+}
+
+void
+GroupedListWidget::AddSwitch(const char *caption, const char *help,
+                             bool &field, bool expert,
+                             std::function<bool()> shown) noexcept
+{
+  ItemOptions options;
+  options.toggle = true;
+  options.checked = field;
+  options.help = help;
+  options.expert = expert;
+  if (shown) {
+    options.value_callback =
+      [shown = std::move(shown)](ValueState &state) {
+        state.hidden = !shown();
+      };
+  }
+
+  AddItem(caption, [this, &field] {
+    field = !field;
+    UpdateValues();
+  }, options);
+}
+
+static const char *
+EnumText(const StaticEnumChoice *list, unsigned value) noexcept
+{
+  if (list == nullptr)
+    return "";
+
+  for (auto i = list; i->display_string != nullptr; ++i)
+    if (i->id == value)
+      return gettext(i->display_string);
+
+  return "";
+}
+
+void
+GroupedListWidget::AddEnumValue(const char *caption, const char *help,
+                                const StaticEnumChoice *list,
+                                std::function<unsigned()> get,
+                                std::function<void(unsigned)> set,
+                                bool expert,
+                                std::function<bool()> shown) noexcept
+{
+  ItemOptions options;
+  options.help = help;
+  options.expert = expert;
+  options.value_callback =
+    [list, get, shown = std::move(shown)](ValueState &state) {
+      state.text = EnumText(list, get());
+      if (shown)
+        state.hidden = !shown();
+    };
+
+  AddValue(caption,
+           [this, caption, help, list, get, set = std::move(set)] {
+    DataFieldEnum df;
+    if (list != nullptr && list->display_string != nullptr &&
+        list->help != nullptr)
+      df.EnableItemHelp(true);
+
+    df.AddChoices(list);
+    df.SetValue(get());
+    if (!ComboPicker(caption, df, help) || df.GetValue() == get())
+      return;
+
+    set(df.GetValue());
+    UpdateValues();
+  }, std::move(options));
+}
+
+void
+GroupedListWidget::AddText(const char *caption, const char *help,
+                           char *buffer, std::size_t capacity,
+                           bool expert,
+                           std::function<bool()> shown) noexcept
+{
+  ItemOptions options;
+  options.help = help;
+  options.expert = expert;
+  options.value_callback =
+    [buffer, shown = std::move(shown)](ValueState &state) {
+      state.text = buffer != nullptr ? buffer : "";
+      if (shown)
+        state.hidden = !shown();
+    };
+
+  AddValue(caption, [this, caption, buffer, capacity] {
+    if (buffer == nullptr || capacity == 0)
+      return;
+
+    if (!TextEntryDialog(buffer, capacity, caption))
+      return;
+
+    UpdateValues();
+  }, std::move(options));
+}
+
+void
+GroupedListWidget::AddInteger(const char *caption, const char *help,
+                             const char *display_format,
+                             const char *edit_format,
+                             int min_value, int max_value, int step,
+                             int &value, bool expert,
+                             std::function<bool()> shown) noexcept
+{
+  ItemOptions options;
+  options.help = help;
+  options.expert = expert;
+  options.value_callback =
+    [&value, display_format, edit_format, min_value, max_value, step,
+     shown = std::move(shown)](ValueState &state) {
+      DataFieldInteger df(edit_format, display_format,
+                          min_value, max_value, value, step);
+      state.text = df.GetAsDisplayString();
+      if (shown)
+        state.hidden = !shown();
+    };
+
+  AddValue(caption,
+           [this, caption, help, display_format, edit_format,
+            min_value, max_value, step, &value] {
+    DataFieldInteger df(edit_format, display_format,
+                        min_value, max_value, value, step);
+    if (!EditDataFieldDialog(caption, df, help))
+      return;
+
+    value = df.GetValue();
+    UpdateValues();
+  }, std::move(options));
+}
+
+void
+GroupedListWidget::AddFloat(const char *caption, const char *help,
+                           const char *display_format,
+                           const char *edit_format,
+                           double min_value, double max_value, double step,
+                           bool fine, double &value, bool expert,
+                           std::function<bool()> shown) noexcept
+{
+  ItemOptions options;
+  options.help = help;
+  options.expert = expert;
+  options.value_callback =
+    [&value, display_format, edit_format, min_value, max_value, step, fine,
+     shown = std::move(shown)](ValueState &state) {
+      DataFieldFloat df(edit_format, display_format,
+                        min_value, max_value, value, step, fine);
+      state.text = df.GetAsDisplayString();
+      if (shown)
+        state.hidden = !shown();
+    };
+
+  AddValue(caption,
+           [this, caption, help, display_format, edit_format,
+            min_value, max_value, step, fine, &value] {
+    DataFieldFloat df(edit_format, display_format,
+                      min_value, max_value, value, step, fine);
+    if (!EditDataFieldDialog(caption, df, help))
+      return;
+
+    value = df.GetValue();
+    UpdateValues();
+  }, std::move(options));
 }
 
 void
@@ -5210,19 +5511,23 @@ GroupedListWidget::AddItem(const char *caption,
 void
 GroupedListWidget::AddWidgetGroup(const char *caption,
                                   std::unique_ptr<Widget> widget,
-                                  unsigned height_pt) noexcept
+                                  unsigned height_pt, bool fill_view,
+                                  std::function<bool()> shown) noexcept
 {
-  AddWidgetGroup(caption, std::move(widget), GroupOptions{}, height_pt);
+  AddWidgetGroup(caption, std::move(widget), GroupOptions{}, height_pt,
+                 fill_view, std::move(shown));
 }
 
 void
 GroupedListWidget::AddWidgetGroup(const char *caption,
                                   std::unique_ptr<Widget> widget,
                                   const GroupOptions &options,
-                                  unsigned height_pt) noexcept
+                                  unsigned height_pt, bool fill_view,
+                                  std::function<bool()> shown) noexcept
 {
   control.AddGroup(caption, options);
-  control.AddWidget(std::move(widget), height_pt);
+  control.AddWidget(std::move(widget), height_pt, fill_view,
+                    std::move(shown));
 }
 
 void
@@ -5451,6 +5756,12 @@ GroupedListWidget::Prepare(ContainerWindow &parent,
 void
 GroupedListWidget::Unprepare() noexcept
 {
+  if (visibility_callback)
+    visibility_callback(false);
+
+  if (unprepare_callback)
+    unprepare_callback();
+
   if (top_widget != nullptr)
     top_widget->Unprepare();
 
@@ -5461,6 +5772,9 @@ GroupedListWidget::Unprepare() noexcept
 bool
 GroupedListWidget::Save(bool &changed) noexcept
 {
+  if (save_callback && !save_callback(changed))
+    return false;
+
   return (top_widget == nullptr || top_widget->Save(changed)) &&
     control.SaveWidgets(changed) &&
     (bottom_widget == nullptr || bottom_widget->Save(changed));
@@ -5469,6 +5783,9 @@ GroupedListWidget::Save(bool &changed) noexcept
 bool
 GroupedListWidget::Leave() noexcept
 {
+  if (leave_callback && !leave_callback())
+    return false;
+
   return (top_widget == nullptr || top_widget->Leave()) &&
     control.LeaveWidgets() &&
     (bottom_widget == nullptr || bottom_widget->Leave());
@@ -5477,6 +5794,7 @@ GroupedListWidget::Leave() noexcept
 void
 GroupedListWidget::Show(const PixelRect &rc) noexcept
 {
+  control.ApplyExpert();
   const auto [top_rc, list_rc, bottom_rc] = SplitRect(rc);
 
   if (top_widget != nullptr)
@@ -5486,11 +5804,17 @@ GroupedListWidget::Show(const PixelRect &rc) noexcept
 
   if (bottom_widget != nullptr)
     bottom_widget->Show(bottom_rc);
+
+  if (visibility_callback)
+    visibility_callback(true);
 }
 
 void
 GroupedListWidget::Hide() noexcept
 {
+  if (visibility_callback)
+    visibility_callback(false);
+
   if (top_widget != nullptr)
     top_widget->Hide();
 
@@ -5503,6 +5827,8 @@ GroupedListWidget::Hide() noexcept
 void
 GroupedListWidget::Move(const PixelRect &rc) noexcept
 {
+  control.ApplyExpert();
+
   const auto [top_rc, list_rc, bottom_rc] = SplitRect(rc);
 
   if (top_widget != nullptr)
