@@ -608,7 +608,7 @@ event=Analysis
 mode=default
 type=gesture
 data=LDR
-event=Mode Config1
+event=Setup System
 
 mode=default
 type=gesture
