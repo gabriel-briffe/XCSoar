@@ -8,13 +8,12 @@
 
 #include "WeatherOverlayDraft.hpp"
 #include "UIGlobals.hpp"
-#include "Form/ButtonPanel.hpp"
 #include "Form/CheckBox.hpp"
 #include "Look/DialogLook.hpp"
 #include "Renderer/TwoTextRowsRenderer.hpp"
 #include "Screen/Layout.hpp"
+#include "Widget/GroupedListWidget.hpp"
 #include "Widget/MultiSelectListWidget.hpp"
-#include "Widget/RowFormWidget.hpp"
 #include "Widget/TwoWidgets.hpp"
 #include "Profile/Profile.hpp"
 #include "Profile/Keys.hpp"
@@ -71,17 +70,33 @@ protected:
   void OnSelectionChanged() noexcept override;
 };
 
-class RainbowOptionsPanel final : public RowFormWidget {
+/**
+ * The strip under the Rainbow layer list: Add page and Pages setup.
+ * The size of this strip is the list, so the layers keep the rest of
+ * the page.
+ */
+class RainbowOptionsPanel final : public GroupedListWidget {
   WeatherOverlayDraft::State overlay;
-  Button *add_page_button = nullptr;
   RainbowLayerListWidget *list = nullptr;
 
 public:
   RainbowOptionsPanel() noexcept
-    :RowFormWidget(UIGlobals::GetDialogLook()) {}
+    :GroupedListWidget(UIGlobals::GetDialogLook()) {}
 
   void SetList(RainbowLayerListWidget *_list) noexcept {
     list = _list;
+  }
+
+  PixelSize GetMinimumSize() const noexcept override {
+    const unsigned height = GetContentHeight();
+    PixelSize size = GroupedListWidget::GetMinimumSize();
+    if (height != 0)
+      size.height = height;
+    return size;
+  }
+
+  PixelSize GetMaximumSize() const noexcept override {
+    return GetMinimumSize();
   }
 
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override;
@@ -91,7 +106,11 @@ public:
   void ApplyLayersToCurrentRainbowPage() noexcept;
 
 private:
+  void Fill() noexcept;
   void AddPageClicked() noexcept;
+
+  [[nodiscard]] [[gnu::pure]]
+  bool AddPageDisabled() const noexcept;
 };
 
 void
@@ -196,24 +215,38 @@ RainbowLayerListWidget::OnSelectionChanged() noexcept
   }
 }
 
-void
-RainbowOptionsPanel::Prepare(ContainerWindow &parent,
-                             const PixelRect &rc) noexcept
+bool
+RainbowOptionsPanel::AddPageDisabled() const noexcept
 {
-  RowFormWidget::Prepare(parent, rc);
+  const auto &settings = CommonInterface::GetUISettings().pages;
+  return !overlay.draft.UsesRainbowOverlay() ||
+    settings.n_pages >= PageSettings::MAX_PAGES;
+}
 
-  add_page_button = AddButton(C_("Button", "Add page"), [this]() {
-    AddPageClicked();
-  });
-  AddButton(_("Pages setup"), []() {
+void
+RainbowOptionsPanel::Fill() noexcept
+{
+  AddGroup();
+
+  AddButton(C_("Button", "Add page"), [this]{ AddPageClicked(); },
+            {.disabled = AddPageDisabled()});
+  AddButton(C_("Button", "Pages setup"), [] {
     WeatherOverlayDraft::OpenPagesConfig();
   });
 }
 
 void
+RainbowOptionsPanel::Prepare(ContainerWindow &parent,
+                             const PixelRect &rc) noexcept
+{
+  Fill();
+  GroupedListWidget::Prepare(parent, rc);
+}
+
+void
 RainbowOptionsPanel::Show(const PixelRect &rc) noexcept
 {
-  RowFormWidget::Show(rc);
+  GroupedListWidget::Show(rc);
   overlay.Load(PageLayout::Overlay::RAINBOW);
   SyncDraftFromList();
 }
@@ -246,7 +279,12 @@ RainbowOptionsPanel::SyncDraftFromList() noexcept
 void
 RainbowOptionsPanel::RefreshButtons() noexcept
 {
-  overlay.SyncButtons(nullptr, add_page_button);
+  if (GetItemCount() == 0)
+    return;
+
+  Clear();
+  Fill();
+  UpdateLayout();
 }
 
 void
@@ -289,7 +327,8 @@ void
 RainbowOptionsPanel::AddPageClicked() noexcept
 {
   SyncDraftFromList();
-  overlay.AddPage(nullptr, add_page_button);
+  overlay.AddPage(nullptr, nullptr);
+  RefreshButtons();
 }
 
 } // namespace

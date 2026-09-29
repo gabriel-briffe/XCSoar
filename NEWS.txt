@@ -216,6 +216,22 @@ Version 7.46 - not yet released
     left
   - show configuration pages as the same list as Wind Settings. A
     page scrolls only when the rows do not fit
+  - show a yes/no field as the same switch as on a settings list.
+    Tapping it, or pressing enter, flips the setting
+  - show Map Item List Settings as a floating list of its two
+    switches. OK keeps them
+  - show SkySight Auto update, the cache size, and the cache and
+    pages buttons as the same list, under the layer list
+  - show the Rainbow Add page and Pages setup buttons as the same
+    list, under the layer list
+  - show the EDL weather page as the same list: the cached day,
+    Auto update, and the time and level of the current page
+  - show the XC Therm weather page as the same list: the layer
+    to download, its status, and the time and altitude of the
+    current page
+  - show Edit device as the same list. The port still opens the
+    scanner, and the other rows appear only when that port uses
+    them
   - show a floating dialog's title as a heading on the page, in line
     with the contents. A dialog that fills the screen keeps a title
     bar
