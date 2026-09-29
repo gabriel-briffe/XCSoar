@@ -111,8 +111,8 @@ AppearanceConfigPanel::Fill() noexcept
                 popup_msg_position_list, popup_message_position);
 
   AddToggleItem(_("Tiled menu"),
-                _("Show Configuration as a tile grid instead of the "
-                  "two-column list."),
+                _("Show Configuration as the icon tile menu instead of "
+                  "the list."),
                 tiled_menu);
 }
 

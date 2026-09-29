@@ -496,8 +496,7 @@ event=Mode Display1
 mode=default
 type=key
 data=APP3
-event=ConfigMenu
-event=Mode default
+event=Mode Config1
 
 mode=default
 type=key
@@ -609,7 +608,7 @@ event=Analysis
 mode=default
 type=gesture
 data=LDR
-event=ConfigMenu
+event=Mode Config1
 
 mode=default
 type=gesture
@@ -1299,8 +1298,7 @@ location=2
 mode=Menu
 type=key
 data=APP3
-event=ConfigMenu
-event=Mode default
+event=Mode Config1
 label=Config
 location=3
 

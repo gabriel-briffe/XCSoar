@@ -11,6 +11,7 @@
 #include "Topography/TopographyStore.hpp"
 #include "Topography/TopographyGlue.hpp"
 #include "Dialogs/Dialogs.h"
+#include "Dialogs/dlgConfigMenu.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "system/FileUtil.hpp"
@@ -258,6 +259,12 @@ SettingsLeave(const UISettings &old_ui_settings)
 void
 SystemConfiguration()
 {
+  if (CommonInterface::GetUISettings().dialog.tiled_menu) {
+    /* Config → Configuration: icon configuration menu */
+    dlgConfigMenuShowModal(*CommonInterface::main_window);
+    return;
+  }
+
   const UISettings old_ui_settings = CommonInterface::GetUISettings();
 
   SettingsEnter();

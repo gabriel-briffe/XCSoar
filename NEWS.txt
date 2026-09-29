@@ -206,9 +206,10 @@ Version 7.46 - not yet released
   - show no wind in the T Next Leg comment when the box is blank
     because wind is not available
 * ui
-  - add a Tiled menu setting under Look / Layout; when On,
-    Configuration opens as a text tile grid instead of the
-    two-column list
+  - add a Tiled menu setting under Look & Accessibility /
+    Appearance; when On, Config → Configuration opens the icon
+    tile menu instead of the list. Config itself still opens the
+    softkey menu
   - give the tiled menu the same button bar as the configuration
     pages: in portrait the arrows share the left half and Close
     takes the right half; in landscape the bar is a column on the
