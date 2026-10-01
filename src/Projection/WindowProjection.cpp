@@ -4,6 +4,8 @@
 #include "WindowProjection.hpp"
 #include "Geo/Quadrilateral.hpp"
 
+#include <cmath>
+
 std::optional<PixelPoint>
 WindowProjection::GeoToScreenIfVisible(const GeoPoint &loc) const noexcept
 {
@@ -27,6 +29,14 @@ double
 WindowProjection::GetMapScale() const noexcept
 {
   return DistancePixelsToMeters(GetMapResolutionFactor());
+}
+
+double
+WindowProjection::GetScreenHalfDiagonalMeters() const noexcept
+{
+  const auto sz = GetScreenSize();
+  return std::hypot(double(sz.width), double(sz.height))
+    / GetScale() / 2;
 }
 
 double

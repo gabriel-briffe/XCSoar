@@ -82,6 +82,15 @@ Version 7.46 - not yet released
   - fix RASP Auto update downloading again on every page switch
     because the file date stayed at the first download #3166
 * map
+  - terrain overview is max-pooled at 4× and 16×; the map picks one
+    level from DEM cells per screen pixel so mid zoom no longer loads
+    full-resolution tiles
+  - if HD would need more tiles than the memory budget to cover the
+    screen, use the medium overview instead
+  - Map Display → Terrain: DEM 2 / DEM 3 thresholds (Auto or a map
+    scale) to force the medium and coarse DEM switch points
+  - show DEM detail level next to the map scale bar (1=HD, 2=medium,
+    3=coarse)
   - use Vario #2 snail trail colours by default so climb and sink
     stand out on typical terrain #2988
   - leave Trail drift off by default so the displayed track matches
@@ -94,6 +103,8 @@ Version 7.46 - not yet released
     map follows the aircraft, including at 10x replay #2948
   - keep the pan-mode map scale while panning, and restore the saved
     circling or cruise scale when leaving pan mode
+* documentation
+  - document DEM 2 / DEM 3 scale thresholds on Map Display → Terrain
 * airspace
   - keep airspace altitude labels readable when they would overlap #771
   - fill airspaces with a transparent colour; hatch patterns and the

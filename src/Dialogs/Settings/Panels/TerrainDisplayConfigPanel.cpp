@@ -21,10 +21,17 @@
 #include "Topography/TopographyRenderer.hpp"
 #include "Topography/TopographyStore.hpp"
 #include "UIGlobals.hpp"
+#include "Units/Descriptor.hpp"
+#include "Units/Units.hpp"
 #include "Widget/WindowWidget.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/window/PaintWindow.hpp"
 #include "ui/window/SingleWindow.hpp"
+#include "util/StaticString.hxx"
+
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
 #ifdef ENABLE_OPENGL
 #include "ui/canvas/opengl/Scissor.hpp"
@@ -79,6 +86,57 @@ static constexpr StaticEnumChoice contours_list[] = {
     N_("Fixed 64m spacing, no zoom dependence"), },
   nullptr
 };
+
+static unsigned
+GetDemScaleMaxThresholdUser() noexcept
+{
+  if (Units::GetUserDistanceUnit() == Unit::KILOMETER)
+    return 1000;
+
+  return 500;
+}
+
+[[gnu::pure]]
+static unsigned
+NextDemScaleChoice(unsigned value) noexcept
+{
+  if (value < 20) {
+    const unsigned fine =
+      Units::GetUserDistanceUnit() == Unit::KILOMETER ? 5u : 2u;
+    return value + fine;
+  }
+
+  return value + 10;
+}
+
+[[gnu::pure]]
+static unsigned
+SnapDemScaleChoice(double value_user, unsigned max_user) noexcept
+{
+  if (value_user <= 0.)
+    return 0;
+
+  unsigned best = 0;
+  double best_delta = value_user;
+
+  for (unsigned value = 0;;) {
+    const double delta = std::fabs(double(value) - value_user);
+    if (delta < best_delta) {
+      best_delta = delta;
+      best = value;
+    }
+
+    if (value >= max_user)
+      break;
+
+    const unsigned next = NextDemScaleChoice(value);
+    if (next <= value)
+      break;
+    value = next;
+  }
+
+  return best;
+}
 
 /* the settings hold contrast and brightness as a byte, the page shows
    them as a percentage */
@@ -241,6 +299,10 @@ class TerrainDisplayConfigPanel final : public ConfigListPanel {
   /** contrast and brightness as the page shows them */
   int contrast, brightness;
 
+  /** DEM scale thresholds in user distance units (0 = Auto) */
+  unsigned dem_medium_scale_user = 0;
+  unsigned dem_coarse_scale_user = 0;
+
   /** the preview below the list; nullptr without a terrain */
   TerrainPreviewWidget *preview = nullptr;
 
@@ -261,6 +323,10 @@ private:
   void AddMapToggleItem(const char *caption, const char *help,
                         bool &value, const char *shown,
                         const char *hidden) noexcept;
+
+  void PickDemScale(bool medium) noexcept;
+
+  void FormatDemScale(StaticString<32> &text, unsigned user_value) const noexcept;
 
 protected:
   /* virtual methods from class ConfigListPanel */
@@ -296,6 +362,95 @@ TerrainDisplayConfigPanel::AddMapToggleItem(const char *caption,
 }
 
 void
+TerrainDisplayConfigPanel::FormatDemScale(StaticString<32> &text,
+                                          unsigned user_value) const noexcept
+{
+  if (user_value == 0) {
+    text = _("Auto");
+    return;
+  }
+
+  text.Format("%u %s", user_value,
+              Units::GetUnitName(Units::GetUserDistanceUnit()));
+}
+
+void
+TerrainDisplayConfigPanel::PickDemScale(bool medium) noexcept
+{
+  const char *const caption = medium
+    ? _("DEM 2 threshold")
+    : _("DEM 3 threshold");
+  const char *const help = medium
+    ? _("Map scale bar distance at which terrain switches to the medium "
+        "(4×) DEM.  Auto uses DEM cells per screen pixel.")
+    : _("Map scale bar distance at which terrain switches to the coarse "
+        "(16×) DEM.  Auto uses DEM cells per screen pixel.");
+
+  const unsigned max_user = GetDemScaleMaxThresholdUser();
+  unsigned &user_value = medium
+    ? dem_medium_scale_user
+    : dem_coarse_scale_user;
+
+  struct Choice {
+    unsigned value;
+    StaticString<32> label;
+  };
+
+  std::vector<Choice> items;
+  for (unsigned value = 0;;) {
+    Choice choice;
+    choice.value = value;
+    if (value == 0)
+      choice.label = _("Auto");
+    else
+      choice.label.Format("%u %s", value,
+                          Units::GetUnitName(Units::GetUserDistanceUnit()));
+    items.push_back(std::move(choice));
+
+    if (value >= max_user)
+      break;
+
+    const unsigned next = NextDemScaleChoice(value);
+    if (next <= value)
+      break;
+    value = next;
+  }
+
+  const unsigned snapped = SnapDemScaleChoice(user_value, max_user);
+
+  std::vector<PickerChoice> choices;
+  choices.reserve(items.size());
+  int current = 0;
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    if (items[i].value == snapped)
+      current = int(i);
+    choices.push_back({items[i].label.c_str()});
+  }
+
+  const int picked = PickChoice(caption, help, choices, current);
+  if (picked < 0 || items[picked].value == user_value)
+    return;
+
+  user_value = items[picked].value;
+
+  /* Keep coarse ≥ medium when both are manual. */
+  if (dem_medium_scale_user > 0 && dem_coarse_scale_user > 0 &&
+      dem_coarse_scale_user < dem_medium_scale_user) {
+    if (medium)
+      dem_coarse_scale_user = dem_medium_scale_user;
+    else
+      dem_medium_scale_user = dem_coarse_scale_user;
+  }
+
+  terrain_settings.dem_medium_scale =
+    Units::ToSysDistance(double(dem_medium_scale_user));
+  terrain_settings.dem_coarse_scale =
+    Units::ToSysDistance(double(dem_coarse_scale_user));
+
+  Refresh();
+}
+
+void
 TerrainDisplayConfigPanel::LoadSettings() noexcept
 {
   const MapSettings &settings_map = CommonInterface::GetMapSettings();
@@ -306,6 +461,18 @@ TerrainDisplayConfigPanel::LoadSettings() noexcept
 
   contrast = ByteToPercent(terrain_settings.contrast);
   brightness = ByteToPercent(terrain_settings.brightness);
+
+  const unsigned list_max = GetDemScaleMaxThresholdUser();
+  dem_medium_scale_user =
+    SnapDemScaleChoice(Units::ToUserDistance(terrain_settings.dem_medium_scale),
+                       list_max);
+  dem_coarse_scale_user =
+    SnapDemScaleChoice(Units::ToUserDistance(terrain_settings.dem_coarse_scale),
+                       list_max);
+  terrain_settings.dem_medium_scale =
+    Units::ToSysDistance(double(dem_medium_scale_user));
+  terrain_settings.dem_coarse_scale =
+    Units::ToSysDistance(double(dem_coarse_scale_user));
 
   /* the conversion to a percentage and back is lossy for some values:
      compare against what the page would save unchanged */
@@ -337,6 +504,22 @@ TerrainDisplayConfigPanel::Fill() noexcept
   AddEnumItem(_("Terrain colors"),
               _("Defines the color ramp used in terrain rendering."),
               terrain_ramp_list, terrain_settings.ramp);
+
+  StaticString<32> dem2, dem3;
+  FormatDemScale(dem2, dem_medium_scale_user);
+  FormatDemScale(dem3, dem_coarse_scale_user);
+
+  AddItem(_("DEM 2 threshold"), [this](){ PickDemScale(true); },
+          {.value = dem2.c_str(), .chevron = true,
+           .help = _("Map scale bar distance at which terrain switches to "
+                     "the medium (4×) DEM.  Auto uses DEM cells per screen "
+                     "pixel.")});
+
+  AddItem(_("DEM 3 threshold"), [this](){ PickDemScale(false); },
+          {.value = dem3.c_str(), .chevron = true,
+           .help = _("Map scale bar distance at which terrain switches to "
+                     "the coarse (16×) DEM.  Auto uses DEM cells per screen "
+                     "pixel.")});
 
   if (IsExpert()) {
     AddEnumItem(_("Slope shading"),
@@ -372,6 +555,10 @@ TerrainDisplayConfigPanel::Refresh() noexcept
 {
   terrain_settings.contrast = PercentToByte(contrast);
   terrain_settings.brightness = PercentToByte(brightness);
+  terrain_settings.dem_medium_scale =
+    Units::ToSysDistance(double(dem_medium_scale_user));
+  terrain_settings.dem_coarse_scale =
+    Units::ToSysDistance(double(dem_coarse_scale_user));
 
   ConfigListPanel::Refresh();
 
@@ -413,6 +600,10 @@ TerrainDisplayConfigPanel::Save(bool &_changed) noexcept
     Profile::Set(ProfileKeys::TerrainGpuDemSpike,
                  terrain_settings.gpu_dem_spike);
 #endif
+    Profile::Set(ProfileKeys::TerrainDemMediumScale,
+                 terrain_settings.dem_medium_scale);
+    Profile::Set(ProfileKeys::TerrainDemCoarseScale,
+                 terrain_settings.dem_coarse_scale);
     changed = true;
   }
 

@@ -9,6 +9,7 @@
 #include "Geo/GeoBounds.hpp"
 #include "Terrain/RasterProjection.hpp"
 #include "Terrain/RasterLocation.hpp"
+#include "Terrain/DemOverview.hpp"
 #include "ui/dim/Size.hpp"
 #include "ui/canvas/opengl/FrameBuffer.hpp"
 #include <vector>
@@ -84,9 +85,11 @@ class RasterRenderer {
   bool shading_for_draw = true;
   unsigned contour_div_for_draw = 0;
 
-  /** Spike: fine-tile textures composed into one height FBO. */
+  /** Spike: DEM textures composed into one height FBO. */
   bool gpu_dem_tiles = false;
+  DemOverview::Lod dem_display_lod = DemOverview::Lod::FINE;
   std::unique_ptr<GLTexture> overview_texture;
+  std::unique_ptr<GLTexture> overview_medium_texture;
   std::vector<std::unique_ptr<GLTexture>> tile_textures;
   /** Indices uploaded in the last SyncGpuDemTileTextures(). */
   std::vector<unsigned> tile_dirty;

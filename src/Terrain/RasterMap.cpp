@@ -156,6 +156,84 @@ RasterMap::ScanLine(const GeoPoint &start, const GeoPoint &end,
                              interpolate);
 }
 
+void
+RasterMap::ScanOverviewLine(const GeoPoint &start, const GeoPoint &end,
+                            TerrainHeight *buffer, unsigned size,
+                            unsigned bits, bool interpolate) const noexcept
+{
+  assert(buffer != nullptr);
+  assert(size > 0);
+  assert(bits == RasterTraits::OVERVIEW_MEDIUM_BITS ||
+         bits == RasterTraits::OVERVIEW_BITS);
+
+  constexpr TerrainHeight invalid = TerrainHeight::Invalid();
+
+  const double total_distance = start.DistanceS(end);
+  if (total_distance <= 0) {
+    std::fill_n(buffer, size, invalid);
+    return;
+  }
+
+  GeoPoint clipped_start = start, clipped_end = end;
+  const GeoClip clip(GetBounds());
+  if (!clip.ClipLine(clipped_start, clipped_end)) {
+    std::fill_n(buffer, size, invalid);
+    return;
+  }
+
+  double clipped_start_distance =
+    std::max(clipped_start.DistanceS(start), 0.);
+  double clipped_end_distance =
+    std::max(clipped_end.DistanceS(start), 0.);
+
+  unsigned clipped_start_offset =
+    (unsigned)(size * clipped_start_distance / total_distance);
+  unsigned clipped_end_offset =
+    uround(size * clipped_end_distance / total_distance);
+  if (clipped_end_offset > size)
+    clipped_end_offset = size;
+  if (clipped_start_offset + 2 > clipped_end_offset) {
+    std::fill_n(buffer, size, invalid);
+    return;
+  }
+
+  std::fill(buffer, buffer + clipped_start_offset, invalid);
+  std::fill(buffer + clipped_end_offset, buffer + size, invalid);
+
+  const RasterBuffer &overview =
+    bits == RasterTraits::OVERVIEW_MEDIUM_BITS
+    ? raster_tile_cache.GetOverviewMedium()
+    : raster_tile_cache.GetOverview();
+  if (!overview.IsDefined()) {
+    std::fill(buffer + clipped_start_offset,
+              buffer + clipped_end_offset, invalid);
+    return;
+  }
+
+  const auto ov_size = overview.GetSize();
+  auto clamp = [ov_size](RasterLocation p) noexcept {
+    if (p.x >= ov_size.x)
+      p.x = ov_size.x - 1;
+    if (p.y >= ov_size.y)
+      p.y = ov_size.y - 1;
+    return p;
+  };
+
+  const RasterLocation a = clamp({
+      unsigned(std::max(0, projection.ProjectCoarse(clipped_start).x)) >> bits,
+      unsigned(std::max(0, projection.ProjectCoarse(clipped_start).y)) >> bits,
+    });
+  const RasterLocation b = clamp({
+      unsigned(std::max(0, projection.ProjectCoarse(clipped_end).x)) >> bits,
+      unsigned(std::max(0, projection.ProjectCoarse(clipped_end).y)) >> bits,
+    });
+
+  overview.ScanLineChecked(a, b,
+                           buffer + clipped_start_offset,
+                           clipped_end_offset - clipped_start_offset,
+                           interpolate);
+}
+
 RasterMap::Intersection
 RasterMap::FirstIntersection(const GeoPoint &origin, const int h_origin,
                              const GeoPoint &destination, const int h_destination,

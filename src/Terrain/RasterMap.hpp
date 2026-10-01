@@ -5,6 +5,7 @@
 
 #include "RasterProjection.hpp"
 #include "RasterTileCache.hpp"
+#include "DemOverview.hpp"
 #include "Geo/GeoPoint.hpp"
 
 class OperationEnvironment;
@@ -76,6 +77,14 @@ public:
     return raster_tile_cache.GetOverview();
   }
 
+  const RasterBuffer &GetOverviewMedium() const noexcept {
+    return raster_tile_cache.GetOverviewMedium();
+  }
+
+  DemOverview::Lod GetDisplayLod() const noexcept {
+    return raster_tile_cache.GetDisplayLod();
+  }
+
   const RasterTileCache &GetTileCache() const noexcept {
     return raster_tile_cache;
   }
@@ -130,6 +139,17 @@ public:
   void ScanLine(const GeoPoint &start, const GeoPoint &end,
                 TerrainHeight *buffer, unsigned size,
                 bool interpolate) const noexcept;
+
+  /**
+   * Scan a straight line from a max-pooled overview buffer only
+   * (no fine tiles).  Used for map display at medium/coarse LOD.
+   *
+   * @param bits overview shift (#OVERVIEW_MEDIUM_BITS or
+   *             #OVERVIEW_BITS)
+   */
+  void ScanOverviewLine(const GeoPoint &start, const GeoPoint &end,
+                        TerrainHeight *buffer, unsigned size,
+                        unsigned bits, bool interpolate) const noexcept;
 
   struct Intersection {
     GeoPoint location;

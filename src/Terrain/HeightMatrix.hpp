@@ -38,12 +38,25 @@ public:
    */
   void Fill(const RasterMap &map, const GeoBounds &bounds,
             UnsignedPoint2D _size, bool interpolate) noexcept;
+
+  /**
+   * Fill from a max-pooled overview only (@p bits =
+   * OVERVIEW_MEDIUM_BITS or OVERVIEW_BITS).
+   */
+  void FillOverview(const RasterMap &map, const GeoBounds &bounds,
+                    UnsignedPoint2D _size, unsigned bits,
+                    bool interpolate) noexcept;
 #else
   /**
    * @param interpolate true enables interpolation of sub-pixel values
    */
   void Fill(const RasterMap &map, const WindowProjection &map_projection,
             unsigned quantisation_pixels, bool interpolate) noexcept;
+
+  void FillOverview(const RasterMap &map,
+                    const WindowProjection &map_projection,
+                    unsigned quantisation_pixels, unsigned bits,
+                    bool interpolate) noexcept;
 #endif
 
   /**

@@ -333,6 +333,13 @@ changed terrain settings are directly visible at the small preview below.
   the map.
 \item[Terrain colours]  Defines the colour ramp used in terrain rendering.  Various 
   schemes are available, which works best for you will depend on how mountainous your region is.
+\item[DEM 2 threshold]  Map scale bar distance at which the map switches
+  from full-resolution DEM tiles to the medium (4$\times$) overview.
+  {\bf Auto} chooses the switch from DEM cells per screen pixel.
+\item[DEM 3 threshold]  Map scale bar distance at which the map switches
+  to the coarse (16$\times$) overview.  {\bf Auto} uses DEM cells per
+  screen pixel.  When both thresholds are set, DEM 3 should be at least
+  as large as DEM 2.
 \item[Slope shading*]  \label{conf:shading} The terrain can be shaded to indicate slopes and 
   other terrain features. The illumination direction for the shading can be either: geographically
   fixed from the north-west, screen-relative fixed from the top left, or the shading can be 

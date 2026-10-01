@@ -40,6 +40,8 @@ Profile::LoadTerrainRendererSettings(const ProfileMap &map,
     settings.contours = (Contours)contours;
 
   map.Get(ProfileKeys::TerrainGpuDemSpike, settings.gpu_dem_spike);
+  map.Get(ProfileKeys::TerrainDemMediumScale, settings.dem_medium_scale);
+  map.Get(ProfileKeys::TerrainDemCoarseScale, settings.dem_coarse_scale);
 #ifdef ENABLE_OPENGL
   /* UNIX A/B without touching the profile editor. */
   if (const char *env = getenv("XCSOAR_GPU_DEM"); env != nullptr)

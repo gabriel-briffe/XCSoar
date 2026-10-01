@@ -14,7 +14,8 @@ RenderMapScale(Canvas &canvas,
                const WindowProjection& projection,
                const PixelRect &rc,
                const OverlayLook &look,
-               unsigned contour_spacing_m)
+               unsigned contour_spacing_m,
+               unsigned dem_lod)
 {
   if (!projection.IsValid())
     return;
@@ -86,5 +87,29 @@ RenderMapScale(Canvas &canvas,
       {x + icon_width + text_padding_x,
        rc.bottom - (int)(font.GetAscentHeight() + Layout::Scale(1u)) - 1},
       contour_buf.c_str());
+
+    x += icon_width + 2 * text_padding_x + (int)contour_size.width;
+  } else {
+    x += look.map_scale_right_icon.GetScaledSize(height).width;
+  }
+
+  /* DEM LOD: 1=HD, 2=medium (4×), 3=coarse (16×). */
+  if (dem_lod >= 1 && dem_lod <= 3) {
+    x += text_padding_x * 2;
+
+    char lod_buf[2] = { char('0' + dem_lod), '\0' };
+    PixelSize lod_size = canvas.CalcTextSize(lod_buf);
+
+    canvas.DrawFilledRectangle(
+      {{x, top},
+       PixelSize{2 * text_padding_x + (int)lod_size.width, height}},
+      COLOR_WHITE);
+
+    canvas.SetBackgroundTransparent();
+    canvas.SetTextColor(COLOR_BLACK);
+    canvas.DrawText(
+      {x + text_padding_x,
+       rc.bottom - (int)(font.GetAscentHeight() + Layout::Scale(1u)) - 1},
+      lod_buf);
   }
 }

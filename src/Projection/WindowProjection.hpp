@@ -127,6 +127,13 @@ public:
   }
 
   /**
+   * Half the screen diagonal in meters — covers the full view in DEM
+   * tile space (including portrait and map rotation corners).
+   */
+  [[gnu::pure]]
+  double GetScreenHalfDiagonalMeters() const noexcept;
+
+  /**
    * Returns the length of the larger edge of the map area in pixels.
    */
   unsigned GetScreenDistance() const noexcept

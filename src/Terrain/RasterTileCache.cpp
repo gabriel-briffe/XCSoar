@@ -2,6 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "RasterTileCache.hpp"
+#include "DemOverview.hpp"
 #include "Math/Angle.hpp"
 #include "io/BufferedOutputStream.hxx"
 #include "io/BufferedReader.hxx"
@@ -16,13 +17,60 @@ extern "C" {
 #include <string.h>
 #include <algorithm>
 
+/**
+ * Max-pool one JP2 tile into an overview buffer at the given bit shift.
+ */
 static void
-CopyOverviewRow(TerrainHeight *gcc_restrict dest, const jas_seqent_t *gcc_restrict src,
-                unsigned width, unsigned skip) noexcept
+PutMaxPoolOverview(RasterBuffer &overview, unsigned bits,
+                   RasterLocation start,
+                   const struct jas_matrix &m) noexcept
 {
-  /* note: this loop rounds up */
-  for (unsigned x = 0; x < width; ++x, src += skip)
-    *dest++ = TerrainHeight(*src);
+  const unsigned pool = 1u << bits;
+  const unsigned dest_pitch = overview.GetSize().x;
+
+  const unsigned ostart_x = RasterTraits::ToOverview(start.x, bits);
+  const unsigned ostart_y = RasterTraits::ToOverview(start.y, bits);
+
+  if (ostart_x >= overview.GetSize().x || ostart_y >= overview.GetSize().y)
+    return;
+
+  unsigned width = RasterTraits::ToOverviewCeil(m.numcols_, bits);
+  if (ostart_x + width > overview.GetSize().x)
+    width = overview.GetSize().x - ostart_x;
+  unsigned height = RasterTraits::ToOverviewCeil(m.numrows_, bits);
+  if (ostart_y + height > overview.GetSize().y)
+    height = overview.GetSize().y - ostart_y;
+
+  auto *gcc_restrict dest = overview.GetData()
+    + ostart_y * dest_pitch + ostart_x;
+
+  for (unsigned oy = 0; oy < height; ++oy, dest += dest_pitch) {
+    const unsigned fy0 = oy * pool;
+    for (unsigned ox = 0; ox < width; ++ox) {
+      const unsigned fx0 = ox * pool;
+      bool any = false;
+      int16_t max_h = 0;
+
+      const unsigned fy1 = std::min(fy0 + pool, unsigned(m.numrows_));
+      const unsigned fx1 = std::min(fx0 + pool, unsigned(m.numcols_));
+
+      for (unsigned fy = fy0; fy < fy1; ++fy) {
+        const jas_seqent_t *row = m.rows_[fy];
+        for (unsigned fx = fx0; fx < fx1; ++fx) {
+          const TerrainHeight h{int16_t(row[fx])};
+          if (h.IsInvalid())
+            continue;
+
+          const int16_t v = h.IsWater() ? int16_t(0) : h.GetValue();
+          if (!any || v > max_h)
+            max_h = v;
+          any = true;
+        }
+      }
+
+      dest[ox] = any ? TerrainHeight(max_h) : TerrainHeight::Invalid();
+    }
+  }
 }
 
 void
@@ -32,29 +80,9 @@ RasterTileCache::PutOverviewTile(unsigned index,
 {
   tiles.GetLinear(index).Set(start, end);
 
-  const unsigned dest_pitch = overview.GetSize().x;
-
-  start.x = RasterTraits::ToOverview(start.x);
-  start.y = RasterTraits::ToOverview(start.y);
-
-  if (start.x >= overview.GetSize().x || start.y >= overview.GetSize().y)
-    return;
-
-  unsigned width = RasterTraits::ToOverviewCeil(m.numcols_);
-  if (start.x + width > overview.GetSize().x)
-    width = overview.GetSize().x - start.x;
-  unsigned height = RasterTraits::ToOverviewCeil(m.numrows_);
-  if (start.y + height > overview.GetSize().y)
-    height = overview.GetSize().y - start.y;
-
-  const unsigned skip = 1 << RasterTraits::OVERVIEW_BITS;
-
-  auto *gcc_restrict dest = overview.GetData()
-    + start.y * dest_pitch + start.x;
-
-  /* note: this loop rounds up */
-  for (unsigned i = 0, y = 0; i < height; ++i, y += skip, dest += dest_pitch)
-    CopyOverviewRow(dest, m.rows_[y], width, skip);
+  PutMaxPoolOverview(overview_medium, RasterTraits::OVERVIEW_MEDIUM_BITS,
+                     start, m);
+  PutMaxPoolOverview(overview, RasterTraits::OVERVIEW_BITS, start, m);
 }
 
 void
@@ -144,6 +172,29 @@ RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius) noexcept
   return num_activate > 0;
 }
 
+bool
+RasterTileCache::ExceedsActiveTileBudget(SignedRasterLocation p,
+                                         unsigned radius) const noexcept
+{
+  /* Match PollTiles(): expand so edge tiles of the view are included. */
+  radius += 256;
+
+  unsigned count = 0;
+  for (unsigned i = 0; i < tiles.GetSize(); ++i) {
+    const auto &tile = tiles.GetLinear(i);
+    if (!tile.IsDefined())
+      continue;
+
+    if (tile.CalcDistanceTo(p) > radius)
+      continue;
+
+    if (++count > MAX_ACTIVE_TILES)
+      return true;
+  }
+
+  return false;
+}
+
 TerrainHeight
 RasterTileCache::GetHeight(RasterLocation p) const noexcept
 {
@@ -187,7 +238,14 @@ RasterTileCache::SetSize(UnsignedPoint2D _size,
 
   /* round the overview size up, because PutOverviewTile() does the
      same */
-  overview.Resize({RasterTraits::ToOverviewCeil(size.x), RasterTraits::ToOverviewCeil(size.y)});
+  overview.Resize({RasterTraits::ToOverviewCeil(size.x),
+                   RasterTraits::ToOverviewCeil(size.y)});
+  overview_medium.Resize({
+      RasterTraits::ToOverviewCeil(size.x,
+                                   RasterTraits::OVERVIEW_MEDIUM_BITS),
+      RasterTraits::ToOverviewCeil(size.y,
+                                   RasterTraits::OVERVIEW_MEDIUM_BITS),
+    });
   overview_size_fine = size << RasterTraits::SUBPIXEL_BITS;
 
   tiles.GrowDiscard(_n_tiles.x, _n_tiles.y);
@@ -216,6 +274,8 @@ RasterTileCache::Reset() noexcept
   segments.clear();
 
   overview.Reset();
+  overview_medium.Reset();
+  display_lod = DemOverview::Lod::FINE;
 
   for (auto &i : tiles)
     i.Unload();
@@ -224,8 +284,16 @@ RasterTileCache::Reset() noexcept
 void
 RasterTileCache::UnloadTiles() noexcept
 {
-  for (auto &i : tiles)
+  bool any = false;
+  for (auto &i : tiles) {
+    if (!i.IsLoaded())
+      continue;
     i.Unload();
+    any = true;
+  }
+
+  if (!any)
+    return;
 
   dirty = false;
   ++serial;
@@ -263,6 +331,14 @@ RasterTileCache::CopyLayoutFrom(const RasterTileCache &src) noexcept
   assert(overview_size.y == src.overview.GetSize().y);
   std::copy_n(src.overview.GetData(), overview_size.Area(),
               overview.GetData());
+
+  const auto medium_size = overview_medium.GetSize();
+  assert(medium_size.x == src.overview_medium.GetSize().x);
+  assert(medium_size.y == src.overview_medium.GetSize().y);
+  std::copy_n(src.overview_medium.GetData(), medium_size.Area(),
+              overview_medium.GetData());
+
+  display_lod = DemOverview::Lod::FINE;
 
   dirty = false;
   ++serial;
@@ -330,9 +406,12 @@ RasterTileCache::SaveCache(BufferedOutputStream &os) const
   i = -1;
   os.Write(ReferenceAsBytes(i));
 
-  /* save overview */
+  /* save overview (coarse then medium) */
   size_t overview_size = overview.GetSize().Area();
   os.Write(std::as_bytes(std::span{overview.GetData(), overview_size}));
+
+  size_t medium_size = overview_medium.GetSize().Area();
+  os.Write(std::as_bytes(std::span{overview_medium.GetData(), medium_size}));
 }
 
 void
@@ -378,10 +457,16 @@ RasterTileCache::LoadCache(BufferedReader &r)
     tiles.GetLinear(i).LoadCache(r);
   }
 
-  /* load overview */
+  /* load overview (coarse then medium) */
   size_t overview_size = overview.GetSize().Area();
   r.ReadFull(std::as_writable_bytes(std::span{
         overview.GetData(),
         overview_size,
+      }));
+
+  size_t medium_size = overview_medium.GetSize().Area();
+  r.ReadFull(std::as_writable_bytes(std::span{
+        overview_medium.GetData(),
+        medium_size,
       }));
 }

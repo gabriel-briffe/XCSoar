@@ -3,6 +3,7 @@
 
 #include "RasterTerrain.hpp"
 #include "Loader.hpp"
+#include "DemOverview.hpp"
 #include "Profile/Profile.hpp"
 #include "io/ZipArchive.hpp"
 #include "io/FileCache.hpp"
@@ -91,11 +92,46 @@ try {
 }
 
 bool
-RasterTerrain::UpdateTiles(const GeoPoint &location, double radius) noexcept
+RasterTerrain::UpdateTiles(const GeoPoint &location, double radius,
+                           double meters_per_screen_pixel,
+                           double scale_bar_meters,
+                           double dem_medium_scale,
+                           double dem_coarse_scale) noexcept
 {
   auto &tile_cache = map.GetTileCache();
   if (!tile_cache.IsValid())
     return false;
+
+  DemOverview::Lod lod = DemOverview::Lod::FINE;
+  if (meters_per_screen_pixel > 0) {
+    const double cell_m = map.PixelDistance(location, 1);
+    const double cpp = cell_m > 0
+      ? meters_per_screen_pixel / cell_m
+      : 0;
+    lod = DemOverview::Select(cpp, scale_bar_meters,
+                              dem_medium_scale, dem_coarse_scale);
+
+    /* HD needs every fine tile under the view.  If that exceeds the
+       active-tile budget, fall back to the medium overview so the
+       whole screen stays consistent (no partial HD window). */
+    if (lod == DemOverview::Lod::FINE) {
+      const auto &projection = map.GetProjection();
+      const auto raster_location = projection.ProjectCoarse(location);
+      const unsigned radius_px =
+        projection.DistancePixelsCoarse(radius);
+      if (tile_cache.ExceedsActiveTileBudget(raster_location, radius_px))
+        lod = DemOverview::Lod::MEDIUM;
+    }
+  }
+
+  tile_cache.SetDisplayLod(lod);
+
+  if (lod != DemOverview::Lod::FINE) {
+    /* Overview-only display: drop fine tiles so mid/far zoom stays
+       light.  Height queries fall back to the coarse overview. */
+    tile_cache.UnloadTiles();
+    return false;
+  }
 
   try {
     UpdateTerrainTiles(archive.get(), tile_cache, mutex,

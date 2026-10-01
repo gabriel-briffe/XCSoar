@@ -7,6 +7,9 @@
 #include "RasterLocation.hpp"
 #include "RasterBuffer.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+
 struct jas_matrix;
 class BufferedOutputStream;
 class BufferedReader;
@@ -73,7 +76,14 @@ public:
   void LoadCache(BufferedReader &r);
 
   [[gnu::pure]]
-  unsigned CalcDistanceTo(IntPoint2D p) const noexcept;
+  unsigned CalcDistanceTo(IntPoint2D p) const noexcept {
+    const unsigned int dx1 = abs(p.x - (int)start.x);
+    const unsigned int dx2 = abs((int)end.x - p.x);
+    const unsigned int dy1 = abs(p.y - (int)start.y);
+    const unsigned int dy2 = abs((int)end.y - p.y);
+
+    return std::max(std::min(dx1, dx2), std::min(dy1, dy2));
+  }
 
   bool CheckTileVisibility(IntPoint2D view, unsigned view_radius) noexcept;
 

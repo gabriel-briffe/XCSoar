@@ -4,6 +4,7 @@
 #pragma once
 
 #include "RasterTraits.hpp"
+#include "DemOverview.hpp"
 #include "RasterTile.hpp"
 #include "RasterLocation.hpp"
 #include "Geo/GeoBounds.hpp"
@@ -76,7 +77,8 @@ protected:
   };
 
   struct CacheHeader {
-    static constexpr unsigned VERSION = 0xb;
+    /** 0xc: dual max-pooled overviews (4× + 16×). */
+    static constexpr unsigned VERSION = 0xc;
 
     unsigned version;
     UnsignedPoint2D size;
@@ -97,9 +99,19 @@ protected:
   AllocatedGrid<RasterTile> tiles;
   Point2D<uint_least16_t> tile_size;
 
+  /** Coarse full-map height buffer (1/16 fine, max-pooled). */
   RasterBuffer overview;
+  /** Medium full-map height buffer (1/4 fine, max-pooled). */
+  RasterBuffer overview_medium;
   RasterLocation size;
   RasterLocation overview_size_fine;
+
+  /**
+   * Map-display LOD chosen from cells-per-pixel.  Height queries and
+   * the glide-cone path ignore this and keep using fine tiles +
+   * coarse overview.
+   */
+  DemOverview::Lod display_lod = DemOverview::Lod::FINE;
 
   GeoBounds bounds;
 
@@ -274,6 +286,14 @@ public:
 
   bool PollTiles(SignedRasterLocation p, unsigned radius) noexcept;
 
+  /**
+   * True when covering @p radius around @p p needs more defined tiles
+   * than #MAX_ACTIVE_TILES (same margin as #PollTiles).
+   */
+  [[gnu::pure]]
+  bool ExceedsActiveTileBudget(SignedRasterLocation p,
+                               unsigned radius) const noexcept;
+
   void PutTileData(unsigned index, const struct jas_matrix &m) noexcept;
 
   void FinishTileUpdate() noexcept;
@@ -288,6 +308,28 @@ public:
    */
   const RasterBuffer &GetOverview() const noexcept {
     return overview;
+  }
+
+  /**
+   * Medium full-map height buffer (1/4 of fine DEM resolution).
+   */
+  const RasterBuffer &GetOverviewMedium() const noexcept {
+    return overview_medium;
+  }
+
+  DemOverview::Lod GetDisplayLod() const noexcept {
+    return display_lod;
+  }
+
+  /**
+   * Set map-display LOD.  Bumps #serial when the value changes so
+   * renderers rebuild.
+   */
+  void SetDisplayLod(DemOverview::Lod lod) noexcept {
+    if (display_lod == lod)
+      return;
+    display_lod = lod;
+    ++serial;
   }
 
   Point2D<uint_least16_t> GetTileSize() const noexcept {

@@ -91,6 +91,7 @@ TEST_NAMES = \
 	TestValidity TestUTM \
 	TestWaypointReachability TestBackupPaths \
 	TestAllocatedGrid \
+	TestDemOverview \
 	TestRadixTree TestGeoBounds TestGeoClip TestGlideConeField \
 	TestLogger TestGPSDeviceName TestGRecord TestClimbAvCalc TestCirclingWind \
 	TestFilteredVarioComputer \
@@ -1106,6 +1107,12 @@ TEST_ALLOCATED_GRID_SOURCES = \
 	$(TEST_SRC_DIR)/TestAllocatedGrid.cpp
 TEST_ALLOCATED_GRID_DEPENDS = UTIL
 $(eval $(call link-program,TestAllocatedGrid,TEST_ALLOCATED_GRID))
+
+TEST_DEM_OVERVIEW_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestDemOverview.cpp
+TEST_DEM_OVERVIEW_DEPENDS = UTIL
+$(eval $(call link-program,TestDemOverview,TEST_DEM_OVERVIEW))
 
 TEST_RADIX_TREE_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \

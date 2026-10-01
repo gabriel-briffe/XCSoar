@@ -6,6 +6,7 @@
 #include "Terrain/RasterTileCache.hpp"
 #include "Terrain/RasterTile.hpp"
 #include "Terrain/RasterTraits.hpp"
+#include "Terrain/DemOverview.hpp"
 #include "Terrain/Height.hpp"
 #include "Math/Angle.hpp"
 #include "Math/Constants.hpp"
@@ -344,14 +345,26 @@ RasterRenderer::ScanMap(const RasterMap &map,
     matrix_size = {clamped_x, clamped_y};
   }
 
-  height_matrix.Fill(map, bounds, matrix_size, true);
+  const auto lod = map.GetDisplayLod();
+  if (lod == DemOverview::Lod::FINE)
+    height_matrix.Fill(map, bounds, matrix_size, true);
+  else
+    height_matrix.FillOverview(map, bounds, matrix_size,
+                               DemOverview::Bits(lod), true);
 
   ClampQuantisationEffectiveToMatrix(quantisation_effective,
                                      height_matrix.GetSize());
 
   last_quantisation_pixels = quantisation_pixels;
 #else
-  height_matrix.Fill(map, projection, quantisation_pixels, true);
+  {
+    const auto lod = map.GetDisplayLod();
+    if (lod == DemOverview::Lod::FINE)
+      height_matrix.Fill(map, projection, quantisation_pixels, true);
+    else
+      height_matrix.FillOverview(map, projection, quantisation_pixels,
+                                 DemOverview::Bits(lod), true);
+  }
 
   ClampQuantisationEffectiveToMatrix(quantisation_effective,
                                      height_matrix.GetSize());
@@ -965,6 +978,28 @@ RasterRenderer::SyncGpuDemTileTextures(const RasterMap &map) noexcept
       UploadHeightLATexture(overview.GetData(), ps, overview_texture);
   }
 
+  const RasterBuffer &overview_medium = map.GetOverviewMedium();
+  if (overview_medium.IsDefined()) {
+    const auto osz = overview_medium.GetSize();
+    const PixelSize ps{int(osz.x), int(osz.y)};
+    if (overview_medium_texture == nullptr ||
+        overview_medium_texture->GetSize() != ps)
+      UploadHeightLATexture(overview_medium.GetData(), ps,
+                            overview_medium_texture);
+  }
+
+  const auto lod = map.GetDisplayLod();
+  if (lod != DemOverview::Lod::FINE) {
+    /* Overview-only LOD: drop any leftover fine-tile textures. */
+    for (unsigned i = 0; i < n; ++i) {
+      if (tile_textures[i]) {
+        tile_textures[i].reset();
+        tile_tex_dropped = true;
+      }
+    }
+    return;
+  }
+
   for (unsigned y = 0; y < ny; ++y) {
     for (unsigned x = 0; x < nx; ++x) {
       const unsigned i = y * nx + x;
@@ -1011,7 +1046,16 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
     return false;
 
   SyncGpuDemTileTextures(map);
-  if (tile_tex_active == 0 && overview_texture == nullptr)
+  dem_display_lod = map.GetDisplayLod();
+  const auto display_lod = dem_display_lod;
+  const bool have_overview =
+    (display_lod == DemOverview::Lod::MEDIUM &&
+     overview_medium_texture != nullptr) ||
+    (display_lod == DemOverview::Lod::COARSE &&
+     overview_texture != nullptr) ||
+    (display_lod == DemOverview::Lod::FINE &&
+     (overview_medium_texture != nullptr || overview_texture != nullptr));
+  if (tile_tex_active == 0 && !have_overview)
     return false;
 
   dem_map_bounds = map.GetBounds();
@@ -1241,18 +1285,29 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
     blit_height_tex(*tile_textures[i], nw, ne, sw, se);
   };
 
-  /* Full compose: overview first (always covers the DEM), then fine
-     tiles on top. Incremental only patches dirty fine tiles. */
-  if (!do_incremental && overview_texture != nullptr &&
-      dem_map_bounds.IsValid()) {
-    blit_height_tex(*overview_texture,
-                    dem_map_bounds.GetNorthWest(),
-                    dem_map_bounds.GetNorthEast(),
-                    dem_map_bounds.GetSouthWest(),
-                    dem_map_bounds.GetSouthEast());
+  /* Full compose: pick one DEM level from display LOD.  Fine still
+     uses a medium/coarse underlay so unloaded tiles are not holes. */
+  if (!do_incremental && dem_map_bounds.IsValid()) {
+    GLTexture *base = nullptr;
+    if (display_lod == DemOverview::Lod::COARSE)
+      base = overview_texture.get();
+    else if (display_lod == DemOverview::Lod::MEDIUM)
+      base = overview_medium_texture.get();
+    else if (overview_medium_texture != nullptr)
+      base = overview_medium_texture.get();
+    else
+      base = overview_texture.get();
+
+    if (base != nullptr)
+      blit_height_tex(*base,
+                      dem_map_bounds.GetNorthWest(),
+                      dem_map_bounds.GetNorthEast(),
+                      dem_map_bounds.GetSouthWest(),
+                      dem_map_bounds.GetSouthEast());
   }
 
-  if (nx > 0 && ny > 0 && tile_textures.size() == nx * ny) {
+  if (display_lod == DemOverview::Lod::FINE &&
+      nx > 0 && ny > 0 && tile_textures.size() == nx * ny) {
     if (do_incremental) {
       for (unsigned i : tile_dirty)
         blit_tile(i);
@@ -1468,11 +1523,28 @@ RasterRenderer::DrawGpuDemTiles(const WindowProjection &projection,
 
   const GeoBounds screen = projection.GetScreenBounds();
 
-  if (overview_texture) {
+  GLTexture *overview_tex = nullptr;
+  unsigned overview_bits = 0;
+  switch (dem_display_lod) {
+  case DemOverview::Lod::COARSE:
+    overview_tex = overview_texture.get();
+    overview_bits = RasterTraits::OVERVIEW_BITS;
+    break;
+  case DemOverview::Lod::MEDIUM:
+    overview_tex = overview_medium_texture.get();
+    overview_bits = RasterTraits::OVERVIEW_MEDIUM_BITS;
+    break;
+  case DemOverview::Lod::FINE:
+    /* Fine tiles only in this path; underlay is for compose FBO. */
+    overview_tex = nullptr;
+    break;
+  }
+
+  if (overview_tex != nullptr) {
     const double overview_hsf =
       std::max(1.0, height_slope_factor_for_draw *
-               double(1u << RasterTraits::OVERVIEW_BITS));
-    DrawHillshadeQuad(projection, *overview_texture,
+               double(1u << overview_bits));
+    DrawHillshadeQuad(projection, *overview_tex,
                       dem_map_bounds.GetNorthWest(),
                       dem_map_bounds.GetNorthEast(),
                       dem_map_bounds.GetSouthWest(),
@@ -1480,34 +1552,36 @@ RasterRenderer::DrawGpuDemTiles(const WindowProjection &projection,
                       overview_hsf, alpha);
   }
 
-  const unsigned nx = dem_tile_grid.x;
-  const unsigned ny = dem_tile_grid.y;
-  if (nx > 0 && ny > 0 &&
-      tile_textures.size() == nx * ny &&
-      tile_starts.size() == nx * ny) {
-    for (unsigned i = 0; i < nx * ny; ++i) {
-      if (!tile_textures[i])
-        continue;
+  if (dem_display_lod == DemOverview::Lod::FINE) {
+    const unsigned nx = dem_tile_grid.x;
+    const unsigned ny = dem_tile_grid.y;
+    if (nx > 0 && ny > 0 &&
+        tile_textures.size() == nx * ny &&
+        tile_starts.size() == nx * ny) {
+      for (unsigned i = 0; i < nx * ny; ++i) {
+        if (!tile_textures[i])
+          continue;
 
-      const RasterLocation start = tile_starts[i];
-      const RasterLocation end = tile_ends[i];
-      if (end.x <= start.x || end.y <= start.y)
-        continue;
+        const RasterLocation start = tile_starts[i];
+        const RasterLocation end = tile_ends[i];
+        if (end.x <= start.x || end.y <= start.y)
+          continue;
 
-      const GeoPoint nw = dem_projection.UnprojectCoarse(start);
-      const GeoPoint ne = dem_projection.UnprojectCoarse(
-        SignedRasterLocation(int(end.x), int(start.y)));
-      const GeoPoint sw = dem_projection.UnprojectCoarse(
-        SignedRasterLocation(int(start.x), int(end.y)));
-      const GeoPoint se = dem_projection.UnprojectCoarse(end);
+        const GeoPoint nw = dem_projection.UnprojectCoarse(start);
+        const GeoPoint ne = dem_projection.UnprojectCoarse(
+          SignedRasterLocation(int(end.x), int(start.y)));
+        const GeoPoint sw = dem_projection.UnprojectCoarse(
+          SignedRasterLocation(int(start.x), int(end.y)));
+        const GeoPoint se = dem_projection.UnprojectCoarse(end);
 
-      const GeoBounds tb(nw, se);
-      if (!tb.IsValid() || !tb.Overlaps(screen))
-        continue;
+        const GeoBounds tb(nw, se);
+        if (!tb.IsValid() || !tb.Overlaps(screen))
+          continue;
 
-      DrawHillshadeQuad(projection, *tile_textures[i],
-                        nw, ne, sw, se,
-                        height_slope_factor_for_draw, alpha);
+        DrawHillshadeQuad(projection, *tile_textures[i],
+                          nw, ne, sw, se,
+                          height_slope_factor_for_draw, alpha);
+      }
     }
   }
 

@@ -138,8 +138,13 @@ GlueMapWindow::UpdateScreenBounds() noexcept
      it's used by other calculations, therefore don't check if terrain
      display is enabled */
   if (terrain_thread != nullptr &&
-      visible_projection.IsValid())
-    terrain_thread->Trigger(visible_projection);
+      visible_projection.IsValid()) {
+    const auto &terrain_settings =
+      CommonInterface::GetMapSettings().terrain;
+    terrain_thread->Trigger(visible_projection,
+                            terrain_settings.dem_medium_scale,
+                            terrain_settings.dem_coarse_scale);
+  }
 }
 
 void

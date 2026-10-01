@@ -15,6 +15,8 @@ TerrainRendererSettings::SetDefaults()
   ramp = 0;
   contours = Contours::OFF;
   gpu_dem_spike = false;
+  dem_medium_scale = 0;
+  dem_coarse_scale = 0;
 }
 
 /**

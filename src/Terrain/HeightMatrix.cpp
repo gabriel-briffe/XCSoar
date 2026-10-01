@@ -83,6 +83,26 @@ HeightMatrix::Fill(const RasterMap &map, const GeoBounds &bounds,
   }
 }
 
+void
+HeightMatrix::FillOverview(const RasterMap &map, const GeoBounds &bounds,
+                           const UnsignedPoint2D _size, unsigned bits,
+                           bool interpolate) noexcept
+{
+  if (_size.x == 0 || _size.y == 0)
+    return;
+
+  SetSize(_size);
+
+  const Angle delta_y = bounds.GetHeight() / _size.y;
+  Angle latitude = bounds.GetNorth();
+  for (auto p = data.data(), end = p + _size.Area();
+       p != end; p += _size.x, latitude -= delta_y) {
+    map.ScanOverviewLine(GeoPoint(bounds.GetWest(), latitude),
+                         GeoPoint(bounds.GetEast(), latitude),
+                         p, _size.x, bits, interpolate);
+  }
+}
+
 #else
 
 void
@@ -104,6 +124,31 @@ HeightMatrix::Fill(const RasterMap &map, const WindowProjection &projection,
     map.ScanLine(projection.ScreenToGeo({0, (int)y}),
                  projection.ScreenToGeo({(int)screen_size.width, (int)y}),
                  p, size.x, interpolate);
+  }
+}
+
+void
+HeightMatrix::FillOverview(const RasterMap &map,
+                           const WindowProjection &projection,
+                           unsigned quantisation_pixels, unsigned bits,
+                           bool interpolate) noexcept
+{
+  if (quantisation_pixels < 1)
+    quantisation_pixels = 1;
+
+  const auto screen_size = projection.GetScreenSize();
+  if (screen_size.width == 0 || screen_size.height == 0)
+    return;
+
+  SetSize((UnsignedPoint2D)screen_size, quantisation_pixels);
+
+  auto p = data.data();
+  for (unsigned y = 0; y < screen_size.height;
+       y += quantisation_pixels, p += size.x) {
+    map.ScanOverviewLine(projection.ScreenToGeo({0, (int)y}),
+                         projection.ScreenToGeo({(int)screen_size.width,
+                                                 (int)y}),
+                         p, size.x, bits, interpolate);
   }
 }
 

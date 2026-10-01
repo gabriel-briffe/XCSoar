@@ -14,6 +14,8 @@
 #include "ui/canvas/opengl/Scissor.hpp"
 #endif
 
+#include <algorithm>
+
 /**
  * Constructor of the MapWindow class
  */
@@ -123,8 +125,16 @@ MapWindow::UpdateTerrain() noexcept
 
   // always service terrain even if it's not used by the map,
   // because it's used by other calculations
+  const auto screen_w =
+    std::max(1, (int)visible_projection.GetScreenSize().width);
+  const double scale_bar = visible_projection.GetScreenWidthMeters();
+  const double mpp = scale_bar / double(screen_w);
+  const auto &terrain_settings = GetMapSettings().terrain;
   return terrain->UpdateTiles(visible_projection.GetGeoScreenCenter(),
-                              visible_projection.GetScreenWidthMeters() / 2);
+                              visible_projection.GetScreenHalfDiagonalMeters(),
+                              mpp, scale_bar,
+                              terrain_settings.dem_medium_scale,
+                              terrain_settings.dem_coarse_scale);
 }
 
 /**

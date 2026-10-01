@@ -73,6 +73,18 @@ struct TerrainRendererSettings {
   bool gpu_dem_spike;
 
   /**
+   * Map scale bar distance (metres) at which to switch to DEM medium
+   * (4×).  Zero means Auto (cells-per-pixel).
+   */
+  double dem_medium_scale;
+
+  /**
+   * Map scale bar distance (metres) at which to switch to DEM coarse
+   * (16×).  Zero means Auto (cells-per-pixel).
+   */
+  double dem_coarse_scale;
+
+  /**
    * Set all attributes to the default values.
    */
   void SetDefaults();
@@ -84,7 +96,9 @@ struct TerrainRendererSettings {
       brightness == other.brightness &&
       ramp == other.ramp &&
       contours == other.contours &&
-      gpu_dem_spike == other.gpu_dem_spike;
+      gpu_dem_spike == other.gpu_dem_spike &&
+      dem_medium_scale == other.dem_medium_scale &&
+      dem_coarse_scale == other.dem_coarse_scale;
   }
 
   bool operator!=(const TerrainRendererSettings &other) const {

@@ -16,6 +16,7 @@
 #include "UIState.hpp"
 #include "Renderer/FinalGlideBarRenderer.hpp"
 #include "Terrain/RasterTerrain.hpp"
+#include "Terrain/DemOverview.hpp"
 #include "util/Macros.hpp"
 #include "util/StringAPI.hxx"
 #include "Look/GestureLook.hpp"
@@ -458,13 +459,31 @@ GlueMapWindow::DrawMapScale(Canvas &canvas, const PixelRect &rc,
   PixelRect scale_pos(rc.left, rc.top, rc.right, rc.bottom - bottom_margin);
 
   unsigned contour_spacing_m = 0;
-  const auto &terrain = GetMapSettings().terrain;
+  const auto &terrain_settings = GetMapSettings().terrain;
   if (projection.IsValid() &&
-      terrain.enable && terrain.contours != Contours::OFF &&
+      terrain_settings.enable && terrain_settings.contours != Contours::OFF &&
       background.AreContoursVisible())
     contour_spacing_m = background.GetContourSpacing();
 
-  RenderMapScale(canvas, projection, scale_pos, look.overlay, contour_spacing_m);
+  unsigned dem_lod = 0;
+  if (projection.IsValid() && terrain_settings.enable &&
+      terrain != nullptr) {
+    const RasterTerrain::Lease map(*terrain);
+    switch (map->GetDisplayLod()) {
+    case DemOverview::Lod::FINE:
+      dem_lod = 1;
+      break;
+    case DemOverview::Lod::MEDIUM:
+      dem_lod = 2;
+      break;
+    case DemOverview::Lod::COARSE:
+      dem_lod = 3;
+      break;
+    }
+  }
+
+  RenderMapScale(canvas, projection, scale_pos, look.overlay,
+                 contour_spacing_m, dem_lod);
 
   if (!projection.IsValid())
     return;

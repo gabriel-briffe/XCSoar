@@ -64,9 +64,20 @@ public:
   }
 
   /**
+   * Load fine DEM tiles around @p location when map display needs
+   * full resolution.  @p meters_per_screen_pixel / @p scale_bar_meters
+   * select the display LOD; pass meters_per_screen_pixel 0 to always
+   * request fine tiles (compute paths such as glide-cone).
+   * @p dem_medium_scale / @p dem_coarse_scale are map-scale-bar metres
+   * (0 = Auto).
+   *
    * @return true if the method shall be called again
    */
-  bool UpdateTiles(const GeoPoint &location, double radius) noexcept;
+  bool UpdateTiles(const GeoPoint &location, double radius,
+                   double meters_per_screen_pixel = 0,
+                   double scale_bar_meters = 0,
+                   double dem_medium_scale = 0,
+                   double dem_coarse_scale = 0) noexcept;
 
 private:
   /**
