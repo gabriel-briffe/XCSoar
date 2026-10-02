@@ -112,13 +112,18 @@ public:
 
   /**
    * Downsample the DEM by taking the maximum valid height in each
-   * @p pool × @p pool block of coarse pixels, starting at @p origin.
-   * Water is treated as 0 m.  Blocks with no valid sample are written
-   * as @p invalid_value.
+   * @p pool × @p pool block of coarse (fine-DEM) pixels, starting at
+   * @p origin.  Water is treated as 0 m.  Blocks with no valid sample
+   * are written as @p invalid_value.
+   *
+   * When @p overview_bits is non-zero, samples the matching overview
+   * buffer once per overview cell that intersects each pool window
+   * (DEM2/3 path — avoids redundant fine-grid walks).
    */
   void MaxPoolElevation(SignedRasterLocation origin, unsigned pool,
                         unsigned width, unsigned height,
-                        float *dest, float invalid_value) const noexcept;
+                        float *dest, float invalid_value,
+                        unsigned overview_bits = 0) const noexcept;
 
   /**
    * Determine the non-interpolated height at the specified location.

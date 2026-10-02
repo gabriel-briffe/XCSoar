@@ -5,6 +5,7 @@
 #include "GlideConeDemSampler.hpp"
 #include "Terrain/RasterMap.hpp"
 #include "Terrain/RasterProjection.hpp"
+#include "Terrain/DemOverview.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
 #include "util/ScopeExit.hxx"
@@ -133,7 +134,8 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   }
 
   map.MaxPoolElevation(origin, pool, dim_x, dim_y,
-                       grid.elevation.data(), invalid_elevation);
+                       grid.elevation.data(), invalid_elevation,
+                       DemOverview::Bits(map.GetDisplayLod()));
   for (float &e : grid.elevation)
     if (e < invalid_elevation)
       e += float(request.clearance);

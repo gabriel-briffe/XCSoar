@@ -34,12 +34,66 @@ RasterMap::GetHeight(const GeoPoint &location) const noexcept
 void
 RasterMap::MaxPoolElevation(SignedRasterLocation origin, unsigned pool,
                             unsigned width, unsigned height,
-                            float *dest, float invalid_value) const noexcept
+                            float *dest, float invalid_value,
+                            unsigned overview_bits) const noexcept
 {
   assert(pool >= 1);
   assert(dest != nullptr);
 
   const auto map_size = raster_tile_cache.GetSize();
+
+  if (overview_bits > 0) {
+    const RasterBuffer &ov =
+      overview_bits == RasterTraits::OVERVIEW_MEDIUM_BITS
+      ? GetOverviewMedium()
+      : GetOverview();
+    if (!ov.IsDefined()) {
+      std::fill_n(dest, std::size_t(width) * height, invalid_value);
+      return;
+    }
+
+    const auto osz = ov.GetSize();
+    for (unsigned j = 0; j < height; ++j) {
+      for (unsigned i = 0; i < width; ++i) {
+        bool any = false;
+        int16_t max_h = 0;
+        const int x0 = origin.x + int(i * pool);
+        const int y0 = origin.y + int(j * pool);
+        const int x1 = x0 + int(pool);
+        const int y1 = y0 + int(pool);
+
+        const unsigned ox0 = x0 <= 0
+          ? 0
+          : unsigned(x0) >> overview_bits;
+        const unsigned oy0 = y0 <= 0
+          ? 0
+          : unsigned(y0) >> overview_bits;
+        const unsigned ox1 = x1 <= 0
+          ? 0
+          : RasterTraits::ToOverviewCeil(unsigned(x1), overview_bits);
+        const unsigned oy1 = y1 <= 0
+          ? 0
+          : RasterTraits::ToOverviewCeil(unsigned(y1), overview_bits);
+
+        for (unsigned oy = oy0; oy < oy1 && oy < osz.y; ++oy) {
+          for (unsigned ox = ox0; ox < ox1 && ox < osz.x; ++ox) {
+            const auto h = ov.Get({ox, oy});
+            if (h.IsInvalid())
+              continue;
+
+            const int16_t v = h.IsWater() ? int16_t(0) : h.GetValue();
+            if (!any || v > max_h)
+              max_h = v;
+            any = true;
+          }
+        }
+
+        dest[std::size_t(j) * width + i] =
+          any ? float(max_h) : invalid_value;
+      }
+    }
+    return;
+  }
 
   for (unsigned j = 0; j < height; ++j) {
     for (unsigned i = 0; i < width; ++i) {
