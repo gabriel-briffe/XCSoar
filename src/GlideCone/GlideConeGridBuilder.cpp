@@ -8,7 +8,6 @@
 #include "Terrain/DemOverview.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
-#include "util/ScopeExit.hxx"
 
 #include <algorithm>
 #include <cmath>
@@ -30,10 +29,7 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   const double desired_cell = std::clamp(request.cell_size, 50.0, 5000.0);
   const double radius_m = request.radius_m;
 
-  /* Ephemeral private DEM: pick LOD from cell size, load HD only for
-     DEM1, then sample → unload. */
-  AtScopeExit(&dem) { dem.ReleaseTiles(); };
-
+  /* Private DEM: DEM1 keeps JP2 across small pans; DEM2/3 use overview. */
   if (!dem.Prepare(display, request.center, radius_m, desired_cell))
     return false;
 

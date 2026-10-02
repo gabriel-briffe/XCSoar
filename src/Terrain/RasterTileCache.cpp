@@ -146,6 +146,36 @@ struct RTDistanceSort {
   }
 };
 
+RasterTileCache::TileIndexRect
+RasterTileCache::TilesOverlapping(SignedRasterLocation p,
+                                  unsigned radius) const noexcept
+{
+  const unsigned nw = tiles.GetWidth();
+  const unsigned nh = tiles.GetHeight();
+  if (nw == 0 || nh == 0 || tile_size.x == 0 || tile_size.y == 0)
+    return {};
+
+  const int x0p = p.x - int(radius);
+  const int x1p = p.x + int(radius);
+  const int y0p = p.y - int(radius);
+  const int y1p = p.y + int(radius);
+
+  const unsigned tx0 = x0p <= 0
+    ? 0
+    : std::min(nw, unsigned(x0p) / tile_size.x);
+  const unsigned ty0 = y0p <= 0
+    ? 0
+    : std::min(nh, unsigned(y0p) / tile_size.y);
+  const unsigned tx1 = x1p < 0
+    ? 0
+    : std::min(nw, unsigned(x1p) / tile_size.x + 1);
+  const unsigned ty1 = y1p < 0
+    ? 0
+    : std::min(nh, unsigned(y1p) / tile_size.y + 1);
+
+  return {tx0, ty0, tx1, ty1};
+}
+
 bool
 RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius,
                            bool load_fine) noexcept
@@ -156,6 +186,14 @@ RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius,
      the screen will be loaded in advance */
   radius += 256;
 
+  /* Same view again: overview needs nothing; fine only continues if
+     still dirty (tiles scheduled but not yet loaded). */
+  if (last_poll_valid && last_poll_p == p && last_poll_radius == radius &&
+      last_poll_load_fine == load_fine) {
+    if (!load_fine || !dirty)
+      return false;
+  }
+
   /**
    * Maximum number of tiles loaded at a time, to reduce system load
    * peaks.
@@ -164,13 +202,45 @@ RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius,
     ? 16
     : MAX_ACTIVE_TILES / 2;
 
-  /* query all tiles; all tiles which are either in range or already
-     loaded are added to RequestTiles */
+  /* Keep previous active indices so loaded tiles outside the new
+     spatial box are still considered (and unloaded if needed). */
+  StaticArray<uint16_t, MAX_RTC_TILES> prev_active;
+  for (unsigned short idx : request_tiles)
+    prev_active.append(idx);
+
+  const auto rect = TilesOverlapping(p, radius);
+  const unsigned nw = tiles.GetWidth();
 
   request_tiles.clear();
-  for (int i = tiles.GetSize() - 1; i >= 0 && !request_tiles.full(); --i)
+
+  auto try_append = [&](unsigned i) noexcept {
+    if (request_tiles.full())
+      return;
     if (tiles.GetLinear(i).VisibilityChanged(p, radius))
-      request_tiles.append(i);
+      request_tiles.append(uint16_t(i));
+  };
+
+  for (unsigned ty = rect.y0; ty < rect.y1; ++ty)
+    for (unsigned tx = rect.x0; tx < rect.x1; ++tx)
+      try_append(ty * nw + tx);
+
+  /* Loaded tiles from the previous set may lie outside the AABB. */
+  for (unsigned short idx : prev_active) {
+    if (request_tiles.full())
+      break;
+    const RasterTile &tile = tiles.GetLinear(idx);
+    if (!tile.IsLoaded())
+      continue;
+    bool already = false;
+    for (unsigned short j : request_tiles) {
+      if (j == idx) {
+        already = true;
+        break;
+      }
+    }
+    if (!already)
+      try_append(idx);
+  }
 
   /* Cap the active set so each LOD keeps a full-screen cover within
      its budget.  HD uses MAX_ACTIVE_TILES; DEM2/3 use the scaled
@@ -191,15 +261,44 @@ RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius,
     request_tiles.shrink(max_tiles);
   }
 
+  last_poll_p = p;
+  last_poll_radius = radius;
+  last_poll_load_fine = load_fine;
+  last_poll_valid = true;
+
   if (!load_fine) {
     /* Overview LOD: keep the active set for GPU crops, drop HD. */
+    bool unloaded = false;
     for (std::size_t i : request_tiles) {
       RasterTile &tile = tiles.GetLinear(i);
-      tile.Unload();
+      if (tile.IsLoaded()) {
+        tile.Unload();
+        unloaded = true;
+      }
       tile.ClearRequest();
     }
+
+    /* Active-set membership change vs previous poll (order ignored). */
+    bool set_changed = request_tiles.size() != prev_active.size();
+    if (!set_changed && !request_tiles.empty()) {
+      StaticArray<uint16_t, MAX_RTC_TILES> a, b;
+      for (unsigned short i : request_tiles)
+        a.append(i);
+      for (unsigned short i : prev_active)
+        b.append(i);
+      std::sort(a.begin(), a.end());
+      std::sort(b.begin(), b.end());
+      for (unsigned i = 0; i < a.size(); ++i) {
+        if (a[i] != b[i]) {
+          set_changed = true;
+          break;
+        }
+      }
+    }
+
     dirty = false;
-    ++serial;
+    if (unloaded || set_changed)
+      ++serial;
     return false;
   }
 
@@ -231,16 +330,18 @@ RasterTileCache::CountTilesInView(SignedRasterLocation p,
   /* Match PollTiles(): expand so edge tiles of the view are included. */
   radius += 256;
 
+  const auto rect = TilesOverlapping(p, radius);
+
   unsigned count = 0;
-  for (unsigned i = 0; i < tiles.GetSize(); ++i) {
-    const auto &tile = tiles.GetLinear(i);
-    if (!tile.IsDefined())
-      continue;
-
-    if (tile.CalcDistanceTo(p) > radius)
-      continue;
-
-    ++count;
+  for (unsigned ty = rect.y0; ty < rect.y1; ++ty) {
+    for (unsigned tx = rect.x0; tx < rect.x1; ++tx) {
+      const auto &tile = tiles.Get(tx, ty);
+      if (!tile.IsDefined())
+        continue;
+      if (tile.CalcDistanceTo(p) > radius)
+        continue;
+      ++count;
+    }
   }
 
   return count;
@@ -386,6 +487,8 @@ RasterTileCache::Reset() noexcept
   size = {0, 0};
   bounds.SetInvalid();
   segments.clear();
+  request_tiles.clear();
+  last_poll_valid = false;
 
   overview.Reset();
   overview_medium.Reset();
@@ -405,6 +508,8 @@ RasterTileCache::UnloadTiles() noexcept
     i.Unload();
     any = true;
   }
+
+  last_poll_valid = false;
 
   if (!any)
     return;
@@ -454,6 +559,8 @@ RasterTileCache::CopyLayoutFrom(const RasterTileCache &src) noexcept
 
   display_lod = DemOverview::Lod::FINE;
 
+  request_tiles.clear();
+  last_poll_valid = false;
   dirty = false;
   ++serial;
 }

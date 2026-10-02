@@ -124,6 +124,24 @@ protected:
    */
   StaticArray<uint16_t, MAX_RTC_TILES> request_tiles;
 
+  /** Last #PollTiles view; used to skip redundant work. */
+  SignedRasterLocation last_poll_p{0, 0};
+  unsigned last_poll_radius = 0;
+  bool last_poll_load_fine = true;
+  bool last_poll_valid = false;
+
+  /**
+   * Half-open tile-index rectangle covering pixels within @p radius
+   * of @p p (axis-aligned; matches #RasterTile::CalcDistanceTo).
+   */
+  struct TileIndexRect {
+    unsigned x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+  };
+
+  [[gnu::pure]]
+  TileIndexRect TilesOverlapping(SignedRasterLocation p,
+                                 unsigned radius) const noexcept;
+
 public:
   RasterTileCache() noexcept {
     Reset();

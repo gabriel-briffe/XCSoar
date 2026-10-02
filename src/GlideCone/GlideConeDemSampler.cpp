@@ -26,6 +26,9 @@ GlideConeDemSampler::EnsureOverview(RasterTerrain *display) noexcept
     archive.emplace(ZipArchive{path});
     map.GetTileCache().Reset();
     overview_ready = false;
+    fine_tiles_ready = false;
+    fine_center = GeoPoint::Invalid();
+    fine_radius = 0;
 
     if (display != nullptr) {
       const RasterTerrain::Lease lease{*display};
@@ -46,6 +49,7 @@ GlideConeDemSampler::EnsureOverview(RasterTerrain *display) noexcept
     return overview_ready;
   } catch (...) {
     overview_ready = false;
+    fine_tiles_ready = false;
     archive.reset();
     return false;
   }
@@ -91,12 +95,35 @@ GlideConeDemSampler::Prepare(RasterTerrain *display,
   }
 
   if (lod == DemOverview::Lod::FINE) {
-    for (unsigned i = 0; i < 64 && UpdateTiles(display, location, radius);
-         ++i) {
+    /* Reload JP2 only when the new window is not covered by the
+       previously loaded circle (small pans reuse tiles). */
+    const bool covered = fine_tiles_ready && fine_radius > 0 &&
+      location.IsValid() && fine_center.IsValid() &&
+      fine_center.DistanceS(location) + radius <= fine_radius;
+
+    bool need_load = !covered;
+    if (covered) {
+      const std::lock_guard lock{mutex};
+      need_load = map.IsDirty();
+    }
+
+    if (need_load) {
+      if (!covered) {
+        fine_center = location;
+        fine_radius = radius;
+      }
+      for (unsigned i = 0; i < 64 && UpdateTiles(display, location, radius);
+           ++i) {
+      }
+      {
+        const std::lock_guard lock{mutex};
+        fine_tiles_ready = !map.IsDirty();
+      }
     }
   } else {
     /* Overview already resident; drop any leftover HD tiles. */
-    ReleaseTiles();
+    if (fine_tiles_ready)
+      ReleaseTiles();
   }
 
   return true;
@@ -125,4 +152,7 @@ GlideConeDemSampler::ReleaseTiles() noexcept
 {
   const std::lock_guard lock{mutex};
   map.GetTileCache().UnloadTiles();
+  fine_tiles_ready = false;
+  fine_center = GeoPoint::Invalid();
+  fine_radius = 0;
 }

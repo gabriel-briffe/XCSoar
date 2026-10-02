@@ -18,8 +18,9 @@ class RasterTerrain;
 /**
  * GlideCone-only DEM access: own archive + tile set, independent of
  * the map-display #RasterTerrain.  Layout/overview is copied from the
- * display DEM when available (no second file overview scan); fine
- * tiles are ephemeral (load → sample → unload) when DEM1 is needed.
+ * display DEM when available (no second file overview scan).  DEM1
+ * JP2 tiles are kept across builds while the compute window still
+ * fits the previously loaded area; DEM2/3 use overview only.
  */
 class GlideConeDemSampler {
   std::optional<ZipArchive> archive;
@@ -29,6 +30,11 @@ class GlideConeDemSampler {
   bool overview_ready = false;
   /** Last cell-size (m) for which DEM choice was logged; <0 = none. */
   double logged_cell_size_m = -1;
+
+  /** Last DEM1 window that still has JP2 tiles loaded. */
+  GeoPoint fine_center = GeoPoint::Invalid();
+  double fine_radius = 0;
+  bool fine_tiles_ready = false;
 
 public:
   /**
@@ -70,7 +76,8 @@ public:
 
   /**
    * Pick DEM1/2/3 from glide-cone cell size vs fine DEM spacing, set
-   * the private cache LOD, and load JP2 only for DEM1.
+   * the private cache LOD, and load JP2 only for DEM1 when the window
+   * is not already covered by previously loaded tiles.
    *
    * Logs once whenever @p cell_size_m changes.
    *
