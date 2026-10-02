@@ -18,7 +18,26 @@ extern "C" {
 #include <algorithm>
 
 /**
- * Max-pool one JP2 tile into an overview buffer at the given bit shift.
+ * Prefer the higher elevation; Invalid loses to any valid sample.
+ * Water counts as 0 m (same as overview build).
+ */
+static TerrainHeight
+MaxTerrainHeight(TerrainHeight a, TerrainHeight b) noexcept
+{
+  if (a.IsInvalid())
+    return b;
+  if (b.IsInvalid())
+    return a;
+
+  const int16_t va = a.IsWater() ? int16_t(0) : a.GetValue();
+  const int16_t vb = b.IsWater() ? int16_t(0) : b.GetValue();
+  return TerrainHeight(std::max(va, vb));
+}
+
+/**
+ * Max-pool one JP2 tile into an overview buffer.  Pool windows are
+ * aligned to the global fine grid; overlapping tile contributions
+ * are merged with max (not last-writer-wins).
  */
 static void
 PutMaxPoolOverview(RasterBuffer &overview, unsigned bits,
@@ -34,10 +53,16 @@ PutMaxPoolOverview(RasterBuffer &overview, unsigned bits,
   if (ostart_x >= overview.GetSize().x || ostart_y >= overview.GetSize().y)
     return;
 
-  unsigned width = RasterTraits::ToOverviewCeil(m.numcols_, bits);
+  /* Cover every overview cell that intersects this tile. */
+  const unsigned oend_x =
+    RasterTraits::ToOverviewCeil(start.x + unsigned(m.numcols_), bits);
+  const unsigned oend_y =
+    RasterTraits::ToOverviewCeil(start.y + unsigned(m.numrows_), bits);
+
+  unsigned width = oend_x - ostart_x;
   if (ostart_x + width > overview.GetSize().x)
     width = overview.GetSize().x - ostart_x;
-  unsigned height = RasterTraits::ToOverviewCeil(m.numrows_, bits);
+  unsigned height = oend_y - ostart_y;
   if (ostart_y + height > overview.GetSize().y)
     height = overview.GetSize().y - ostart_y;
 
@@ -45,18 +70,26 @@ PutMaxPoolOverview(RasterBuffer &overview, unsigned bits,
     + ostart_y * dest_pitch + ostart_x;
 
   for (unsigned oy = 0; oy < height; ++oy, dest += dest_pitch) {
-    const unsigned fy0 = oy * pool;
+    const unsigned global_y0 = (ostart_y + oy) << bits;
     for (unsigned ox = 0; ox < width; ++ox) {
-      const unsigned fx0 = ox * pool;
+      const unsigned global_x0 = (ostart_x + ox) << bits;
+
+      const int fy0 = int(global_y0) - int(start.y);
+      const int fx0 = int(global_x0) - int(start.x);
+      const int fy1 = fy0 + int(pool);
+      const int fx1 = fx0 + int(pool);
+
+      const int row0 = std::max(fy0, 0);
+      const int col0 = std::max(fx0, 0);
+      const int row1 = std::min(fy1, int(m.numrows_));
+      const int col1 = std::min(fx1, int(m.numcols_));
+
       bool any = false;
       int16_t max_h = 0;
 
-      const unsigned fy1 = std::min(fy0 + pool, unsigned(m.numrows_));
-      const unsigned fx1 = std::min(fx0 + pool, unsigned(m.numcols_));
-
-      for (unsigned fy = fy0; fy < fy1; ++fy) {
+      for (int fy = row0; fy < row1; ++fy) {
         const jas_seqent_t *row = m.rows_[fy];
-        for (unsigned fx = fx0; fx < fx1; ++fx) {
+        for (int fx = col0; fx < col1; ++fx) {
           const TerrainHeight h{int16_t(row[fx])};
           if (h.IsInvalid())
             continue;
@@ -68,7 +101,10 @@ PutMaxPoolOverview(RasterBuffer &overview, unsigned bits,
         }
       }
 
-      dest[ox] = any ? TerrainHeight(max_h) : TerrainHeight::Invalid();
+      if (!any)
+        continue;
+
+      dest[ox] = MaxTerrainHeight(dest[ox], TerrainHeight(max_h));
     }
   }
 }
@@ -111,7 +147,8 @@ struct RTDistanceSort {
 };
 
 bool
-RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius) noexcept
+RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius,
+                           bool load_fine) noexcept
 {
   /* tiles are usually 256 pixels wide; with a radius smaller than
      that, the (optimized) tile distance calculations may fail;
@@ -135,20 +172,35 @@ RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius) noexcept
     if (tiles.GetLinear(i).VisibilityChanged(p, radius))
       request_tiles.append(i);
 
-  /* reduce if there are too many */
-
-  if (request_tiles.size() > MAX_ACTIVE_TILES) {
-    /* sort by distance */
+  /* Cap the active set so each LOD keeps a full-screen cover within
+     its budget.  HD uses MAX_ACTIVE_TILES; DEM2/3 use the scaled
+     budgets from #MaxActiveTilesForLod (set via #SetDisplayLod). */
+  const unsigned max_tiles = load_fine
+    ? MAX_ACTIVE_TILES
+    : MaxActiveTilesForLod(display_lod);
+  if (request_tiles.size() > max_tiles) {
     const RTDistanceSort sort(*this);
     std::sort(request_tiles.begin(), request_tiles.end(), sort);
 
-    /* dispose all tiles which are out of range */
-    for (unsigned i = MAX_ACTIVE_TILES; i < request_tiles.size(); ++i) {
+    for (unsigned i = max_tiles; i < request_tiles.size(); ++i) {
       RasterTile &tile = tiles.GetLinear(request_tiles[i]);
       tile.Unload();
+      tile.ClearRequest();
     }
 
-    request_tiles.shrink(MAX_ACTIVE_TILES);
+    request_tiles.shrink(max_tiles);
+  }
+
+  if (!load_fine) {
+    /* Overview LOD: keep the active set for GPU crops, drop HD. */
+    for (std::size_t i : request_tiles) {
+      RasterTile &tile = tiles.GetLinear(i);
+      tile.Unload();
+      tile.ClearRequest();
+    }
+    dirty = false;
+    ++serial;
+    return false;
   }
 
   /* fill ActiveTiles and request new tiles */
@@ -172,9 +224,9 @@ RasterTileCache::PollTiles(SignedRasterLocation p, unsigned radius) noexcept
   return num_activate > 0;
 }
 
-bool
-RasterTileCache::ExceedsActiveTileBudget(SignedRasterLocation p,
-                                         unsigned radius) const noexcept
+unsigned
+RasterTileCache::CountTilesInView(SignedRasterLocation p,
+                                  unsigned radius) const noexcept
 {
   /* Match PollTiles(): expand so edge tiles of the view are included. */
   radius += 256;
@@ -188,11 +240,40 @@ RasterTileCache::ExceedsActiveTileBudget(SignedRasterLocation p,
     if (tile.CalcDistanceTo(p) > radius)
       continue;
 
-    if (++count > MAX_ACTIVE_TILES)
-      return true;
+    ++count;
   }
 
-  return false;
+  return count;
+}
+
+unsigned
+RasterTileCache::CountLodTilesInView(SignedRasterLocation p,
+                                     unsigned radius,
+                                     DemOverview::Lod lod) const noexcept
+{
+  const unsigned n_jp2 = CountTilesInView(p, radius);
+  const unsigned per = Jp2TilesPerLodTile(lod);
+  return (n_jp2 + per - 1) / per;
+}
+
+bool
+RasterTileCache::ExceedsActiveTileBudget(SignedRasterLocation p,
+                                         unsigned radius,
+                                         DemOverview::Lod lod) const noexcept
+{
+  return CountLodTilesInView(p, radius, lod) > MAX_ACTIVE_TILES;
+}
+
+DemOverview::Lod
+RasterTileCache::SelectLodByTileBudget(SignedRasterLocation p,
+                                       unsigned radius) const noexcept
+{
+  /* Same test at every level: ≤ MAX_ACTIVE_TILES tiles of this LOD. */
+  if (!ExceedsActiveTileBudget(p, radius, DemOverview::Lod::FINE))
+    return DemOverview::Lod::FINE;
+  if (!ExceedsActiveTileBudget(p, radius, DemOverview::Lod::MEDIUM))
+    return DemOverview::Lod::MEDIUM;
+  return DemOverview::Lod::COARSE;
 }
 
 TerrainHeight
@@ -246,6 +327,13 @@ RasterTileCache::SetSize(UnsignedPoint2D _size,
       RasterTraits::ToOverviewCeil(size.y,
                                    RasterTraits::OVERVIEW_MEDIUM_BITS),
     });
+
+  /* Invalid so tile contributions can max-merge into empty cells. */
+  std::fill_n(overview.GetData(), overview.GetSize().Area(),
+              TerrainHeight::Invalid());
+  std::fill_n(overview_medium.GetData(), overview_medium.GetSize().Area(),
+              TerrainHeight::Invalid());
+
   overview_size_fine = size << RasterTraits::SUBPIXEL_BITS;
 
   tiles.GrowDiscard(_n_tiles.x, _n_tiles.y);

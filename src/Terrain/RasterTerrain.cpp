@@ -17,6 +17,30 @@
 
 static const char *const terrain_cache_name = "terrain";
 
+static void
+LogDemSizes(const RasterMap &map) noexcept
+{
+  const auto &cache = map.GetTileCache();
+  if (!cache.IsValid())
+    return;
+
+  const auto fine = cache.GetSize();
+  const auto medium = cache.GetOverviewMedium().GetSize();
+  const auto coarse = cache.GetOverview().GetSize();
+  constexpr double bytes_per_sample = sizeof(TerrainHeight);
+
+  const auto mib = [](unsigned w, unsigned h) noexcept {
+    return double(w) * double(h) * bytes_per_sample / (1024. * 1024.);
+  };
+
+  LogFmt("Terrain DEM 1 (HD): {}x{} ({:.1f} MiB)",
+         fine.x, fine.y, mib(fine.x, fine.y));
+  LogFmt("Terrain DEM 2 (medium): {}x{} ({:.1f} MiB)",
+         medium.x, medium.y, mib(medium.x, medium.y));
+  LogFmt("Terrain DEM 3 (coarse): {}x{} ({:.1f} MiB)",
+         coarse.x, coarse.y, mib(coarse.x, coarse.y));
+}
+
 inline bool
 RasterTerrain::LoadCache(FileCache &cache, Path path)
 {
@@ -50,8 +74,10 @@ RasterTerrain::Load(Path path, FileCache *cache,
                     OperationEnvironment &operation)
 {
   try {
-    if (LoadCache(cache, path))
+    if (LoadCache(cache, path)) {
+      LogDemSizes(map);
       return;
+    }
   } catch (...) {
     LogError(std::current_exception(), "Failed to load terrain cache");
   }
@@ -59,6 +85,7 @@ RasterTerrain::Load(Path path, FileCache *cache,
   LoadTerrainOverview(archive.get(), map.GetTileCache(), operation);
 
   map.UpdateProjection();
+  LogDemSizes(map);
 
   if (cache != nullptr) {
     try {
@@ -102,34 +129,43 @@ RasterTerrain::UpdateTiles(const GeoPoint &location, double radius,
   if (!tile_cache.IsValid())
     return false;
 
-  DemOverview::Lod lod = DemOverview::Lod::FINE;
-  if (meters_per_screen_pixel > 0) {
+  const auto &projection = map.GetProjection();
+  const auto raster_location = projection.ProjectCoarse(location);
+  const unsigned radius_px = projection.DistancePixelsCoarse(radius);
+
+  DemOverview::Lod lod;
+  if (dem_medium_scale <= 0 && dem_coarse_scale <= 0) {
+    /* Auto: ignore cells-per-pixel.  Same rule at each step — if the
+       view needs more JP2 tiles than this LOD's budget, step up. */
+    lod = tile_cache.SelectLodByTileBudget(raster_location, radius_px);
+  } else {
     const double cell_m = map.PixelDistance(location, 1);
-    const double cpp = cell_m > 0
+    const double cpp = cell_m > 0 && meters_per_screen_pixel > 0
       ? meters_per_screen_pixel / cell_m
       : 0;
     lod = DemOverview::Select(cpp, scale_bar_meters,
                               dem_medium_scale, dem_coarse_scale);
 
-    /* HD needs every fine tile under the view.  If that exceeds the
-       active-tile budget, fall back to the medium overview so the
-       whole screen stays consistent (no partial HD window). */
-    if (lod == DemOverview::Lod::FINE) {
-      const auto &projection = map.GetProjection();
-      const auto raster_location = projection.ProjectCoarse(location);
-      const unsigned radius_px =
-        projection.DistancePixelsCoarse(radius);
-      if (tile_cache.ExceedsActiveTileBudget(raster_location, radius_px))
-        lod = DemOverview::Lod::MEDIUM;
-    }
+    /* Manual thresholds can still leave FINE/MEDIUM short of the
+       screen; promote with the same tile-budget rule (≤ MAX tiles
+       of the current LOD). */
+    if (lod == DemOverview::Lod::FINE &&
+        tile_cache.ExceedsActiveTileBudget(raster_location, radius_px,
+                                           DemOverview::Lod::FINE))
+      lod = DemOverview::Lod::MEDIUM;
+    if (lod == DemOverview::Lod::MEDIUM &&
+        tile_cache.ExceedsActiveTileBudget(raster_location, radius_px,
+                                           DemOverview::Lod::MEDIUM))
+      lod = DemOverview::Lod::COARSE;
   }
 
   tile_cache.SetDisplayLod(lod);
 
   if (lod != DemOverview::Lod::FINE) {
-    /* Overview-only display: drop fine tiles so mid/far zoom stays
-       light.  Height queries fall back to the coarse overview. */
-    tile_cache.UnloadTiles();
+    /* Overview LOD: refresh the active tile set for GPU crops; do not
+       decode JP2. */
+    const std::lock_guard lock{mutex};
+    tile_cache.PollTiles(raster_location, radius_px, false);
     return false;
   }
 

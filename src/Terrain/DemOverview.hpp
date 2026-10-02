@@ -38,10 +38,11 @@ Select(double cells_per_pixel) noexcept
 
 /**
  * Pick a LOD using optional map-scale-bar thresholds (metres).
- * A threshold of 0 means Auto for that step (cells-per-pixel).
+ * A threshold of 0 means Auto for that step.
  *
- * When both thresholds are set: FINE / MEDIUM / COARSE by scale bar.
- * When only one is set: that step is forced; the other uses Auto.
+ * When both thresholds are 0, map display does not use this helper —
+ * #RasterTileCache::SelectLodByTileBudget picks LOD from the JP2 tile
+ * budget instead.  This function remains for mixed/manual thresholds.
  */
 [[gnu::const]]
 constexpr Lod

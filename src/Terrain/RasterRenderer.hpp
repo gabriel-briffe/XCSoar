@@ -10,7 +10,9 @@
 #include "Terrain/RasterProjection.hpp"
 #include "Terrain/RasterLocation.hpp"
 #include "Terrain/DemOverview.hpp"
+#include "Terrain/Height.hpp"
 #include "ui/dim/Size.hpp"
+#include "ui/dim/Rect.hpp"
 #include "ui/canvas/opengl/FrameBuffer.hpp"
 #include <vector>
 #endif
@@ -88,9 +90,10 @@ class RasterRenderer {
   /** Spike: DEM textures composed into one height FBO. */
   bool gpu_dem_tiles = false;
   DemOverview::Lod dem_display_lod = DemOverview::Lod::FINE;
-  std::unique_ptr<GLTexture> overview_texture;
-  std::unique_ptr<GLTexture> overview_medium_texture;
+  DemOverview::Lod dem_sync_lod = DemOverview::Lod::FINE;
   std::vector<std::unique_ptr<GLTexture>> tile_textures;
+  /** Scratch for overview crops (GLES2 has no UNPACK_ROW_LENGTH). */
+  std::vector<TerrainHeight> overview_tile_scratch;
   /** Indices uploaded in the last SyncGpuDemTileTextures(). */
   std::vector<unsigned> tile_dirty;
   unsigned tile_tex_active = 0;
@@ -100,6 +103,12 @@ class RasterRenderer {
   UnsignedPoint2D dem_tile_grid{0, 0};
   std::vector<RasterLocation> tile_starts;
   std::vector<RasterLocation> tile_ends;
+  /**
+   * Content rectangle inside each tile texture (pixel coords).
+   * Overview crops keep a 1-texel skirt outside this rect so adjacent
+   * tiles share geo edges while bilinear can sample the neighbour.
+   */
+  std::vector<PixelRect> tile_src;
   std::unique_ptr<GLFrameBuffer> dem_fbo;
   UnsignedPoint2D composed_size{0, 0};
 #endif

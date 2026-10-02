@@ -382,9 +382,11 @@ TerrainDisplayConfigPanel::PickDemScale(bool medium) noexcept
     : _("DEM 3 threshold");
   const char *const help = medium
     ? _("Map scale bar distance at which terrain switches to the medium "
-        "(4×) DEM.  Auto uses DEM cells per screen pixel.")
+        "(4×) DEM.  Auto steps up when the DEM1 tile budget can no longer "
+        "cover the screen.")
     : _("Map scale bar distance at which terrain switches to the coarse "
-        "(16×) DEM.  Auto uses DEM cells per screen pixel.");
+        "(16×) DEM.  Auto steps up when the DEM2 tile budget can no longer "
+        "cover the screen.");
 
   const unsigned max_user = GetDemScaleMaxThresholdUser();
   unsigned &user_value = medium
@@ -512,14 +514,14 @@ TerrainDisplayConfigPanel::Fill() noexcept
   AddItem(_("DEM 2 threshold"), [this](){ PickDemScale(true); },
           {.value = dem2.c_str(), .chevron = true,
            .help = _("Map scale bar distance at which terrain switches to "
-                     "the medium (4×) DEM.  Auto uses DEM cells per screen "
-                     "pixel.")});
+                     "the medium (4×) DEM.  Auto steps up when the DEM1 "
+                     "tile budget can no longer cover the screen.")});
 
   AddItem(_("DEM 3 threshold"), [this](){ PickDemScale(false); },
           {.value = dem3.c_str(), .chevron = true,
            .help = _("Map scale bar distance at which terrain switches to "
-                     "the coarse (16×) DEM.  Auto uses DEM cells per screen "
-                     "pixel.")});
+                     "the coarse (16×) DEM.  Auto steps up when the DEM2 "
+                     "tile budget can no longer cover the screen.")});
 
   if (IsExpert()) {
     AddEnumItem(_("Slope shading"),

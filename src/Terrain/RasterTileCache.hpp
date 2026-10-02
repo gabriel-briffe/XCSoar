@@ -77,8 +77,8 @@ protected:
   };
 
   struct CacheHeader {
-    /** 0xc: dual max-pooled overviews (4× + 16×). */
-    static constexpr unsigned VERSION = 0xc;
+    /** 0xd: global-aligned max-pool with cross-tile merge. */
+    static constexpr unsigned VERSION = 0xd;
 
     unsigned version;
     UnsignedPoint2D size;
@@ -284,15 +284,87 @@ public:
                        RasterLocation start, RasterLocation end,
                        const struct jas_matrix &m) noexcept;
 
-  bool PollTiles(SignedRasterLocation p, unsigned radius) noexcept;
+  /**
+   * Update which tiles cover @p radius around @p p.
+   * @param load_fine when true, request JP2 loads (HD).  When false,
+   *   only refresh the active set for overview draw and unload fine
+   *   buffers — no JP2 decode.
+   * @return true if fine tiles still need loading
+   */
+  bool PollTiles(SignedRasterLocation p, unsigned radius,
+                 bool load_fine = true) noexcept;
 
   /**
-   * True when covering @p radius around @p p needs more defined tiles
-   * than #MAX_ACTIVE_TILES (same margin as #PollTiles).
+   * Tile indices covering the view after the last #PollTiles call.
+   */
+  const auto &GetActiveTiles() const noexcept {
+    return request_tiles;
+  }
+
+  /**
+   * How many defined JP2 (DEM1) tiles intersect @p radius around @p p
+   * (same +256 margin as #PollTiles).
+   */
+  [[gnu::pure]]
+  unsigned CountTilesInView(SignedRasterLocation p,
+                            unsigned radius) const noexcept;
+
+  /**
+   * JP2 tiles covered by one "slot" at @p lod (1, 16, or 256).
+   * DEM2/DEM3 budgets are expressed as #MAX_ACTIVE_TILES of these
+   * larger tiles; this converts to an equivalent JP2 count.
+   */
+  [[gnu::const]]
+  static constexpr unsigned
+  Jp2TilesPerLodTile(DemOverview::Lod lod) noexcept {
+    switch (lod) {
+    case DemOverview::Lod::FINE:
+      return 1;
+    case DemOverview::Lod::MEDIUM:
+      return 1u << (2u * RasterTraits::OVERVIEW_MEDIUM_BITS);
+    case DemOverview::Lod::COARSE:
+      return 1u << (2u * RasterTraits::OVERVIEW_BITS);
+    }
+    return 1;
+  }
+
+  /**
+   * How many tiles at @p lod fit the view (ceil of JP2 count /
+   * #Jp2TilesPerLodTile).  Auto compares this to #MAX_ACTIVE_TILES.
+   */
+  [[gnu::pure]]
+  unsigned CountLodTilesInView(SignedRasterLocation p, unsigned radius,
+                               DemOverview::Lod lod) const noexcept;
+
+  /**
+   * True when #CountLodTilesInView exceeds #MAX_ACTIVE_TILES for @p lod
+   * (same rule at every DEM level).
    */
   [[gnu::pure]]
   bool ExceedsActiveTileBudget(SignedRasterLocation p,
-                               unsigned radius) const noexcept;
+                               unsigned radius,
+                               DemOverview::Lod lod =
+                                 DemOverview::Lod::FINE) const noexcept;
+
+  /**
+   * Max JP2 tiles #PollTiles may keep active for @p lod
+   * (#MAX_ACTIVE_TILES × #Jp2TilesPerLodTile).
+   */
+  [[gnu::const]]
+  static constexpr unsigned
+  MaxActiveTilesForLod(DemOverview::Lod lod) noexcept {
+    const unsigned n = MAX_ACTIVE_TILES * Jp2TilesPerLodTile(lod);
+    return n < MAX_RTC_TILES ? n : MAX_RTC_TILES;
+  }
+
+  /**
+   * Auto LOD: DEM1 while ≤ #MAX_ACTIVE_TILES DEM1 tiles cover the
+   * view; else DEM2 while ≤ #MAX_ACTIVE_TILES DEM2 tiles; else DEM3.
+   */
+  [[gnu::pure]]
+  DemOverview::Lod
+  SelectLodByTileBudget(SignedRasterLocation p,
+                        unsigned radius) const noexcept;
 
   void PutTileData(unsigned index, const struct jas_matrix &m) noexcept;
 

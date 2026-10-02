@@ -961,65 +961,175 @@ RasterRenderer::SyncGpuDemTileTextures(const RasterMap &map) noexcept
   tile_tex_active = 0;
   tile_tex_dropped = false;
 
+  const auto lod = map.GetDisplayLod();
+  if (lod != dem_sync_lod) {
+    /* Stepping to a finer LOD: keep existing textures as underlay
+       (DEM3→DEM2, DEM2→DEM1) until replacements upload.  Stepping
+       coarser still drops everything. */
+    const bool step_down =
+      unsigned(lod) < unsigned(dem_sync_lod);
+    dem_sync_lod = lod;
+    if (!step_down) {
+      for (auto &tex : tile_textures)
+        tex.reset();
+      tile_tex_dropped = true;
+    }
+  }
+
   if (tile_textures.size() != n) {
     tile_textures.clear();
     tile_textures.resize(n);
-    tile_starts.assign(n, {});
-    tile_ends.assign(n, {});
-    /* Grid rebuild invalidates any prior composed FBO content. */
     tile_tex_dropped = true;
   }
+  if (tile_starts.size() != n) {
+    tile_starts.assign(n, {});
+    tile_ends.assign(n, {});
+    tile_src.assign(n, {});
+  }
+
+  /* Active set from the last PollTiles (HD or overview). */
+  std::vector<char> active(n, 0);
+  for (unsigned short idx : cache.GetActiveTiles())
+    if (idx < n)
+      active[idx] = 1;
 
   const RasterBuffer &overview = map.GetOverview();
-  if (overview.IsDefined()) {
-    const auto osz = overview.GetSize();
-    const PixelSize ps{int(osz.x), int(osz.y)};
-    if (overview_texture == nullptr || overview_texture->GetSize() != ps)
-      UploadHeightLATexture(overview.GetData(), ps, overview_texture);
-  }
-
   const RasterBuffer &overview_medium = map.GetOverviewMedium();
-  if (overview_medium.IsDefined()) {
-    const auto osz = overview_medium.GetSize();
-    const PixelSize ps{int(osz.x), int(osz.y)};
-    if (overview_medium_texture == nullptr ||
-        overview_medium_texture->GetSize() != ps)
-      UploadHeightLATexture(overview_medium.GetData(), ps,
-                            overview_medium_texture);
-  }
 
-  const auto lod = map.GetDisplayLod();
-  if (lod != DemOverview::Lod::FINE) {
-    /* Overview-only LOD: drop any leftover fine-tile textures. */
-    for (unsigned i = 0; i < n; ++i) {
-      if (tile_textures[i]) {
-        tile_textures[i].reset();
-        tile_tex_dropped = true;
+  /**
+   * Crop one overview tile with a 1-texel skirt on each side that has
+   * a neighbour.  Geo covers only the content cells (no skirt); UV is
+   * inset so shared edges stay identical and bilinear can peek into
+   * the neighbour cell (fixes hairline gaps between DEM2/3 tiles).
+   *
+   * Oversizing is always 1 overview sample per side — not "2 rows" for
+   * 2-bit (4×) pooling.  Fine-space overlap is 1<<bits cells.
+   */
+  auto copy_overview_tile =
+    [&](const RasterBuffer &ov, unsigned bits,
+        RasterLocation start, RasterLocation end,
+        UnsignedPoint2D &out_size,
+        RasterLocation &draw_start,
+        RasterLocation &draw_end,
+        PixelRect &src_rect) noexcept -> const TerrainHeight * {
+      if (!ov.IsDefined() || end.x <= start.x || end.y <= start.y)
+        return nullptr;
+
+      const auto osz = ov.GetSize();
+      unsigned x0 = start.x >> bits;
+      unsigned y0 = start.y >> bits;
+      unsigned x1 = RasterTraits::ToOverviewCeil(end.x, bits);
+      unsigned y1 = RasterTraits::ToOverviewCeil(end.y, bits);
+      if (x0 >= osz.x || y0 >= osz.y)
+        return nullptr;
+      if (x1 > osz.x)
+        x1 = osz.x;
+      if (y1 > osz.y)
+        y1 = osz.y;
+      if (x1 <= x0 || y1 <= y0)
+        return nullptr;
+
+      const unsigned pad_l = x0 > 0 ? 1u : 0u;
+      const unsigned pad_t = y0 > 0 ? 1u : 0u;
+      const unsigned pad_r = x1 < osz.x ? 1u : 0u;
+      const unsigned pad_b = y1 < osz.y ? 1u : 0u;
+
+      const unsigned cx0 = x0 - pad_l;
+      const unsigned cy0 = y0 - pad_t;
+      const unsigned cx1 = x1 + pad_r;
+      const unsigned cy1 = y1 + pad_b;
+
+      out_size = {cx1 - cx0, cy1 - cy0};
+      draw_start = {x0 << bits, y0 << bits};
+      draw_end = {x1 << bits, y1 << bits};
+      src_rect = PixelRect(int(pad_l), int(pad_t),
+                           int(pad_l + (x1 - x0)),
+                           int(pad_t + (y1 - y0)));
+
+      overview_tile_scratch.resize(out_size.Area());
+      const unsigned pitch = osz.x;
+      const TerrainHeight *src = ov.GetData() + cy0 * pitch + cx0;
+      TerrainHeight *dest = overview_tile_scratch.data();
+      for (unsigned row = 0; row < out_size.y;
+           ++row, src += pitch, dest += out_size.x)
+        std::copy_n(src, out_size.x, dest);
+      return overview_tile_scratch.data();
+    };
+
+  auto apply_overview_crop =
+    [&](const RasterBuffer &ov, unsigned bits,
+        RasterLocation start, RasterLocation end,
+        UnsignedPoint2D &psz, PixelRect &src_rect,
+        unsigned i) noexcept -> const TerrainHeight * {
+      RasterLocation draw_start, draw_end;
+      const TerrainHeight *pixels =
+        copy_overview_tile(ov, bits, start, end, psz,
+                           draw_start, draw_end, src_rect);
+      if (pixels != nullptr) {
+        tile_starts[i] = draw_start;
+        tile_ends[i] = draw_end;
       }
-    }
-    return;
-  }
+      return pixels;
+    };
 
   for (unsigned y = 0; y < ny; ++y) {
     for (unsigned x = 0; x < nx; ++x) {
       const unsigned i = y * nx + x;
       const RasterTile &tile = cache.GetTile(x, y);
-      if (!tile.IsLoaded() || !tile.buffer.IsDefined()) {
-        if (tile_textures[i]) {
-          tile_textures[i].reset();
+      auto &tex = tile_textures[i];
+
+      if (!tile.IsDefined() || !active[i]) {
+        if (tex) {
+          tex.reset();
           tile_tex_dropped = true;
         }
         continue;
       }
 
+      const TerrainHeight *pixels = nullptr;
+      UnsignedPoint2D psz{0, 0};
+      PixelRect src_rect{};
+
+      if (lod == DemOverview::Lod::FINE && tile.IsLoaded() &&
+          tile.buffer.IsDefined()) {
+        tile_starts[i] = tile.start;
+        tile_ends[i] = tile.end;
+        psz = tile.buffer.GetSize();
+        pixels = tile.buffer.GetData();
+        src_rect = PixelRect(0, 0, int(psz.x), int(psz.y));
+      } else if (lod == DemOverview::Lod::FINE) {
+        /* DEM2 underlay until JP2 arrives. */
+        pixels = apply_overview_crop(overview_medium,
+                                     RasterTraits::OVERVIEW_MEDIUM_BITS,
+                                     tile.start, tile.end, psz, src_rect, i);
+      } else if (lod == DemOverview::Lod::MEDIUM) {
+        pixels = apply_overview_crop(overview_medium,
+                                     RasterTraits::OVERVIEW_MEDIUM_BITS,
+                                     tile.start, tile.end, psz, src_rect, i);
+        if (pixels == nullptr)
+          /* DEM3 underlay if medium crop fails / not ready. */
+          pixels = apply_overview_crop(overview,
+                                       RasterTraits::OVERVIEW_BITS,
+                                       tile.start, tile.end, psz, src_rect, i);
+      } else {
+        pixels = apply_overview_crop(overview,
+                                     RasterTraits::OVERVIEW_BITS,
+                                     tile.start, tile.end, psz, src_rect, i);
+      }
+
+      if (pixels == nullptr || psz.x == 0 || psz.y == 0) {
+        /* Keep prior-LOD texture (step-down underlay) if still bound. */
+        if (tex)
+          ++tile_tex_active;
+        continue;
+      }
+
+      tile_src[i] = src_rect;
+
       ++tile_tex_active;
-      tile_starts[i] = tile.start;
-      tile_ends[i] = tile.end;
-      const auto tsz = tile.buffer.GetSize();
-      const PixelSize ps{int(tsz.x), int(tsz.y)};
-      auto &tex = tile_textures[i];
+      const PixelSize ps{int(psz.x), int(psz.y)};
       if (tex == nullptr || tex->GetSize() != ps) {
-        UploadHeightLATexture(tile.buffer.GetData(), ps, tex);
+        UploadHeightLATexture(pixels, ps, tex);
         tile_dirty.push_back(i);
       }
     }
@@ -1047,15 +1157,7 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
 
   SyncGpuDemTileTextures(map);
   dem_display_lod = map.GetDisplayLod();
-  const auto display_lod = dem_display_lod;
-  const bool have_overview =
-    (display_lod == DemOverview::Lod::MEDIUM &&
-     overview_medium_texture != nullptr) ||
-    (display_lod == DemOverview::Lod::COARSE &&
-     overview_texture != nullptr) ||
-    (display_lod == DemOverview::Lod::FINE &&
-     (overview_medium_texture != nullptr || overview_texture != nullptr));
-  if (tile_tex_active == 0 && !have_overview)
+  if (tile_tex_active == 0)
     return false;
 
   dem_map_bounds = map.GetBounds();
@@ -1229,7 +1331,7 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
     return FloatPoint2D{u * 2.f - 1.f, v * 2.f - 1.f};
   };
 
-  auto blit_height_tex = [&](GLTexture &tex,
+  auto blit_height_tex = [&](GLTexture &tex, const PixelRect &src,
                              const GeoPoint &nw, const GeoPoint &ne,
                              const GeoPoint &sw, const GeoPoint &se) noexcept {
     const GeoBounds tb(nw, se);
@@ -1242,15 +1344,18 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
     };
     const ScopeVertexPointer vp(vertices);
 
+    /* Map geo to the content rect; skirt texels sit outside so
+       height_blit bilinear can sample the shared neighbour cell. */
     const PixelSize allocated = tex.GetAllocatedSize();
-    const PixelSize tsize = tex.GetSize();
-    const GLfloat x1 = GLfloat(tsize.width) / allocated.width;
-    const GLfloat y1 = GLfloat(tsize.height) / allocated.height;
+    const GLfloat u0 = GLfloat(src.left) / allocated.width;
+    const GLfloat v0 = GLfloat(src.top) / allocated.height;
+    const GLfloat u1 = GLfloat(src.right) / allocated.width;
+    const GLfloat v1 = GLfloat(src.bottom) / allocated.height;
     const GLfloat coord[] = {
-      0, 0,
-      x1, 0,
-      0, y1,
-      x1, y1,
+      u0, v0,
+      u1, v0,
+      u0, v1,
+      u1, v1,
     };
 
     glEnableVertexAttribArray(OpenGL::Attribute::TEXCOORD);
@@ -1269,6 +1374,8 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
   auto blit_tile = [&](unsigned i) noexcept {
     if (i >= tile_textures.size() || !tile_textures[i])
       return;
+    if (i >= tile_src.size())
+      return;
 
     const RasterLocation start = tile_starts[i];
     const RasterLocation end = tile_ends[i];
@@ -1282,32 +1389,12 @@ RasterRenderer::PrepareGpuDemTiles(const RasterMap &map,
       SignedRasterLocation(int(start.x), int(end.y)));
     const GeoPoint se = dem_projection.UnprojectCoarse(end);
 
-    blit_height_tex(*tile_textures[i], nw, ne, sw, se);
+    blit_height_tex(*tile_textures[i], tile_src[i], nw, ne, sw, se);
   };
 
-  /* Full compose: pick one DEM level from display LOD.  Fine still
-     uses a medium/coarse underlay so unloaded tiles are not holes. */
-  if (!do_incremental && dem_map_bounds.IsValid()) {
-    GLTexture *base = nullptr;
-    if (display_lod == DemOverview::Lod::COARSE)
-      base = overview_texture.get();
-    else if (display_lod == DemOverview::Lod::MEDIUM)
-      base = overview_medium_texture.get();
-    else if (overview_medium_texture != nullptr)
-      base = overview_medium_texture.get();
-    else
-      base = overview_texture.get();
-
-    if (base != nullptr)
-      blit_height_tex(*base,
-                      dem_map_bounds.GetNorthWest(),
-                      dem_map_bounds.GetNorthEast(),
-                      dem_map_bounds.GetSouthWest(),
-                      dem_map_bounds.GetSouthEast());
-  }
-
-  if (display_lod == DemOverview::Lod::FINE &&
-      nx > 0 && ny > 0 && tile_textures.size() == nx * ny) {
+  /* One pipeline: compose active DEM tiles only (HD, medium, or
+     coarse crops — SyncGpuDemTileTextures picked the source). */
+  if (nx > 0 && ny > 0 && tile_textures.size() == nx * ny) {
     if (do_incremental) {
       for (unsigned i : tile_dirty)
         blit_tile(i);
@@ -1523,65 +1610,41 @@ RasterRenderer::DrawGpuDemTiles(const WindowProjection &projection,
 
   const GeoBounds screen = projection.GetScreenBounds();
 
-  GLTexture *overview_tex = nullptr;
-  unsigned overview_bits = 0;
-  switch (dem_display_lod) {
-  case DemOverview::Lod::COARSE:
-    overview_tex = overview_texture.get();
-    overview_bits = RasterTraits::OVERVIEW_BITS;
-    break;
-  case DemOverview::Lod::MEDIUM:
-    overview_tex = overview_medium_texture.get();
-    overview_bits = RasterTraits::OVERVIEW_MEDIUM_BITS;
-    break;
-  case DemOverview::Lod::FINE:
-    /* Fine tiles only in this path; underlay is for compose FBO. */
-    overview_tex = nullptr;
-    break;
-  }
-
-  if (overview_tex != nullptr) {
-    const double overview_hsf =
-      std::max(1.0, height_slope_factor_for_draw *
+  const unsigned overview_bits = DemOverview::Bits(dem_display_lod);
+  const double tile_hsf =
+    overview_bits == 0
+    ? height_slope_factor_for_draw
+    : std::max(1.0, height_slope_factor_for_draw *
                double(1u << overview_bits));
-    DrawHillshadeQuad(projection, *overview_tex,
-                      dem_map_bounds.GetNorthWest(),
-                      dem_map_bounds.GetNorthEast(),
-                      dem_map_bounds.GetSouthWest(),
-                      dem_map_bounds.GetSouthEast(),
-                      overview_hsf, alpha);
-  }
 
-  if (dem_display_lod == DemOverview::Lod::FINE) {
-    const unsigned nx = dem_tile_grid.x;
-    const unsigned ny = dem_tile_grid.y;
-    if (nx > 0 && ny > 0 &&
-        tile_textures.size() == nx * ny &&
-        tile_starts.size() == nx * ny) {
-      for (unsigned i = 0; i < nx * ny; ++i) {
-        if (!tile_textures[i])
-          continue;
+  const unsigned nx = dem_tile_grid.x;
+  const unsigned ny = dem_tile_grid.y;
+  if (nx > 0 && ny > 0 &&
+      tile_textures.size() == nx * ny &&
+      tile_starts.size() == nx * ny) {
+    for (unsigned i = 0; i < nx * ny; ++i) {
+      if (!tile_textures[i])
+        continue;
 
-        const RasterLocation start = tile_starts[i];
-        const RasterLocation end = tile_ends[i];
-        if (end.x <= start.x || end.y <= start.y)
-          continue;
+      const RasterLocation start = tile_starts[i];
+      const RasterLocation end = tile_ends[i];
+      if (end.x <= start.x || end.y <= start.y)
+        continue;
 
-        const GeoPoint nw = dem_projection.UnprojectCoarse(start);
-        const GeoPoint ne = dem_projection.UnprojectCoarse(
-          SignedRasterLocation(int(end.x), int(start.y)));
-        const GeoPoint sw = dem_projection.UnprojectCoarse(
-          SignedRasterLocation(int(start.x), int(end.y)));
-        const GeoPoint se = dem_projection.UnprojectCoarse(end);
+      const GeoPoint nw = dem_projection.UnprojectCoarse(start);
+      const GeoPoint ne = dem_projection.UnprojectCoarse(
+        SignedRasterLocation(int(end.x), int(start.y)));
+      const GeoPoint sw = dem_projection.UnprojectCoarse(
+        SignedRasterLocation(int(start.x), int(end.y)));
+      const GeoPoint se = dem_projection.UnprojectCoarse(end);
 
-        const GeoBounds tb(nw, se);
-        if (!tb.IsValid() || !tb.Overlaps(screen))
-          continue;
+      const GeoBounds tb(nw, se);
+      if (!tb.IsValid() || !tb.Overlaps(screen))
+        continue;
 
-        DrawHillshadeQuad(projection, *tile_textures[i],
-                          nw, ne, sw, se,
-                          height_slope_factor_for_draw, alpha);
-      }
+      DrawHillshadeQuad(projection, *tile_textures[i],
+                        nw, ne, sw, se,
+                        tile_hsf, alpha);
     }
   }
 
