@@ -287,8 +287,21 @@ RasterTileCache::GetHeight(RasterLocation p) const noexcept
   if (tile.IsLoaded())
     return tile.GetHeight(p);
 
-  // still not found, so go to overview
-  return overview.GetInterpolated(p << (RasterTraits::SUBPIXEL_BITS - RasterTraits::OVERVIEW_BITS));
+  /* No fine tile: sample the overview matching #display_lod (glide
+     cone / map underlay).  FINE with missing HD keeps the coarse
+     overview fallback. */
+  if (display_lod == DemOverview::Lod::MEDIUM &&
+      overview_medium.IsDefined()) {
+    const auto osz = overview_medium.GetSize();
+    const unsigned ox = p.x >> RasterTraits::OVERVIEW_MEDIUM_BITS;
+    const unsigned oy = p.y >> RasterTraits::OVERVIEW_MEDIUM_BITS;
+    if (ox >= osz.x || oy >= osz.y)
+      return TerrainHeight::Invalid();
+    return overview_medium.Get({ox, oy});
+  }
+
+  return overview.GetInterpolated(p << (RasterTraits::SUBPIXEL_BITS -
+                                        RasterTraits::OVERVIEW_BITS));
 }
 
 TerrainHeight
@@ -305,8 +318,21 @@ RasterTileCache::GetInterpolatedHeight(RasterLocation l) const noexcept
   if (tile.IsLoaded())
     return tile.GetInterpolatedHeight(px, py, ix, iy);
 
+  if (display_lod == DemOverview::Lod::MEDIUM &&
+      overview_medium.IsDefined()) {
+    const auto osz = overview_medium.GetSize();
+    const unsigned ox = RasterTraits::ToOverview(l.x,
+      RasterTraits::OVERVIEW_MEDIUM_BITS);
+    const unsigned oy = RasterTraits::ToOverview(l.y,
+      RasterTraits::OVERVIEW_MEDIUM_BITS);
+    if (ox >= osz.x || oy >= osz.y)
+      return TerrainHeight::Invalid();
+    return overview_medium.GetInterpolated({ox, oy});
+  }
+
   // still not found, so go to overview
-  return overview.GetInterpolated({RasterTraits::ToOverview(l.x), RasterTraits::ToOverview(l.y)});
+  return overview.GetInterpolated({RasterTraits::ToOverview(l.x),
+                                   RasterTraits::ToOverview(l.y)});
 }
 
 void

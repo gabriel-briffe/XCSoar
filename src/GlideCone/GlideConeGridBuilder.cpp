@@ -29,12 +29,12 @@ BuildGlideConeGrid(const GlideConeGridRequest &request,
   const double desired_cell = std::clamp(request.cell_size, 50.0, 5000.0);
   const double radius_m = request.radius_m;
 
-  /* Ephemeral private DEM: load → sample → unload. */
+  /* Ephemeral private DEM: pick LOD from cell size, load HD only for
+     DEM1, then sample → unload. */
   AtScopeExit(&dem) { dem.ReleaseTiles(); };
 
-  for (unsigned i = 0; i < 64 &&
-         dem.UpdateTiles(display, request.center, radius_m); ++i) {
-  }
+  if (!dem.Prepare(display, request.center, radius_m, desired_cell))
+    return false;
 
   const GlideConeDemSampler::Lease lease{dem};
   const RasterMap &map = lease;

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Terrain/RasterMap.hpp"
+#include "Terrain/DemOverview.hpp"
 #include "Geo/GeoPoint.hpp"
 #include "io/ZipArchive.hpp"
 #include "thread/SharedMutex.hpp"
@@ -18,7 +19,7 @@ class RasterTerrain;
  * GlideCone-only DEM access: own archive + tile set, independent of
  * the map-display #RasterTerrain.  Layout/overview is copied from the
  * display DEM when available (no second file overview scan); fine
- * tiles are ephemeral (load → sample → unload).
+ * tiles are ephemeral (load → sample → unload) when DEM1 is needed.
  */
 class GlideConeDemSampler {
   std::optional<ZipArchive> archive;
@@ -26,11 +27,13 @@ class GlideConeDemSampler {
   SharedMutex mutex;
   RasterMap map;
   bool overview_ready = false;
+  /** Last cell-size (m) for which DEM choice was logged; <0 = none. */
+  double logged_cell_size_m = -1;
 
 public:
   /**
    * Read-only lease on the sampler map.  Caller must hold tiles loaded
-   * via #UpdateTiles for the window of interest.
+   * via #UpdateTiles for the window of interest when using DEM1.
    */
   class Lease {
     GlideConeDemSampler &sampler;
@@ -64,6 +67,17 @@ public:
    * @return false if no map file or overview/layout unavailable
    */
   bool EnsureOverview(RasterTerrain *display) noexcept;
+
+  /**
+   * Pick DEM1/2/3 from glide-cone cell size vs fine DEM spacing, set
+   * the private cache LOD, and load JP2 only for DEM1.
+   *
+   * Logs once whenever @p cell_size_m changes.
+   *
+   * @return false if overview unavailable
+   */
+  bool Prepare(RasterTerrain *display, const GeoPoint &location,
+               double radius, double cell_size_m) noexcept;
 
   /**
    * Load fine tiles for @p location / @p radius into the private cache.
