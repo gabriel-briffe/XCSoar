@@ -50,11 +50,17 @@ MapLook::Initialise(const MapSettings &settings,
 
   track_line_pen.Create(Layout::ScalePenWidth(3), COLOR_GRAY);
 
-  glide_cone_pen.Create(Layout::ScalePenWidth(3),
+  const unsigned glide_cone_width = Layout::ScalePenWidth(3);
+  const unsigned glide_cone_border =
+    glide_cone_width + Layout::ScalePenWidth(2);
+
+  glide_cone_border_pen.Create(glide_cone_border, COLOR_WHITE);
+  glide_cone_pen.Create(glide_cone_width,
                         HasColors() ? COLOR_GLIDE_CONE : COLOR_BLACK);
 
-  glide_cone_ground_pen.Create(Pen::DASH3, Layout::ScalePenWidth(3),
-                               COLOR_BLACK);
+  glide_cone_ground_border_pen.Create(Pen::DASH3, glide_cone_border,
+                                      COLOR_WHITE);
+  glide_cone_ground_pen.Create(Pen::DASH3, glide_cone_width, COLOR_BLACK);
 
   glide_cone_contour_pen.Create(Layout::ScalePenWidth(1), COLOR_BLACK);
 

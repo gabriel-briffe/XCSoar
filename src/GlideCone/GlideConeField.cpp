@@ -186,11 +186,17 @@ std::optional<double>
 GlideConeField::PathDistance(GeoPoint from) const noexcept
 {
   const auto path = Trace(from);
-  if (path.size() < 2)
+  if (path.size() < 2 || !from.IsValid())
     return std::nullopt;
 
-  double distance_m = 0;
-  for (std::size_t i = 1; i < path.size(); ++i) {
+  /* First hop: true start position → next cell centre (not the start
+     cell centre, which can be hundreds of metres off). */
+  const GeoPoint next = CellToGeo(path[1].x, path[1].y);
+  if (!next.IsValid())
+    return std::nullopt;
+
+  double distance_m = from.DistanceS(next);
+  for (std::size_t i = 2; i < path.size(); ++i) {
     const GeoPoint a = CellToGeo(path[i - 1].x, path[i - 1].y);
     const GeoPoint b = CellToGeo(path[i].x, path[i].y);
     if (!a.IsValid() || !b.IsValid())

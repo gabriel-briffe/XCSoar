@@ -155,8 +155,8 @@ static constexpr Color COLOR_WIND_ARROW_INSTANTANEOUS =
 
 static constexpr uint8_t ALPHA_OVERLAY = 0xA0;
 
-/** Glide cone relay path overlay. */
-static constexpr Color COLOR_GLIDE_CONE = Color(0x28, 0x78, 0xff);
+/** Glide cone relay path overlay (pink; white border drawn under). */
+static constexpr Color COLOR_GLIDE_CONE = Color(0xff, 0x40, 0xb0);
 
 /** Full-screen Config menu tiles (Garmin-style). */
 static constexpr Color COLOR_CONFIG_MENU_TILE =

@@ -343,10 +343,15 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
     if (run.size() < 2)
       return;
     if (run_ground) {
+      canvas.Select(look.glide_cone_ground_border_pen);
+      for (std::size_t i = 1; i < run.size(); ++i)
+        canvas.DrawLine(run[i - 1], run[i]);
       canvas.Select(look.glide_cone_ground_pen);
       for (std::size_t i = 1; i < run.size(); ++i)
         canvas.DrawLine(run[i - 1], run[i]);
     } else {
+      canvas.Select(look.glide_cone_border_pen);
+      canvas.DrawPolyline(run.data(), unsigned(run.size()));
       canvas.Select(look.glide_cone_pen);
       canvas.DrawPolyline(run.data(), unsigned(run.size()));
     }
@@ -356,10 +361,14 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
     const auto &a = cells[i - 1];
     const auto &b = cells[i];
     const bool ground = field.IsDownhillGroundSegment(a.x, a.y, b.x, b.y);
-    const BulkPixelPoint from_pt = projection.GeoToScreen(
-      field.CellToGeo(a.x, a.y));
-    const BulkPixelPoint to_pt = projection.GeoToScreen(
-      field.CellToGeo(b.x, b.y));
+    /* First vertex is the real start (aircraft / pan probe), not the
+       start-cell centre — cells can be hundreds of metres wide. */
+    const GeoPoint geo_from = (i == 1) ? from : field.CellToGeo(a.x, a.y);
+    const GeoPoint geo_to = field.CellToGeo(b.x, b.y);
+    if (!geo_from.IsValid() || !geo_to.IsValid())
+      continue;
+    const BulkPixelPoint from_pt = projection.GeoToScreen(geo_from);
+    const BulkPixelPoint to_pt = projection.GeoToScreen(geo_to);
 
     if (run.empty()) {
       run_ground = ground;

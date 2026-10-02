@@ -105,6 +105,9 @@ struct GlideConeField {
    * Trace the glide relay path from the given position back to the seed
    * by following origin pointers.  Returns an empty result if the start
    * cell is outside the grid or unreachable.
+   *
+   * Path geometry for drawing / distance uses @p from as the first
+   * vertex, then cell centres from the second cell onward.
    */
   std::vector<TraceCell> Trace(GeoPoint from) const noexcept;
 
@@ -130,8 +133,8 @@ struct GlideConeField {
 
   /**
    * Total Euclidean ground distance [m] along the relay path from
-   * @p from to the seed (sum of cell-centre hops).  Empty when no
-   * path exists.
+   * @p from to the seed: first hop from @p from to the next cell
+   * centre, then cell-centre hops.  Empty when no path exists.
    */
   std::optional<double> PathDistance(GeoPoint from) const noexcept;
 
