@@ -1,0 +1,39 @@
+name: Android aarch64 APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    container: debian:trixie-slim
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Mark git directory as safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install dependencies
+        run: |
+          ./ide/provisioning/install-debian-packages.sh UPDATE
+          ./ide/provisioning/install-debian-packages.sh BASE
+          ./ide/provisioning/install-debian-packages.sh LINUX
+          ./ide/provisioning/install-debian-packages.sh ARM
+          ./ide/provisioning/install-debian-packages.sh LLVM
+          ./ide/provisioning/install-debian-packages.sh ANDROID
+          ./ide/provisioning/install-android-tools.sh NDK
+          ./ide/provisioning/install-android-tools.sh SDK
+          ./ide/provisioning/install-debian-packages.sh CLEAN
+
+      - name: Build arm64 APK
+        run: make -j$(nproc) TARGET=ANDROIDAARCH64 DEBUG=y USE_CCACHE=y V=2 output/ANDROID/bin/XCSoar.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: XCSoar-aarch64
+          path: output/ANDROID/bin/XCSoar*.apk
+          if-no-files-found: error
