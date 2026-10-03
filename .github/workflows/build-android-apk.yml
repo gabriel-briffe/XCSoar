@@ -17,15 +17,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          ./ide/provisioning/install-debian-packages.sh UPDATE
-          ./ide/provisioning/install-debian-packages.sh BASE
-          ./ide/provisioning/install-debian-packages.sh LINUX
-          ./ide/provisioning/install-debian-packages.sh ARM
-          ./ide/provisioning/install-debian-packages.sh LLVM
-          ./ide/provisioning/install-debian-packages.sh ANDROID
-          ./ide/provisioning/install-android-tools.sh NDK
-          ./ide/provisioning/install-android-tools.sh SDK
-          ./ide/provisioning/install-debian-packages.sh CLEAN
+          sudo ./ide/provisioning/install-debian-packages.sh UPDATE
+          sudo ./ide/provisioning/install-debian-packages.sh BASE
+          sudo ./ide/provisioning/install-debian-packages.sh LINUX
+          sudo ./ide/provisioning/install-debian-packages.sh ARM
+          sudo ./ide/provisioning/install-debian-packages.sh LLVM
+          sudo ./ide/provisioning/install-debian-packages.sh ANDROID
+          sudo ./ide/provisioning/install-android-tools.sh NDK
+          sudo ./ide/provisioning/install-android-tools.sh SDK
+          sudo ./ide/provisioning/install-debian-packages.sh CLEAN
 
       - name: Build arm64 APK
         run: make -j$(nproc) TARGET=ANDROIDAARCH64 DEBUG=y USE_CCACHE=y V=2 output/ANDROID/bin/XCSoar.apk
