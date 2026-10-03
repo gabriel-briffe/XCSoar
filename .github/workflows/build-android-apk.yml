@@ -26,6 +26,7 @@ jobs:
           sudo apt-get install -y openjdk-21-jdk-headless
           ./ide/provisioning/install-android-tools.sh NDK
           ./ide/provisioning/install-android-tools.sh SDK
+          ./ide/provisioning/install-android-tools.sh BUNDLETOOL
           sudo ./ide/provisioning/install-debian-packages.sh CLEAN
 
       - name: Build arm64 APK
