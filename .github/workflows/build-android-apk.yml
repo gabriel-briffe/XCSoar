@@ -23,12 +23,16 @@ jobs:
           sudo ./ide/provisioning/install-debian-packages.sh ARM
           sudo ./ide/provisioning/install-debian-packages.sh LLVM
           sudo ./ide/provisioning/install-debian-packages.sh ANDROID
+          sudo apt-get install -y openjdk-21-jdk-headless
           ./ide/provisioning/install-android-tools.sh NDK
           ./ide/provisioning/install-android-tools.sh SDK
           sudo ./ide/provisioning/install-debian-packages.sh CLEAN
 
       - name: Build arm64 APK
         run: |
+          export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+          export PATH="$JAVA_HOME/bin:$PATH"
+          java -version
           make -j$(nproc) TARGET=ANDROIDAARCH64 DEBUG=y USE_CCACHE=y V=2 \
             ANDROID_SDK="$HOME/opt/android-sdk-linux" \
             ANDROID_NDK="$HOME/opt/android-ndk-r26d" \
