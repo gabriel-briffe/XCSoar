@@ -138,7 +138,9 @@ GlideConeRenderer::DrawField(Canvas &canvas,
       GlideConeOptions::Update(field, basic.nav_altitude, gi, gj, gc);
   }
   GlideConeOptions::Draw(canvas, projection, gc);
-  GlideConeOptions::DrawTimer(canvas, projection.GetScreenSize(),
+  const PixelSize screen = projection.GetScreenSize();
+  GlideConeOptions::DrawTimer(canvas,
+                              PixelRect{0, 0, int(screen.width), int(screen.height)},
                               *look.overlay.overlay_font, gc);
 
   overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,

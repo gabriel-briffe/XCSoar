@@ -346,8 +346,8 @@ GlideConeOptions::DrawTimer(Canvas &canvas, const PixelRect &rc, const Font &fon
   canvas.SelectWhiteBrush();
   canvas.DrawRoundRectangle(pill, PixelSize{unsigned(height)});
   canvas.SetTextColor(COLOR_BLACK);
-  canvas.DrawText({pill.left + (pill.GetWidth() - int(tsize.width)) / 2,
-                   pill.top + (pill.GetHeight() - int(tsize.height)) / 2},
+  canvas.DrawText({pill.left + (int(pill.GetWidth()) - int(tsize.width)) / 2,
+                   pill.top + (int(pill.GetHeight()) - int(tsize.height)) / 2},
                   text);
 }
 
