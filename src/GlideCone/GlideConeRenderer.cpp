@@ -2,6 +2,9 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeRenderer.hpp"
+#include "GlideConeOptions.hpp"
+#include "Interface.hpp"
+#include "NMEA/MoreData.hpp"
 #include "GlideConeStatus.hpp"
 #include "Computer/Settings.hpp"
 #include "Look/MapLook.hpp"
@@ -111,6 +114,14 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   } else if (jobs.HasContourState() || !field.contour_lines.empty()) {
     jobs.ClearContours(field, overlay);
   }
+
+  if (aircraft_valid) {
+    int gi = -1, gj = -1;
+    const MoreData &basic = CommonInterface::Basic();
+    if (field.GeoToCell(aircraft, gi, gj) && basic.NavAltitudeAvailable())
+      GlideConeOptions::Update(field, basic.nav_altitude, gi, gj, gc);
+  }
+  GlideConeOptions::Draw(canvas, projection, gc);
 
   overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
                      pan_probe, look);

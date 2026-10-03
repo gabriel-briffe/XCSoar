@@ -11,6 +11,7 @@
 #include "InfoBoxes/InfoBoxLayout.hpp"
 #include "InfoBoxes/Content/Factory.hpp"
 #include "InfoBoxes/Panel/Panel.hpp"
+#include "InfoBoxes/Panel/GlideConeSetup.hpp"
 #include "Widget/TabWidget.hpp"
 #include "Widget/ActionWidget.hpp"
 #include "Widget/ButtonWidget.hpp"
@@ -101,8 +102,14 @@ dlgInfoBoxAccessShowModeless(const int id, const InfoBoxPanel *panels)
     }
   }
 
-  tab_widget.AddTab(std::make_unique<ActionWidget>(dialog.MakeModalResultCallback(mrOK)),
-                    _("Close"));
+  const bool glide_cone_box =
+    old_type == InfoBoxFactory::e_GlideCone ||
+    old_type == InfoBoxFactory::e_GlideConeDist;
+  if (glide_cone_box)
+    tab_widget.AddTab(LoadGlideConeOptionsPanel(id), _("Option"));
+  else
+    tab_widget.AddTab(std::make_unique<ActionWidget>(dialog.MakeModalResultCallback(mrOK)),
+                      _("Close"));
 
   /* Dock to the bottom of the map area and lift map overlays by the
      visible dialog height.  Size to the *current* tab so a short page

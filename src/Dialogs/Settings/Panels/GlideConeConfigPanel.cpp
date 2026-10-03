@@ -116,6 +116,8 @@ class GlideConeConfigPanel final : public ConfigListPanel {
   unsigned contours_min_scale_user;
   int label_spacing;
   bool pan_mode_path;
+  int options_routine_s;
+  int options_opacity;
   double map_scale_to_ruler;
 
   void AddFixedItem(const char *caption, const char *help,
@@ -233,6 +235,8 @@ GlideConeConfigPanel::LoadSettings() noexcept
   contours_min_scale_user = SnapThresholdChoice(ruler_user, list_max);
   label_spacing = int(glide_cone.label_spacing);
   pan_mode_path = glide_cone.pan_mode_path;
+  options_routine_s = int(glide_cone.options_routine_s);
+  options_opacity = int(glide_cone.options_opacity);
 }
 
 void
@@ -276,6 +280,28 @@ GlideConeConfigPanel::Fill() noexcept
   }, {.value = iterations.c_str(), .chevron = true,
       .help = _("Upper bound on the number of GPU propagation "
                 "iterations.")});
+
+  StaticString<16> routine;
+  routine.Format("%ds", options_routine_s);
+  AddItem(_("Options routine"), [this](){
+    if (PickNumber(_("Options routine"),
+                   _("How often the optional area is recomputed in Routine mode."),
+                   1, 60, 1, options_routine_s,
+                   [](StaticString<32> &s, int v){ s.Format("%ds", v); }))
+      Refresh();
+  }, {.value = routine.c_str(), .chevron = true,
+      .help = _("How often the optional area is recomputed in Routine mode.")});
+
+  StaticString<16> opacity;
+  opacity.Format("%d%%", options_opacity);
+  AddItem(_("Options opacity"), [this](){
+    if (PickNumber(_("Options opacity"),
+                   _("Opacity of the optional area, from 20% to 100%."),
+                   20, 100, 5, options_opacity,
+                   [](StaticString<32> &s, int v){ s.Format("%d%%", v); }))
+      Refresh();
+  }, {.value = opacity.c_str(), .chevron = true,
+      .help = _("Opacity of the optional area, from 20% to 100%.")});
 
   AddToggleItem(_("Contours"),
                 _("Draw 100 m altitude contour lines of the reachable area."),
@@ -347,6 +373,13 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
 
   changed |= Profile::Update(ProfileKeys::GlideConePanModePath,
                              glide_cone.pan_mode_path, pan_mode_path);
+
+  const unsigned routine_s = unsigned(std::clamp(options_routine_s, 1, 60));
+  changed |= Profile::Update(ProfileKeys::GlideConeOptionsRoutine,
+                             glide_cone.options_routine_s, routine_s);
+  const unsigned opacity_pct = unsigned(std::clamp(options_opacity, 20, 100));
+  changed |= Profile::Update(ProfileKeys::GlideConeOptionsOpacity,
+                             glide_cone.options_opacity, opacity_pct);
 
   _changed |= changed;
   return true;
