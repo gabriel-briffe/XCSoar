@@ -363,9 +363,9 @@ class GlideConeOptionsWidget final : public NullWidget {
       return;
     StaticString<64> text;
     if (const auto ms = GlideConeOptions::LastComputeMs())
-      text.Format(_("Last compute: %u ms"), *ms);
+      text.UnsafeFormat(_("Last compute: %u ms"), *ms);
     else
-      text.Format(_("Last compute: —"));
+      text.UnsafeFormat("%s", _("Last compute: —"));
     duration->SetText(text.c_str());
   }
 
@@ -410,8 +410,7 @@ public:
     modes[2] = MakeActiveButton(parent, look.button, _("Routine"),
                                 cells.routine, button_style,
                                 [this](){ SetMode(GlideConeSettings::OptionsMode::ROUTINE); });
-    duration = std::make_unique<WndFrame>();
-    duration->Create(parent, cells.info, style);
+    duration = std::make_unique<WndFrame>(parent, look, cells.info, style);
     duration->SetVAlignCenter();
     UpdateButtons();
     UpdateDuration();
