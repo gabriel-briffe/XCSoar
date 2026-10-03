@@ -11,6 +11,13 @@ on:
         required: false
         default: ''
         type: string
+      target:
+        description: >
+          Limit this manual run to one matrix target (ANDROID, UNIX, KOBO,
+          WIN64OPENGL, WIN32OPENGL, MACOS, IOS64). Leave empty to build all.
+        required: false
+        default: ''
+        type: string
   push:
     paths-ignore:
       - '.clang-format'
@@ -156,6 +163,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     needs: release
+    if: github.event_name != 'workflow_dispatch' || inputs.target == '' || matrix.target == inputs.target
     permissions:
       contents: write
     # On push/tag, one failed matrix leg (e.g. iOS/macOS) must not block
