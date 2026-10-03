@@ -4,6 +4,9 @@
 #pragma once
 
 #include "Geo/GeoBounds.hpp"
+#include "ui/dim/Rect.hpp"
+
+class Font;
 
 #include <cstdint>
 #include <optional>
@@ -32,5 +35,10 @@ void Update(const GlideConeField &field, double start_alt,
 
 void Draw(Canvas &canvas, const WindowProjection &projection,
           const GlideConeSettings &settings) noexcept;
+
+void DrawTimer(Canvas &canvas, const PixelRect &rc, const Font &font,
+               const GlideConeSettings &settings) noexcept;
+bool HitTimer(PixelPoint p) noexcept;
+void ResetTimer() noexcept;
 
 } // namespace GlideConeOptions

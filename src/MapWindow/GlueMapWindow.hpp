@@ -248,6 +248,8 @@ private:
   const GestureLook &gesture_look;
 
   UI::Timer map_item_timer{[this]{ OnMapItemTimer(); }};
+  UI::Timer options_timer{[this]{ OnOptionsTimerReset(); }};
+  bool options_timer_press = false;
 
   UI::Notify redraw_notify{[this]{ PartialRedraw(); }};
 
@@ -527,6 +529,7 @@ protected:
 
 private:
   void OnMapItemTimer() noexcept;
+  void OnOptionsTimerReset() noexcept;
 
 #ifdef ENABLE_OPENGL
   void OnKineticTimer() noexcept;

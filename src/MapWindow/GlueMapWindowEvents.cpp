@@ -2,6 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "GlueMapWindow.hpp"
+#include "GlideCone/GlideConeOptions.hpp"
 #include "InfoBoxes/InfoBoxArrange.hpp"
 #include "Input/InputEvents.hpp"
 #include "Screen/Layout.hpp"
@@ -187,11 +188,26 @@ IsCtrlKeyPressed() noexcept
 #endif
 }
 
+void
+GlueMapWindow::OnOptionsTimerReset() noexcept
+{
+  options_timer.Cancel();
+  GlideConeOptions::ResetTimer();
+  Invalidate();
+}
+
 bool
 GlueMapWindow::OnMouseDown(PixelPoint p) noexcept
 {
   if (InfoBoxArrange::IsActive())
     return true;
+
+  if (GlideConeOptions::HitTimer(p)) {
+    options_timer_press = true;
+    options_timer.Schedule(std::chrono::milliseconds(700));
+    SetCapture();
+    return true;
+  }
 
   map_item_timer.Cancel();
 
@@ -268,6 +284,13 @@ GlueMapWindow::OnMouseDown(PixelPoint p) noexcept
 bool
 GlueMapWindow::OnMouseUp(PixelPoint p) noexcept
 {
+  options_timer.Cancel();
+  if (options_timer_press) {
+    options_timer_press = false;
+    ReleaseCapture();
+    return true;
+  }
+
   if (drag_mode != DRAG_NONE)
     ReleaseCapture();
 

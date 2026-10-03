@@ -10,6 +10,9 @@
 #include "ui/canvas/Color.hpp"
 #include "Look/Colors.hpp"
 #include "Projection/WindowProjection.hpp"
+#include "Screen/Layout.hpp"
+#include "ui/canvas/Font.hpp"
+#include "util/StaticString.hxx"
 
 #ifdef ENABLE_OPENGL
 #include "ui/canvas/opengl/Scope.hpp"
@@ -36,6 +39,8 @@ struct State {
   GeoBounds bounds = GeoBounds::Invalid();
   double cell_x = 0, cell_y = 0;
   std::vector<std::uint8_t> mask;
+  PixelRect timer_rc = PixelRect(0, 0, 0, 0);
+  bool timer_visible = false;
 };
 
 State state;
@@ -306,4 +311,55 @@ GlideConeOptions::Draw(Canvas &canvas, const WindowProjection &projection,
         canvas.DrawPolygon(pts, 4);
     }
   }
+}
+
+void
+GlideConeOptions::DrawTimer(Canvas &canvas, const PixelRect &rc, const Font &font,
+                            const GlideConeSettings &settings) noexcept
+{
+  state.timer_visible = false;
+  canvas.Select(font);
+  if (settings.options_mode != GlideConeSettings::OptionsMode::ROUTINE)
+    return;
+
+  const auto now = std::chrono::steady_clock::now();
+  const unsigned elapsed = state.has_last
+    ? unsigned(std::chrono::duration_cast<std::chrono::seconds>(now - state.last_at).count())
+    : 0;
+  StaticString<16> text;
+  text.UnsafeFormat("%us", elapsed);
+
+  const PixelSize tsize = canvas.CalcTextSize(text);
+  const int pad = int(Layout::GetTextPadding()) + int(Layout::Scale(6));
+  const int height = int(tsize.height) + pad;
+  const int width = int(tsize.width) + pad * 2;
+  PixelRect pill{
+    rc.GetCenter().x - width / 2,
+    rc.top + int(Layout::Scale(8)),
+    rc.GetCenter().x + width / 2,
+    rc.top + int(Layout::Scale(8)) + height,
+  };
+  state.timer_rc = pill;
+  state.timer_visible = true;
+
+  canvas.SelectBlackPen();
+  canvas.SelectWhiteBrush();
+  canvas.DrawRoundRectangle(pill, PixelSize{unsigned(height)});
+  canvas.SetTextColor(COLOR_BLACK);
+  canvas.DrawText({pill.left + (pill.GetWidth() - int(tsize.width)) / 2,
+                   pill.top + (pill.GetHeight() - int(tsize.height)) / 2},
+                  text);
+}
+
+bool
+GlideConeOptions::HitTimer(PixelPoint p) noexcept
+{
+  return state.timer_visible && state.timer_rc.Contains(p);
+}
+
+void
+GlideConeOptions::ResetTimer() noexcept
+{
+  state.last_at = std::chrono::steady_clock::now();
+  state.has_last = true;
 }
