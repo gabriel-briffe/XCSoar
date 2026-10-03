@@ -23,12 +23,16 @@ jobs:
           sudo ./ide/provisioning/install-debian-packages.sh ARM
           sudo ./ide/provisioning/install-debian-packages.sh LLVM
           sudo ./ide/provisioning/install-debian-packages.sh ANDROID
-          sudo ./ide/provisioning/install-android-tools.sh NDK
-          sudo ./ide/provisioning/install-android-tools.sh SDK
+          ./ide/provisioning/install-android-tools.sh NDK
+          ./ide/provisioning/install-android-tools.sh SDK
           sudo ./ide/provisioning/install-debian-packages.sh CLEAN
 
       - name: Build arm64 APK
-        run: make -j$(nproc) TARGET=ANDROIDAARCH64 DEBUG=y USE_CCACHE=y V=2 output/ANDROID/bin/XCSoar.apk
+        run: |
+          make -j$(nproc) TARGET=ANDROIDAARCH64 DEBUG=y USE_CCACHE=y V=2 \
+            ANDROID_SDK="$HOME/opt/android-sdk-linux" \
+            ANDROID_NDK="$HOME/opt/android-ndk-r26d" \
+            output/ANDROID/bin/XCSoar.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
