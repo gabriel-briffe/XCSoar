@@ -189,8 +189,15 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   const float start_f = float(start_alt);
   const float floor = field.elevation.size() == n ? field.elevation[start] : start_f;
   const float cone = field.result.altitudes[start];
-  if (start_f < floor || cone >= field.max_alt || start_f < cone)
+  if (start_f < floor || cone >= field.max_alt || start_f < cone) {
+    /* Below the airport cone or the ground floor there is no options
+       area.  Drop the previous mask, otherwise the last reachable
+       patch stays on the map after the aircraft has descended. */
+    Clear();
+    state.has_last = true;
+    state.last_at = std::chrono::steady_clock::now();
     return;
+  }
 
   best[start] = start_f;
   origin[start] = int(start);
