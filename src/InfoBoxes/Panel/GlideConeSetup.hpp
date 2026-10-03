@@ -12,3 +12,6 @@ LoadGlideConeSetupPanel(unsigned id);
 
 std::unique_ptr<Widget>
 LoadGlideConeContoursPanel(unsigned id);
+
+std::unique_ptr<Widget>
+LoadGlideConeOptionsPanel(unsigned id);

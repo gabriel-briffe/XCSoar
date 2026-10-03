@@ -399,4 +399,7 @@ constexpr std::string_view GlideConePanModePath = "GlideConePanModePath";
 constexpr std::string_view GlideConeContoursMinScale = "GlideConeContoursMinScale";
 constexpr std::string_view GlideConeLabelSpacing = "GlideConeLabelSpacing";
 constexpr std::string_view GlideConeCellSize = "GlideConeCellSize";
+constexpr std::string_view GlideConeOptionsMode = "GlideConeOptionsMode";
+constexpr std::string_view GlideConeOptionsRoutine = "GlideConeOptionsRoutine";
+constexpr std::string_view GlideConeOptionsOpacity = "GlideConeOptionsOpacity";
 }

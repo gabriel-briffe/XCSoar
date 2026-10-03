@@ -14,6 +14,9 @@ GlideConeSettings::SetDefaults() noexcept
   cell_size = DEFAULT_CELL_SIZE_M;
   iteration_cap = 2000;
   contours = true;
+  options_mode = OptionsMode::OFF;
+  options_routine_s = 10;
+  options_opacity = 50;
   pan_mode_path = true;
   /* ~30 km on the map scale bar at the usual 8× GetMapScale factor. */
   contours_min_scale = 3750;

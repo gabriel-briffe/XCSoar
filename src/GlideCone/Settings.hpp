@@ -59,6 +59,21 @@ struct GlideConeSettings {
   /** Draw 100 m altitude contour lines of the reachability field. */
   bool contours;
 
+  enum class OptionsMode : uint8_t {
+    OFF,
+    ONCE,
+    ROUTINE,
+  };
+
+  /** Optional-area overlay: off, one shot, or repeating. */
+  OptionsMode options_mode;
+
+  /** Repeat interval for OptionsMode::ROUTINE [s], 1–60. */
+  unsigned options_routine_s;
+
+  /** Optional-area fill opacity, 20–100 percent. */
+  unsigned options_opacity;
+
   /**
    * When true (default), draw the relay path and GlideCone altitude
    * text at the pan crosshair while the map is panning.

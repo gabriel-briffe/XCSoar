@@ -134,6 +134,17 @@ Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
   map.Get(ProfileKeys::GlideConePanModePath, settings.pan_mode_path);
   map.Get(ProfileKeys::GlideConeContoursMinScale, settings.contours_min_scale);
   map.Get(ProfileKeys::GlideConeLabelSpacing, settings.label_spacing);
+  map.GetEnum(ProfileKeys::GlideConeOptionsMode, settings.options_mode);
+  map.Get(ProfileKeys::GlideConeOptionsRoutine, settings.options_routine_s);
+  map.Get(ProfileKeys::GlideConeOptionsOpacity, settings.options_opacity);
+  if (settings.options_routine_s < 1)
+    settings.options_routine_s = 1;
+  else if (settings.options_routine_s > 60)
+    settings.options_routine_s = 60;
+  if (settings.options_opacity < 20)
+    settings.options_opacity = 20;
+  else if (settings.options_opacity > 100)
+    settings.options_opacity = 100;
   /* Was base pixels (20–400); now percent of min(screen side) (20–100). */
   if (settings.label_spacing < 20)
     settings.label_spacing = 20;

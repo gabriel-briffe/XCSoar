@@ -16,6 +16,7 @@
 #include "UIGlobals.hpp"
 #include "Renderer/TextButtonRenderer.hpp"
 #include "util/StaticString.hxx"
+#include "GlideCone/GlideConeOptions.hpp"
 
 #include <algorithm>
 #include <array>
@@ -323,6 +324,133 @@ public:
   }
 };
 
+
+class GlideConeOptionsWidget final : public NullWidget {
+  const DialogLook &look;
+  std::array<std::unique_ptr<Button>, 3> modes;
+  std::unique_ptr<WndFrame> duration;
+
+  struct Cells {
+    PixelRect off, once, routine, info;
+  };
+
+  static Cells Layout(const PixelRect &rc) noexcept {
+    const int mid1 = (rc.left * 2 + rc.right) / 3;
+    const int mid2 = (rc.left + rc.right * 2) / 3;
+    const int split = rc.top + rc.GetHeight() / 2;
+    return {
+      PixelRect{rc.left, rc.top, mid1, split},
+      PixelRect{mid1, rc.top, mid2, split},
+      PixelRect{mid2, rc.top, rc.right, split},
+      PixelRect{rc.left, split, rc.right, rc.bottom},
+    };
+  }
+
+  void UpdateButtons() noexcept {
+    const auto mode = CommonInterface::GetComputerSettings().glide_cone.options_mode;
+    const bool values[] = {
+      mode == GlideConeSettings::OptionsMode::OFF,
+      mode == GlideConeSettings::OptionsMode::ONCE,
+      mode == GlideConeSettings::OptionsMode::ROUTINE,
+    };
+    for (std::size_t i = 0; i < modes.size(); ++i)
+      if (modes[i] != nullptr)
+        SetButtonActive(*modes[i], values[i]);
+  }
+
+  void UpdateDuration() noexcept {
+    if (duration == nullptr)
+      return;
+    StaticString<64> text;
+    if (const auto ms = GlideConeOptions::LastComputeMs())
+      text.Format(_("Last compute: %u ms"), *ms);
+    else
+      text.Format(_("Last compute: —"));
+    duration->SetText(text.c_str());
+  }
+
+  void SetMode(GlideConeSettings::OptionsMode mode) noexcept {
+    auto &gc = CommonInterface::SetComputerSettings().glide_cone;
+    gc.options_mode = mode;
+    Profile::Set(ProfileKeys::GlideConeOptionsMode, int(mode));
+    if (mode == GlideConeSettings::OptionsMode::OFF)
+      GlideConeOptions::Clear();
+    else
+      GlideConeOptions::RequestOnce();
+    UpdateButtons();
+    UpdateDuration();
+  }
+
+public:
+  explicit GlideConeOptionsWidget(const DialogLook &_look) noexcept
+    :look(_look) {}
+
+  PixelSize GetMinimumSize() const noexcept override {
+    return {3u * Layout::GetMinimumControlHeight(),
+            2u * Layout::GetMinimumControlHeight()};
+  }
+
+  PixelSize GetMaximumSize() const noexcept override {
+    return {6u * Layout::GetMaximumControlHeight(),
+            2u * Layout::GetMaximumControlHeight()};
+  }
+
+  void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override {
+    const auto cells = Layout(rc);
+    WindowStyle style;
+    style.Hide();
+    WindowStyle button_style{style};
+    button_style.TabStop();
+    modes[0] = MakeActiveButton(parent, look.button, _("Off"),
+                                cells.off, button_style,
+                                [this](){ SetMode(GlideConeSettings::OptionsMode::OFF); });
+    modes[1] = MakeActiveButton(parent, look.button, _("One time"),
+                                cells.once, button_style,
+                                [this](){ SetMode(GlideConeSettings::OptionsMode::ONCE); });
+    modes[2] = MakeActiveButton(parent, look.button, _("Routine"),
+                                cells.routine, button_style,
+                                [this](){ SetMode(GlideConeSettings::OptionsMode::ROUTINE); });
+    duration = std::make_unique<WndFrame>();
+    duration->Create(parent, cells.info, style);
+    duration->SetVAlignCenter();
+    UpdateButtons();
+    UpdateDuration();
+  }
+
+  void Show(const PixelRect &rc) noexcept override {
+    const auto cells = Layout(rc);
+    modes[0]->MoveAndShow(cells.off);
+    modes[1]->MoveAndShow(cells.once);
+    modes[2]->MoveAndShow(cells.routine);
+    duration->MoveAndShow(cells.info);
+    UpdateButtons();
+    UpdateDuration();
+  }
+
+  void Hide() noexcept override {
+    for (auto &button : modes)
+      button->Hide();
+    duration->Hide();
+  }
+
+  void Move(const PixelRect &rc) noexcept override {
+    const auto cells = Layout(rc);
+    modes[0]->Move(cells.off);
+    modes[1]->Move(cells.once);
+    modes[2]->Move(cells.routine);
+    duration->Move(cells.info);
+  }
+
+  bool SetFocus() noexcept override {
+    modes[0]->SetFocus();
+    return true;
+  }
+
+  bool HasFocus() const noexcept override {
+    return modes[0]->HasFocus() || modes[1]->HasFocus() || modes[2]->HasFocus();
+  }
+};
+
 std::unique_ptr<Widget>
 LoadGlideConeSetupPanel([[maybe_unused]] unsigned id)
 {
@@ -333,4 +461,10 @@ std::unique_ptr<Widget>
 LoadGlideConeContoursPanel([[maybe_unused]] unsigned id)
 {
   return std::make_unique<GlideConeContoursWidget>(UIGlobals::GetDialogLook());
+}
+
+std::unique_ptr<Widget>
+LoadGlideConeOptionsPanel([[maybe_unused]] unsigned id)
+{
+  return std::make_unique<GlideConeOptionsWidget>(UIGlobals::GetDialogLook());
 }
