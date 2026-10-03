@@ -6,7 +6,6 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-24.04
-    container: debian:trixie-slim
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
