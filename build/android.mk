@@ -597,16 +597,22 @@ $(ANDROID_BIN)/XCSoar.aab: $(BUNDLE_BUILD_DIR)/unsigned.aab $(ANDROID_SIGN_KEYST
 
 $(ANDROID_BIN)/XCSoar.apk: $(ANDROID_BIN)/XCSoar.aab
 	@$(NQ)echo "  APK     $@"
+ifeq ($(BUNDLE_KS_PASS_FILE),)
+	$(Q)$(BUNDLETOOL) build-apks --overwrite --mode=universal \
+		--ks=$(ANDROID_SIGN_KEYSTORE) --ks-key-alias=$(ANDROID_SIGN_ALIAS) $(BUNDLETOOL_SIGN_PASSWD) \
+		--bundle=$< \
+		--output=$(BUNDLE_BUILD_DIR)/apkset-release.apks
+	$(Q)$(UNZIP) -p $(BUNDLE_BUILD_DIR)/apkset-release.apks universal.apk > $@
+else
 	$(Q)set -e; \
-	if [ -n "$(BUNDLE_KS_PASS_FILE)" ]; then \
-		umask 077; \
-		printf '%s\n' "$$ANDROID_KEYSTORE_PASS" > $(BUNDLE_KS_PASS_FILE); \
-	fi; \
+	umask 077; \
+	printf '%s\n' "$$ANDROID_KEYSTORE_PASS" > $(BUNDLE_KS_PASS_FILE); \
 	trap 'rm -f $(BUNDLE_KS_PASS_FILE)' EXIT; \
 	$(BUNDLETOOL) build-apks --overwrite --mode=universal \
 		--ks=$(ANDROID_SIGN_KEYSTORE) --ks-key-alias=$(ANDROID_SIGN_ALIAS) $(BUNDLETOOL_SIGN_PASSWD) \
 		--bundle=$< \
 		--output=$(BUNDLE_BUILD_DIR)/apkset-release.apks; \
 	$(UNZIP) -p $(BUNDLE_BUILD_DIR)/apkset-release.apks universal.apk > $@
+endif
 
 endif
