@@ -161,8 +161,7 @@ struct Heap {
 /**
  * Downward optional area: the upward glide-cone altitudes are the floor
  * (not terrain).  FLAG-like "GC" cells mean the wavefront already hit
- * that cone — they hard-stop LOS and neighbour expansion (gpu-MC
- * downward-shader semantics).
+ * that cone — used to stop neighbour expansion / mask (not LOS).
  */
 constexpr std::uint8_t GC = 1;
 
@@ -174,13 +173,12 @@ HasConeFloor(const GlideConeField &field, std::size_t i) noexcept
 }
 
 /**
- * Bresenham LOS from (@p x0,@p y0) to origin (@p ox,@p oy).  Blocked by
- * GC cells and by intermediates whose descent altitude from the origin
- * would fall below the upward glide-cone floor.
+ * Bresenham LOS from (@p x0,@p y0) to origin (@p ox,@p oy).  Blocked
+ * when descent altitude from the origin would fall below the upward
+ * glide-cone floor (GC flags alone do not block).
  */
 bool
-InView(const std::vector<std::uint8_t> &flags,
-       const std::vector<float> &best,
+InView(const std::vector<float> &best,
        const GlideConeField &field,
        unsigned width, unsigned height,
        int x0, int y0, int ox, int oy,
@@ -203,8 +201,6 @@ InView(const std::vector<std::uint8_t> &flags,
     if (x < 0 || y < 0 || x >= int(width) || y >= int(height))
       return false;
     const std::size_t i = std::size_t(y) * width + x;
-    if (flags[i] & GC)
-      return false;
     if (!HasConeFloor(field, i))
       return false;
     const float alt = origin_alt -
@@ -279,7 +275,7 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
 
         int elected = index;
         if (from_origin >= 0 &&
-            InView(flags, best, field, width, height, nx, ny,
+            InView(best, field, width, height, nx, ny,
                    from_origin % int(width),
                    from_origin / int(width),
                    cell_x, cell_y, ratio))
