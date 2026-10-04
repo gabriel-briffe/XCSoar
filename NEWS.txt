@@ -111,6 +111,8 @@ Version 7.46 - not yet released
   - keep the pan-mode map scale while panning, and restore the saved
     circling or cruise scale when leaving pan mode
 * documentation
+  - document the Status → Times map stopwatch (show/hide, tap,
+    hold to reset) in the English manual
   - document DEM 2 / DEM 3 scale thresholds on Map Display → Terrain
   - document the Route drawn setting on Glide Computer → Route
   - document waypoint Label position on Map Display → Waypoints
