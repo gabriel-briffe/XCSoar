@@ -85,8 +85,10 @@ Version 7.46 - not yet released
   - Config → Route: Route drawn turns the planned obstacle-avoiding
     route on or off; the direct bearing and terrain warning stay
   - Map Display → Waypoints: Label position (top/bottom × left/right)
-  - map stopwatch pill follows the InfoBox light/dark colours, shows a
-    border while running, and resets after a 0.7 s hold without lift-off
+  - Status → Times: Show timer draws a map stopwatch (tap start/stop;
+    yellow press and InfoBox hold fill, lift to reset, slide off to
+    cancel); follows the InfoBox light/dark colours and shows a
+    border while running
   - terrain overview is max-pooled at 4× and 16×; the map picks one
     level from DEM cells per screen pixel so mid zoom no longer loads
     full-resolution tiles

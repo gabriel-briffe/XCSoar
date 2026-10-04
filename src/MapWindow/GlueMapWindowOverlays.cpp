@@ -27,6 +27,7 @@
 #include "BackendComponents.hpp"
 #include "Replay/Replay.hpp"
 #include "MapTimer.hpp"
+#include "InfoBoxes/InfoBoxArrange.hpp"
 #include "Look/InfoBoxLook.hpp"
 #include "ui/canvas/Canvas.hpp"
 #include "ui/canvas/Pen.hpp"
@@ -35,6 +36,12 @@
 #include "Interface.hpp"
 #include "MainWindow.hpp"
 #include "PopupMessage.hpp"
+#include "Asset.hpp"
+#include "Hardware/CPU.hpp"
+
+#ifdef ENABLE_OPENGL
+#include "ui/canvas/opengl/Scissor.hpp"
+#endif
 
 #include <algorithm> // for std::clamp()
 
@@ -559,6 +566,41 @@ GlueMapWindow::DrawMapScale(Canvas &canvas, const PixelRect &rc,
   }
 }
 
+namespace {
+
+/**
+ * Vertical hold fill clipped to a rounded rectangle.
+ * Duplicated from InfoBoxArrangeWindow for now; share later.
+ */
+void
+FillRoundedCard(Canvas &canvas, const PixelRect &inner, int radius,
+                int height, Color glow,
+                [[maybe_unused]] Color rest) noexcept
+{
+  if (height <= 0)
+    return;
+
+  const PixelSize ellipse{radius * 2, radius * 2};
+
+#ifdef ENABLE_OPENGL
+  PixelRect band = inner;
+  band.top = inner.bottom - height;
+  const GLCanvasScissor clip(band);
+  canvas.Select(Brush{glow});
+  canvas.DrawRoundRectangle(inner, ellipse);
+#else
+  canvas.Select(Brush{glow});
+  canvas.DrawRoundRectangle(inner, ellipse);
+  if (height < (int)inner.GetHeight()) {
+    PixelRect top = inner;
+    top.bottom = inner.bottom - height;
+    canvas.DrawFilledRectangle(top, rest);
+  }
+#endif
+}
+
+} // namespace
+
 PixelRect
 GlueMapWindow::GetMapTimerRect(const PixelRect &rc) const noexcept
 {
@@ -603,7 +645,10 @@ GlueMapWindow::MapTimerHitTest(PixelPoint p) const noexcept
   if (!MapTimer::IsVisible() || IsPanning())
     return false;
 
-  const PixelRect pill = GetMapTimerRect(GetHudLayout().content);
+  const PixelRect hud_rc = content_rect.GetWidth() > 0
+    ? content_rect
+    : GetClientRect();
+  const PixelRect pill = GetMapTimerRect(hud_rc);
   return pill.GetWidth() > 0 && pill.Contains(p);
 }
 
@@ -629,22 +674,40 @@ GlueMapWindow::DrawMapTimer(Canvas &canvas, const PixelRect &rc) const noexcept
   if (pill.GetWidth() <= 0 || pill.GetHeight() <= 0)
     return;
 
-  /* Follow the InfoBox (navbox) theme: light = white fill / black text;
-     dark = black fill / white text.  A contrasting border while the
-     timer is running shows that it is active. */
+  /* InfoBox theme: yellow while pressed, blue hold fill (same idea as
+     arrange cards; FillRoundedCard duplicated locally for now). */
   const bool running = MapTimer::IsRunning();
-  const Color fill = info_box_look.background_color;
+  const bool pressed = map_timer_hold_pending;
+  const Color fill = pressed
+    ? info_box_look.pressed_background_color
+    : info_box_look.background_color;
   const Color text_color = info_box_look.value.fg_color;
   const Color border_color = info_box_look.inverse
     ? COLOR_WHITE
     : COLOR_BLACK;
+  const int radius = int(pill.GetHeight() / 2);
 
+  canvas.SelectNullPen();
   canvas.Select(Brush{fill});
-  if (running)
-    canvas.Select(Pen{Layout::ScalePenWidth(2), border_color});
-  else
-    canvas.SelectNullPen();
   canvas.DrawRoundRectangle(pill, PixelSize{pill.GetHeight()});
+
+  if (map_timer_hold_pending || map_timer_hold_armed) {
+    const bool fade = !HasEPaper() && !IsSlowCPU() &&
+      !map_timer_hold_armed;
+    const unsigned t = fade
+      ? InfoBoxArrange::LongPressFade(map_timer_press_start)
+      : 256;
+    FillRoundedCard(canvas, pill, radius,
+                    int(pill.GetHeight() * t / 256),
+                    info_box_look.GetPreviewGlowColor(),
+                    fill);
+  }
+
+  if (running) {
+    canvas.SelectHollowBrush();
+    canvas.Select(Pen{Layout::ScalePenWidth(2), border_color});
+    canvas.DrawRoundRectangle(pill, PixelSize{pill.GetHeight()});
+  }
 
   canvas.SetTextColor(text_color);
   canvas.SetBackgroundTransparent();
