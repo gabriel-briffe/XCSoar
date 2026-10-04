@@ -39,11 +39,13 @@ constexpr std::uint32_t FLAG_CHANGED = 2u;
 /*
  * GLES 3.1 compute port of the WebGPU glide cone propagation.
  *
- * Ground clearance / line-of-sight blocking and the relay-origin
- * propagation follow the original single-mode algorithm.  The whole
- * per-cell state (altitude, origin, flags) is packed into one std430
- * struct so the shader needs only three shader-storage blocks (elevation
- * plus a ping-pong pair), staying within the GLES 3.1 guaranteed minimum.
+ * Ground clearance / line-of-sight and relay-origin propagation follow
+ * the single-mode algorithm; LOS rejects rays whose L/D slope would go
+ * through terrain (elevation vs glide altitude along the ray).  The
+ * whole per-cell state (altitude, origin, flags) is packed into one
+ * std430 struct so the shader needs only three shader-storage blocks
+ * (elevation plus a ping-pong pair), staying within the GLES 3.1
+ * guaranteed minimum.
  */
 constexpr char PROPAGATE_SHADER[] = R"GLSL(#version 310 es
 precision highp float;
@@ -108,12 +110,26 @@ void noteChange() {
   atomicAdd(change_count, 1u);
 }
 
-// Full Bresenham line-of-sight, blocked by ground cells.
+// True if terrain at (cx,cy) sticks through the L/D slope from origin.
+bool cellBlocksRay(int cx, int cy, int ox, int oy, float originAlt) {
+  if (!inBounds(cx, cy))
+    return true;
+  if (cx == ox && cy == oy)
+    return false;
+  float dx = float(cx - ox) * uCellSizeX;
+  float dy = float(cy - oy) * uCellSizeY;
+  float glideAlt = originAlt + sqrt(dx * dx + dy * dy) / uGlideRatio;
+  return elev[idx(cx, cy)] >= glideAlt;
+}
+
+// Bresenham LOS to the elected origin: terrain must stay below the
+// glide slope along the ray (ground flags alone do not block).
 bool isInViewToOrigin(int x0, int y0, int targetOx, int targetOy) {
   if (!originValid(targetOx, targetOy))
     return false;
   if (x0 == targetOx && y0 == targetOy)
     return true;
+  float originAlt = cin[idx(targetOx, targetOy)].alt;
   int adx = abs(targetOx - x0);
   int ady = abs(targetOy - y0);
   int x1 = x0;
@@ -135,12 +151,14 @@ bool isInViewToOrigin(int x0, int y0, int targetOx, int targetOy) {
         y1 = y1 + ystep;
         error = error - ddx;
         if (error + errorprev < ddx) {
-          if (isGroundAt(x1, y1 - ystep)) return false;
+          if (cellBlocksRay(x1, y1 - ystep, targetOx, targetOy, originAlt))
+            return false;
         } else if (error + errorprev > ddx) {
-          if (isGroundAt(x1 - xstep, y1)) return false;
+          if (cellBlocksRay(x1 - xstep, y1, targetOx, targetOy, originAlt))
+            return false;
         }
       }
-      if (!(x1 == targetOx && y1 == targetOy) && isGroundAt(x1, y1))
+      if (cellBlocksRay(x1, y1, targetOx, targetOy, originAlt))
         return false;
       errorprev = error;
     }
@@ -152,12 +170,14 @@ bool isInViewToOrigin(int x0, int y0, int targetOx, int targetOy) {
         x1 = x1 + xstep;
         error = error - ddy;
         if (error + errorprev < ddy) {
-          if (isGroundAt(x1 - xstep, y1)) return false;
+          if (cellBlocksRay(x1 - xstep, y1, targetOx, targetOy, originAlt))
+            return false;
         } else if (error + errorprev > ddy) {
-          if (isGroundAt(x1, y1 - ystep)) return false;
+          if (cellBlocksRay(x1, y1 - ystep, targetOx, targetOy, originAlt))
+            return false;
         }
       }
-      if (!(x1 == targetOx && y1 == targetOy) && isGroundAt(x1, y1))
+      if (cellBlocksRay(x1, y1, targetOx, targetOy, originAlt))
         return false;
       errorprev = error;
     }

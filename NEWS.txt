@@ -138,7 +138,8 @@ Version 7.46 - not yet released
   - add Glide Cone settings for the pink worst-case route (If below /
     Always) and the green highest-arrival route (on/off); red discs mark
     air-to-ground steps that go below the cone altitude at 80% of the
-    configured glide ratio
+    configured glide ratio; origin shortcuts also clear the L/D slope
+    against terrain along the ray
   - fix best-glide speed and speed-to-fly at altitude when MacCready
     is set, so density scaling no longer inflates MacCready #2881
   - fix circling wind staying blank on paragliders and other aircraft
