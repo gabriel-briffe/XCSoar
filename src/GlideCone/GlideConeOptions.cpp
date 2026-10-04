@@ -96,18 +96,24 @@ struct Heap {
   }
 };
 
+/**
+ * Downward optional area: the upward glide-cone altitudes are the floor
+ * (not terrain).  FLAG-like "GC" cells mean the wavefront already hit
+ * that cone — they hard-stop LOS and neighbour expansion (gpu-MC
+ * downward-shader semantics).
+ */
+constexpr std::uint8_t GC = 1;
+
+[[gnu::pure]]
 bool
-Blocks(const GlideConeField &field, int x, int y, float start_alt) noexcept
+HasConeFloor(const GlideConeField &field, std::size_t i) noexcept
 {
-  if (x < 0 || y < 0 || x >= int(field.result.width) || y >= int(field.result.height))
-    return true;
-  const auto elev = field.elevation[std::size_t(y) * field.result.width + x];
-  return elev > start_alt;
+  return field.result.altitudes[i] < field.max_alt;
 }
 
 bool
-InView(const GlideConeField &field, int x0, int y0, int x1, int y1,
-       float start_alt) noexcept
+InView(const std::vector<std::uint8_t> &flags, unsigned width,
+       unsigned height, int x0, int y0, int x1, int y1) noexcept
 {
   int dx = std::abs(x1 - x0);
   int dy = std::abs(y1 - y0);
@@ -119,7 +125,11 @@ InView(const GlideConeField &field, int x0, int y0, int x1, int y1,
     const int e2 = 2 * err;
     if (e2 > -dy) { err -= dy; x += sx; }
     if (e2 < dx) { err += dx; y += sy; }
-    if ((x != x1 || y != y1) && Blocks(field, x, y, start_alt))
+    if (x == x1 && y == y1)
+      break;
+    if (x < 0 || y < 0 || x >= int(width) || y >= int(height))
+      return false;
+    if (flags[std::size_t(y) * width + x] & GC)
       return false;
   }
   return true;
@@ -185,14 +195,16 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   const auto t0 = std::chrono::steady_clock::now();
   std::vector<float> best(n, -1.f);
   std::vector<int> origin(n, -1);
+  std::vector<std::uint8_t> flags(n, 0);
   const std::size_t start = std::size_t(gj) * width + gi;
   const float start_f = float(start_alt);
-  const float floor = field.elevation.size() == n ? field.elevation[start] : start_f;
+  const float terrain_floor =
+    field.elevation.size() == n ? field.elevation[start] : start_f;
   const float cone = field.result.altitudes[start];
-  if (start_f < floor || cone >= field.max_alt || start_f < cone) {
-    /* Below the airport cone or the ground floor there is no options
-       area.  Drop the previous mask, otherwise the last reachable
-       patch stays on the map after the aircraft has descended. */
+  if (start_f < terrain_floor || !HasConeFloor(field, start) ||
+      start_f < cone) {
+    /* Already at/below the upward cone (or terrain): no optional area.
+       Drop the previous mask so the last patch does not linger. */
     Clear();
     state.has_last = true;
     state.last_at = std::chrono::steady_clock::now();
@@ -210,11 +222,14 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
 
   while (!heap.Empty()) {
     const auto [index, arrival] = heap.Pop();
-    if (arrival < best[std::size_t(index)] - 0.05f)
+    const std::size_t ui = std::size_t(index);
+    if (flags[ui] & GC)
+      continue;
+    if (arrival < best[ui] - 0.05f)
       continue;
     const int x = index % int(width);
     const int y = index / int(width);
-    const int from_origin = origin[std::size_t(index)];
+    const int from_origin = origin[ui];
     for (int dy = -1; dy <= 1; ++dy) {
       for (int dx = -1; dx <= 1; ++dx) {
         if (dx == 0 && dy == 0)
@@ -223,19 +238,37 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
         if (nx < 0 || ny < 0 || nx >= int(width) || ny >= int(height))
           continue;
         const std::size_t nidx = std::size_t(ny) * width + nx;
-        const int elected = (from_origin >= 0 &&
-                             InView(field, nx, ny, from_origin % int(width),
-                                    from_origin / int(width), start_f))
-          ? from_origin : index;
+        /* GC neighbours are a hard stop. */
+        if (flags[nidx] & GC)
+          continue;
+
+        int elected = index;
+        if (from_origin >= 0 &&
+            InView(flags, width, height, nx, ny,
+                   from_origin % int(width),
+                   from_origin / int(width)))
+          elected = from_origin;
+
+        if (flags[std::size_t(elected)] & GC)
+          continue;
+
         const int ox = elected % int(width);
         const int oy = elected / int(width);
         const double dist = std::hypot((nx - ox) * cell_x, (ny - oy) * cell_y);
         const float next = best[std::size_t(elected)] - float(dist / ratio);
-        const float need = std::max(
-          field.elevation.size() == n ? field.elevation[nidx] : next,
-          field.result.altitudes[nidx] < field.max_alt
-            ? field.result.altitudes[nidx] : 1.0e9f);
-        if (next < need || next <= best[nidx])
+
+        /* Upward glide cone is the floor (not DEM elevation). */
+        if (HasConeFloor(field, nidx) &&
+            next < field.result.altitudes[nidx]) {
+          if (!(flags[nidx] & GC)) {
+            best[nidx] = field.result.altitudes[nidx];
+            origin[nidx] = elected;
+            flags[nidx] = GC;
+          }
+          continue;
+        }
+
+        if (next <= best[nidx])
           continue;
         best[nidx] = next;
         origin[nidx] = elected;
@@ -244,9 +277,11 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
     }
   }
 
+  /* Green where descending arrival is at or above the cone. */
   state.mask.assign(n, 0);
   for (std::size_t i = 0; i < n; ++i)
-    if (best[i] >= 0)
+    if (!(flags[i] & GC) && best[i] >= 0 && HasConeFloor(field, i) &&
+        best[i] >= field.result.altitudes[i])
       state.mask[i] = 1;
   state.width = width;
   state.height = height;
