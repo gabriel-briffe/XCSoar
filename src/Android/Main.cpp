@@ -40,6 +40,7 @@
 #include "Profile/Profile.hpp"
 #include "MainWindow.hpp"
 #include "Startup.hpp"
+#include "Protection.hpp"
 #include "Interface.hpp"
 #include "java/Global.hxx"
 #include "java/File.hxx"
@@ -428,6 +429,11 @@ Java_org_xcsoar_NativeView_pauseNative(JNIEnv *env, jobject obj)
     return;
 
   main_window->Pause();
+
+  /* Android may kill the process after onPause without a clean
+     Shutdown; flush profile (including last simulator position). */
+  if (global_running)
+    SaveUserState();
 }
 
 gcc_visibility_default

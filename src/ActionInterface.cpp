@@ -14,6 +14,9 @@
 #include "CalculationThread.hpp"
 #include "Task/ProtectedTaskManager.hpp"
 #include "Profile/Profile.hpp"
+#include "Profile/Current.hpp"
+#include "Profile/Map.hpp"
+#include "Simulator.hpp"
 #include "UIState.hpp"
 #include "Operation/MessageOperationEnvironment.hpp"
 #include "Components.hpp"
@@ -513,6 +516,20 @@ ActionInterface::SetStartupLocation() noexcept
   if (backend_components == nullptr ||
       backend_components->device_blackboard == nullptr)
     return;
+
+  if (is_simulator()) {
+    GeoPoint sim_location;
+    if (Profile::map.GetGeoPoint(ProfileKeys::SimulatorLocation,
+                                 sim_location) &&
+        sim_location.IsValid()) {
+      double alt = 0;
+      Profile::Get(ProfileKeys::SimulatorAltitude, alt);
+      LogString("Start at last simulator location");
+      backend_components->device_blackboard->SetStartupLocation(sim_location,
+                                                              alt);
+      return;
+    }
+  }
 
   const auto &poi = GetComputerSettings().poi;
   if (poi.home_location_available) {

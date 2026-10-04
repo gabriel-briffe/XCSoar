@@ -4,6 +4,9 @@
 #include "Blackboard/DeviceBlackboard.hpp"
 #include "Protection.hpp"
 #include "Simulator.hpp"
+#include "Profile/Profile.hpp"
+#include "Profile/Current.hpp"
+#include "Profile/Map.hpp"
 #include "Radio/RadioFrequency.hpp"
 
 #include <algorithm>
@@ -97,6 +100,14 @@ DeviceBlackboard::SetSimulatorLocation(const GeoPoint &location) noexcept
   simulator.Touch(basic);
   basic.track = location.Bearing(basic.location).Reciprocal();
   basic.location = location;
+
+  /* Persist jumps (Sim: Jump to, Ctrl+click, pan) for the next
+     Simulator relaunch; altitude is whatever the sim currently has. */
+  if (location.IsValid()) {
+    Profile::map.SetGeoPoint(ProfileKeys::SimulatorLocation, location);
+    if (basic.gps_altitude_available)
+      Profile::Set(ProfileKeys::SimulatorAltitude, basic.gps_altitude);
+  }
 
   ScheduleMerge();
 }

@@ -1,4 +1,7 @@
 Version 7.46 - not yet released
+* simulator
+  - remember the last glider position and altitude between
+    Simulator relaunches, including after Sim: Jump to
 * android
   - on the InfoBox arrange page and the InfoBox Sets editor, lay
     the cards, the text and the buttons below the area that opens

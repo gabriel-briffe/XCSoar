@@ -12,6 +12,7 @@
 #include "ui/canvas/Features.hpp" // for SOFTWARE_ROTATE_DISPLAY
 #include "Profile/Profile.hpp"
 #include "Profile/Current.hpp"
+#include "Profile/Map.hpp"
 #include "Profile/Settings.hpp"
 #include "Asset.hpp"
 #include "Hardware/CPU.hpp"
@@ -835,6 +836,17 @@ SaveUserState() noexcept
 {
   SaveFlarmColors();
   SaveFlarmMessaging();
+
+  if (is_simulator()) {
+    const auto &basic = CommonInterface::Basic();
+    if (basic.location_available && basic.location.IsValid()) {
+      Profile::map.SetGeoPoint(ProfileKeys::SimulatorLocation,
+                               basic.location);
+      if (basic.gps_altitude_available)
+        Profile::Set(ProfileKeys::SimulatorAltitude, basic.gps_altitude);
+    }
+  }
+
   Profile::Save();
 }
 
