@@ -75,6 +75,25 @@ struct GlideConeSettings {
   unsigned options_opacity;
 
   /**
+   * When to draw the pink worst-case relay path (terrain-limited).
+   */
+  enum class WorstCaseRoute : uint8_t {
+    /** Only when the green highest-arrival path is not drawn. */
+    IF_BELOW,
+    /** Always draw the worst-case path. */
+    ALWAYS,
+    COUNT
+  };
+
+  WorstCaseRoute worst_case_route;
+
+  /**
+   * Draw the green options path to the airport with the highest
+   * descending arrival.
+   */
+  bool highest_arrival_route;
+
+  /**
    * When true (default), draw the relay path and GlideCone altitude
    * text at the pan crosshair while the map is panning.
    */

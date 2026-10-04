@@ -58,8 +58,9 @@ struct GlideConeField {
   std::vector<ContourLine> contour_lines;
 
   /**
-   * Reused cycle-detection stamps for Trace / RequiredAltitude.
-   * Epoch bump avoids clearing the whole grid each call.
+   * Reused cycle-detection stamps for Trace /
+   * RidgeSoaringProofGlideConeAltitude.  Epoch bump avoids clearing
+   * the whole grid each call.
    */
   mutable std::vector<std::uint32_t> visit_stamp;
   mutable std::uint32_t visit_epoch = 0;
@@ -120,16 +121,30 @@ struct GlideConeField {
   bool IsDownhillGroundSegment(int from_x, int from_y,
                                int to_x, int to_y) const noexcept;
 
+  /** True when grid cell (@p x,@p y) is a ground (terrain-hit) cell. */
+  [[gnu::pure]]
+  bool IsGroundAt(int x, int y) const noexcept;
+
   /**
-   * Required arrival altitude [m MSL] at @p from for the InfoBox.
-   *
-   * Air cells use the stored required altitude.  On a ground cell the
-   * stored value is terrain, so the relay path is walked back to the
-   * first air cell and extra_alt = Euclidean cell distance / L/D is
-   * added.  If the path is ground all the way to the seed, the result
-   * is seed arrival altitude plus remaining distance / L/D.
+   * Stored field altitude [m MSL] at @p from: required height on air
+   * cells, terrain on ground cells.  Empty if outside / unreachable.
+   * Used for pan GlideCone label and critical-path discs.
    */
-  std::optional<double> RequiredAltitude(GeoPoint from) const noexcept;
+  std::optional<double> StoredAltitude(GeoPoint from) const noexcept;
+
+  /**
+   * InfoBox GlideCone altitude [m MSL] at @p from.
+   *
+   * Air cells: stored field altitude.  Ground cells store terrain, so
+   * this walks origin toward the seed to the first air cell and adds
+   * distance / L/D (or seed arrival if the path is ground all the way).
+   * That avoids a large negative margin on the ridge while the stored
+   * terrain height would show a huge positive margin once clear of
+   * ground clearance — a ridge-soaring display trick, not the pan
+   * label or critical-path red discs.
+   */
+  std::optional<double>
+  RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept;
 
   /**
    * Total Euclidean ground distance [m] along the relay path from

@@ -59,11 +59,20 @@ struct MapLook {
   /** White border under the glide cone relay path */
   Pen glide_cone_border_pen;
 
+  /** Pen for the options path that ends at an airport seed */
+  Pen glide_cone_options_pen;
+
   /** Black dashed pen for downhill-ground path segments */
   Pen glide_cone_ground_pen;
 
   /** White dashed border under downhill-ground path segments */
   Pen glide_cone_ground_border_pen;
+
+  /** Pen for below-cone path prefix up to the first critical segment */
+  Pen glide_cone_critical_pen;
+
+  /** White border under the below-cone critical path prefix */
+  Pen glide_cone_critical_border_pen;
 
   /** Pen for the glide cone altitude contour lines */
   Pen glide_cone_contour_pen;

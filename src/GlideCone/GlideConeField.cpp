@@ -237,8 +237,34 @@ GlideConeField::IsDownhillGroundSegment(int from_x, int from_y,
   return elevation[to_i] < elevation[from_i];
 }
 
+bool
+GlideConeField::IsGroundAt(int x, int y) const noexcept
+{
+  if (!IsValid() || !InGrid(result, x, y))
+    return false;
+  return IsGroundCell(result, std::size_t(y) * result.width + std::size_t(x));
+}
+
 std::optional<double>
-GlideConeField::RequiredAltitude(GeoPoint from) const noexcept
+GlideConeField::StoredAltitude(GeoPoint from) const noexcept
+{
+  if (!IsValid())
+    return std::nullopt;
+
+  int x, y;
+  if (!GeoToCell(from, x, y))
+    return std::nullopt;
+
+  const std::size_t index =
+    std::size_t(y) * result.width + std::size_t(x);
+  if (result.altitudes[index] >= max_alt)
+    return std::nullopt;
+
+  return double(result.altitudes[index]);
+}
+
+std::optional<double>
+GlideConeField::RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept
 {
   if (!IsValid() || glide_ratio <= 0)
     return std::nullopt;

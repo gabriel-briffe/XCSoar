@@ -137,6 +137,9 @@ Profile::Load(const ProfileMap &map, GlideConeSettings &settings)
   map.GetEnum(ProfileKeys::GlideConeOptionsMode, settings.options_mode);
   map.Get(ProfileKeys::GlideConeOptionsRoutine, settings.options_routine_s);
   map.Get(ProfileKeys::GlideConeOptionsOpacity, settings.options_opacity);
+  map.GetEnum(ProfileKeys::GlideConeWorstCaseRoute, settings.worst_case_route);
+  map.Get(ProfileKeys::GlideConeHighestArrivalRoute,
+          settings.highest_arrival_route);
   if (settings.options_routine_s < 1)
     settings.options_routine_s = 1;
   else if (settings.options_routine_s > 60)

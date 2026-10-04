@@ -15,7 +15,8 @@ GlideConeStatus::Set(const Snapshot &snapshot) noexcept
   const std::lock_guard lock{mutex};
   if (current.valid == snapshot.valid &&
       (!snapshot.valid ||
-       (current.required_altitude == snapshot.required_altitude &&
+       (current.ridge_soaring_proof_altitude ==
+          snapshot.ridge_soaring_proof_altitude &&
         current.path_distance == snapshot.path_distance &&
         current.destination_waypoint_id ==
           snapshot.destination_waypoint_id)))

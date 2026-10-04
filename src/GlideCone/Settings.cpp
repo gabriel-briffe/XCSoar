@@ -17,6 +17,8 @@ GlideConeSettings::SetDefaults() noexcept
   options_mode = OptionsMode::OFF;
   options_routine_s = 10;
   options_opacity = 50;
+  worst_case_route = WorstCaseRoute::IF_BELOW;
+  highest_arrival_route = true;
   pan_mode_path = true;
   /* ~30 km on the map scale bar at the usual 8× GetMapScale factor. */
   contours_min_scale = 3750;

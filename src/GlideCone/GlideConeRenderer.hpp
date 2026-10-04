@@ -66,12 +66,28 @@ public:
             GeoPoint pan_probe = GeoPoint::Invalid()) noexcept;
 
   /**
-   * Required arrival altitude [m MSL] at @p location when the field is
-   * valid and the cone is enabled; nullopt if unreachable / inactive.
+   * Stored field altitude [m MSL] at @p location (pan GlideCone label);
+   * nullopt if unreachable / inactive.
    */
   [[gnu::pure]]
   std::optional<double>
-  QueryRequiredAltitude(GeoPoint location) const noexcept;
+  QueryStoredAltitude(GeoPoint location) const noexcept;
+
+  /**
+   * Ridge-soaring-proof GlideCone altitude [m MSL] at @p location
+   * (InfoBox); nullopt if unreachable / inactive.
+   */
+  [[gnu::pure]]
+  std::optional<double>
+  QueryRidgeSoaringProofGlideConeAltitude(GeoPoint location) const noexcept;
+
+  /**
+   * Optional-area descending arrival [m MSL] at @p location when that
+   * cell is in the green patch; nullopt otherwise.
+   */
+  [[gnu::pure]]
+  std::optional<double>
+  QueryOptionsAltitude(GeoPoint location) const noexcept;
 
   /**
    * True while CPU grid build, contour build, or GPU propagate is in

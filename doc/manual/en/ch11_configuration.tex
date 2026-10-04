@@ -564,6 +564,41 @@ This page allows glide computer algorithms to be configured.
 
 
 %%%%%%%%%%%%%%%%%%
+\section{Glide Computer / Glide Cone}\label{sec:glide-cone}
+
+This page configures the terrain-aware glide cone (GPU OpenGL~ES~3.1
+compute).  It appears only on devices that support that feature.
+
+\begin{description}
+\item[Glide cone]  Off, Single (Goto airport), or Combined (landables in a
+  moving window around the aircraft).
+\item[Glide ratio]  Fixed L/D used for cone propagation.
+\item[Max.\ altitude]  Maximum working altitude (m~MSL); larger values enlarge
+  the reachable area.
+\item[Cell size]  Target size of one compute cell (m).
+\item[Iteration cap]  Upper bound on GPU propagation iterations.
+\item[Options routine]  How often the optional area is recomputed in Routine
+  mode.
+\item[Options opacity]  Opacity of the optional area (20--100\,\%).
+\item[Contours]  Draw 100~m altitude contour lines of the reachable area.
+\item[Contours min scale]  Only show contours and labels when the map scale
+  bar is at most this distance.
+\item[Label distance]  Minimum screen distance between labels of the same
+  altitude, as a percentage of the shorter map side.
+\item[Pan mode path]  Draw the glide path and GlideCone altitude at the pan
+  crosshair while panning the map.
+\item[Worst case route]  When to draw the pink terrain-limited relay path. \\
+  {\bf If below}: Only when the green highest-arrival path is not shown. \\
+  {\bf Always}: Always draw the pink path.  Red discs mark air-to-ground
+  steps that fall below the cone altitude when flying at 80\% of the
+  configured glide ratio (then the budget restarts from that cone
+  altitude).
+\item[Highest arrival route]  Draw the green options path to the airport with
+  the highest descending arrival.
+\end{description}
+
+
+%%%%%%%%%%%%%%%%%%
 \section{Glide Computer / Wind} \label{sec:wind}
 
 Circling wind, ZigZag wind and External wind. They are the same

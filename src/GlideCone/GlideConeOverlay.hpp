@@ -8,6 +8,7 @@
 #include "ui/dim/Size.hpp"
 
 #include <chrono>
+#include <optional>
 #include <vector>
 
 class Canvas;
@@ -79,7 +80,10 @@ public:
   void DrawTraces(Canvas &canvas, const WindowProjection &projection,
                   const GlideConeField &field,
                   GeoPoint aircraft, bool aircraft_valid,
-                  GeoPoint pan_probe, const MapLook &look) const noexcept;
+                  std::optional<double> aircraft_altitude,
+                  GeoPoint pan_probe,
+                  std::optional<double> pan_altitude,
+                  const MapLook &look) const noexcept;
 
   /**
    * Stroke contour lines and manage / draw altitude labels when
@@ -106,7 +110,13 @@ private:
   void DrawLabels(Canvas &canvas, const WindowProjection &projection,
                   const MapLook &look) const noexcept;
 
+  /**
+   * @param pan_path  Pan-crosshair worst-case path: always mark the
+   *                  first air→ground contact (or start from a ground
+   *                  cell with no disc), then use the 80% L/D budget.
+   */
   void DrawTraceFrom(Canvas &canvas, const WindowProjection &projection,
                      const GlideConeField &field, GeoPoint from,
+                     std::optional<double> start_altitude, bool pan_path,
                      const MapLook &look) const noexcept;
 };

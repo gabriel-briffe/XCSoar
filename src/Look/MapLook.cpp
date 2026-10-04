@@ -57,10 +57,17 @@ MapLook::Initialise(const MapSettings &settings,
   glide_cone_border_pen.Create(glide_cone_border, COLOR_WHITE);
   glide_cone_pen.Create(glide_cone_width,
                         HasColors() ? COLOR_GLIDE_CONE : COLOR_BLACK);
+  glide_cone_options_pen.Create(glide_cone_width,
+                                HasColors() ? COLOR_GLIDE_CONE_OPTIONS
+                                            : COLOR_BLACK);
 
   glide_cone_ground_border_pen.Create(Pen::DASH3, glide_cone_border,
                                       COLOR_WHITE);
   glide_cone_ground_pen.Create(Pen::DASH3, glide_cone_width, COLOR_BLACK);
+
+  glide_cone_critical_border_pen.Create(glide_cone_border, COLOR_WHITE);
+  glide_cone_critical_pen.Create(glide_cone_width,
+                                 HasColors() ? COLOR_RED : COLOR_BLACK);
 
   glide_cone_contour_pen.Create(Layout::ScalePenWidth(1), COLOR_BLACK);
 

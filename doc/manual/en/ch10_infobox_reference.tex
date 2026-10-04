@@ -400,11 +400,14 @@ configured terrain clearance altitude.}
 
 \ibi{Glide Cone}{GlideCone}{Altitude margin to the Goto airport (or nearest
 landable, in combined mode) from the terrain-aware glide cone computation.
-The main value is the glider's current altitude minus the altitude required
-at the glider position (green when at or above, red when below); the bottom
-line is that required altitude.  The title shows the current glide ratio
-(GC L/D).  Tap to choose the mode and adjust the glide ratio.  Requires
-OpenGL ES 3.1 (Android).}
+The main value is the glider's current altitude minus a ridge-soaring-proof
+altitude at the glider (green when at or above, red when below); the bottom
+line is that same altitude.  On a ground (terrain-hit) cell the stored field
+value is terrain, so the proof walks back to the first air cell on the relay
+path — otherwise the margin would look largely negative on the ridge while
+clearing terrain would show a huge positive versus stored height.  The title
+shows the current glide ratio (GC L/D).  Tap to choose the mode and adjust
+the glide ratio.  Requires OpenGL ES 3.1 (Android).}
 \ibi{Glide Cone Distance}{GC Dist}{Euclidean ground distance along the
 terrain-aware glide cone relay path from the aircraft to the Goto airport
 (or nearest landable, in combined mode).  Requires OpenGL ES 3.1 (Android).}

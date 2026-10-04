@@ -189,12 +189,22 @@ GlueMapWindow::DrawPanInfo(Canvas &canvas) const noexcept
 
   if (GetComputerSettings().glide_cone.IsEnabled() &&
       GetComputerSettings().glide_cone.pan_mode_path) {
-    if (const auto required =
-          glide_cone_renderer.QueryRequiredAltitude(location)) {
+    if (const auto stored =
+          glide_cone_renderer.QueryStoredAltitude(location)) {
       StaticString<64> glide_cone_long;
       glide_cone_long.Format("%s: %s", "GlideCone",
-                             FormatUserAltitude(*required).c_str());
+                             FormatUserAltitude(*stored).c_str());
       TextInBox(canvas, glide_cone_long, p, mode,
+                render_projection.GetScreenSize());
+      p.y += height;
+    }
+
+    if (const auto options =
+          glide_cone_renderer.QueryOptionsAltitude(location)) {
+      StaticString<64> options_long;
+      options_long.Format("%s: %s", "Options",
+                          FormatUserAltitude(*options).c_str());
+      TextInBox(canvas, options_long, p, mode,
                 render_projection.GetScreenSize());
       p.y += height;
     }

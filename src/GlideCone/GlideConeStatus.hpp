@@ -11,11 +11,14 @@
 namespace GlideConeStatus {
 
 struct Snapshot {
-  /** Whether a valid required altitude / path is available. */
+  /** Whether a valid ridge-soaring-proof altitude / path is available. */
   bool valid = false;
 
-  /** Required arrival altitude at the aircraft position [m MSL]. */
-  double required_altitude = 0;
+  /**
+   * Ridge-soaring-proof GlideCone altitude at the aircraft [m MSL]
+   * (InfoBox margin); not the raw stored field altitude on ground.
+   */
+  double ridge_soaring_proof_altitude = 0;
 
   /**
    * Euclidean ground distance [m] along the relay path from the

@@ -15,6 +15,7 @@
 #include "ui/canvas/Canvas.hpp"
 
 #include <algorithm>
+#include <optional>
 
 void
 GlideConeRenderer::SetTarget(GeoPoint seed, double elevation) noexcept
@@ -66,11 +67,26 @@ GlideConeRenderer::Draw(Canvas &canvas, const WindowProjection &projection,
 }
 
 std::optional<double>
-GlideConeRenderer::QueryRequiredAltitude(GeoPoint location) const noexcept
+GlideConeRenderer::QueryStoredAltitude(GeoPoint location) const noexcept
 {
   if (!location.IsValid() || !field.IsValid())
     return std::nullopt;
-  return field.RequiredAltitude(location);
+  return field.StoredAltitude(location);
+}
+
+std::optional<double>
+GlideConeRenderer::QueryRidgeSoaringProofGlideConeAltitude(
+  GeoPoint location) const noexcept
+{
+  if (!location.IsValid() || !field.IsValid())
+    return std::nullopt;
+  return field.RidgeSoaringProofGlideConeAltitude(location);
+}
+
+std::optional<double>
+GlideConeRenderer::QueryOptionsAltitude(GeoPoint location) const noexcept
+{
+  return GlideConeOptions::QueryArrivalAltitude(location);
 }
 
 void
@@ -89,12 +105,13 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   }
 
   if (aircraft_valid) {
-    const auto required = field.RequiredAltitude(aircraft);
-    if (required) {
+    const auto proof =
+      field.RidgeSoaringProofGlideConeAltitude(aircraft);
+    if (proof) {
       const auto path_distance = field.PathDistance(aircraft);
       const unsigned destination_id =
         field.PathDestinationWaypointId(aircraft);
-      GlideConeStatus::Set({true, *required,
+      GlideConeStatus::Set({true, *proof,
                             path_distance.value_or(0), destination_id});
     } else {
       GlideConeStatus::SetInvalid();
@@ -115,14 +132,45 @@ GlideConeRenderer::DrawField(Canvas &canvas,
     jobs.ClearContours(field, overlay);
   }
 
+  const MoreData &basic = CommonInterface::Basic();
   if (aircraft_valid) {
     int gi = -1, gj = -1;
-    const MoreData &basic = CommonInterface::Basic();
     if (field.GeoToCell(aircraft, gi, gj) && basic.NavAltitudeAvailable())
-      GlideConeOptions::Update(field, basic.nav_altitude, gi, gj, gc);
+      GlideConeOptions::Update(field, basic.nav_altitude, aircraft,
+                               gi, gj, gc);
   }
   GlideConeOptions::Draw(canvas, projection, gc);
 
-  overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
-                     pan_probe, look);
+  std::optional<double> aircraft_altitude;
+  if (aircraft_valid && basic.NavAltitudeAvailable())
+    aircraft_altitude = basic.nav_altitude;
+  std::optional<double> pan_altitude =
+    pan_probe.IsValid() ? GlideConeOptions::QueryArrivalAltitude(pan_probe)
+                        : std::nullopt;
+
+  const bool draw_highest = gc.highest_arrival_route;
+  bool highest_drawn = false;
+
+  /* Worst-case path under the green path when both are on. */
+  const bool draw_worst =
+    gc.worst_case_route == GlideConeSettings::WorstCaseRoute::ALWAYS ||
+    !draw_highest;
+  if (draw_worst)
+    overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
+                       aircraft_altitude, pan_probe, pan_altitude, look);
+
+  if (draw_highest)
+    highest_drawn =
+      GlideConeOptions::DrawBestAirportPath(canvas, projection, look);
+
+  /* IF_BELOW: if the green path was requested but not available, fall
+     back to the pink path (unless ALWAYS already drew it). */
+  if (!draw_worst && !highest_drawn)
+    overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
+                       aircraft_altitude, pan_probe, pan_altitude, look);
+
+  /* Pan only: pink aircraft → option cell, green cell → airport. */
+  if (pan_probe.IsValid() && gc.pan_mode_path)
+    GlideConeOptions::DrawPanPaths(canvas, projection, pan_probe,
+                                   field, look);
 }

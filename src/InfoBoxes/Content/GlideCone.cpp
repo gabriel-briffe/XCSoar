@@ -23,13 +23,13 @@
 
 /*
  * Title: "GC L/D <ratio>".  Main value: altitude margin (glider altitude
- * minus the altitude required by the glide cone computation to reach the
- * Goto airport / nearest landable); green when >=0, red when below.
- * Comment: the required altitude at the aircraft position.  On a ground
- * cell this is reconstructed from the first air cell on the relay path
- * plus distance / L/D (or seed arrival if the path is ground all the
- * way).  While a new cone is computed the last required altitude is
- * kept (the map path likewise).
+ * minus RidgeSoaringProofGlideConeAltitude); green when >=0, red when
+ * below.  Comment: that same proof altitude.  On a ground cell the
+ * stored field value is terrain, so the proof walks to the first air
+ * cell on the relay path plus distance / L/D — so the InfoBox does not
+ * show a large negative margin on the ridge (clear of terrain you would
+ * see a huge positive vs stored height).  While a new cone is computed
+ * the last proof altitude is kept (the map path likewise).
  *
  * The delta sign convention and green/red colouring follow the original
  * gpu-MC glide cone code.
@@ -113,13 +113,13 @@ InfoBoxContentGlideCone::Update(InfoBoxData &data) noexcept
     return;
   }
 
-  const double required = status.required_altitude;
-  const double delta = basic.nav_altitude - required;
+  const double proof = status.ridge_soaring_proof_altitude;
+  const double delta = basic.nav_altitude - proof;
 
   data.SetValueFromArrival(delta);
-  data.SetComment(FormatUserAltitude(required).c_str());
+  data.SetComment(FormatUserAltitude(proof).c_str());
 
-  // green when at/above required altitude, red when below
+  // green when at/above proof altitude, red when below
   data.SetValueColor(delta >= 0 ? 3 : 1);
 }
 

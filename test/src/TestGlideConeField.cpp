@@ -66,14 +66,17 @@ main()
   ok1(air.GeoToCell(CellCentre(air, 4, 0), gx, gy));
   ok1(gx == 4 && gy == 0);
 
-  const auto air_req = air.RequiredAltitude(CellCentre(air, 1, 0));
+  const auto air_req =
+    air.RidgeSoaringProofGlideConeAltitude(CellCentre(air, 1, 0));
   ok1(air_req && equals(*air_req, 120));
 
   /* 3 hops of 400 m / L/D 20 = 60 m extra on the first air cell */
-  const auto gnd_req = air.RequiredAltitude(CellCentre(air, 4, 0));
+  const auto gnd_req =
+    air.RidgeSoaringProofGlideConeAltitude(CellCentre(air, 4, 0));
   ok1(gnd_req && equals(*gnd_req, 180));
 
-  const auto near_req = air.RequiredAltitude(CellCentre(air, 2, 0));
+  const auto near_req =
+    air.RidgeSoaringProofGlideConeAltitude(CellCentre(air, 2, 0));
   ok1(near_req && equals(*near_req, 140));
 
   const auto path = air.Trace(CellCentre(air, 4, 0));
@@ -93,14 +96,15 @@ main()
     all_gnd.elevation[i] = 400;
   }
   /* 4 hops of 400 m / 20 = 80 m plus seed arrival 80 */
-  const auto seed_req = all_gnd.RequiredAltitude(CellCentre(all_gnd, 4, 0));
+  const auto seed_req =
+    all_gnd.RidgeSoaringProofGlideConeAltitude(CellCentre(all_gnd, 4, 0));
   ok1(seed_req && equals(*seed_req, 160));
 
   air.result.altitudes[4] = air.max_alt;
-  ok1(!air.RequiredAltitude(CellCentre(air, 4, 0)));
+  ok1(!air.RidgeSoaringProofGlideConeAltitude(CellCentre(air, 4, 0)));
 
   GeoPoint outside(Angle::Degrees(90), Angle::Degrees(90));
-  ok1(!air.RequiredAltitude(outside));
+  ok1(!air.RidgeSoaringProofGlideConeAltitude(outside));
 
   return exit_status();
 }

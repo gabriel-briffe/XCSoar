@@ -119,6 +119,8 @@ Version 7.46 - not yet released
   - document DEM 2 / DEM 3 scale thresholds on Map Display → Terrain
   - document the Route drawn setting on Glide Computer → Route
   - document waypoint Label position on Map Display → Waypoints
+  - document Glide Computer → Glide Cone (worst-case and highest-
+    arrival routes) in the English manual
 * airspace
   - keep airspace altitude labels readable when they would overlap #771
   - fill airspaces with a transparent colour; hatch patterns and the
@@ -133,6 +135,10 @@ Version 7.46 - not yet released
     binary mode if the logger dropped it while the flight list was
     open #3049
 * glide computer
+  - add Glide Cone settings for the pink worst-case route (If below /
+    Always) and the green highest-arrival route (on/off); red discs mark
+    air-to-ground steps that go below the cone altitude at 80% of the
+    configured glide ratio
   - fix best-glide speed and speed-to-fly at altitude when MacCready
     is set, so density scaling no longer inflates MacCready #2881
   - fix circling wind staying blank on paragliders and other aircraft

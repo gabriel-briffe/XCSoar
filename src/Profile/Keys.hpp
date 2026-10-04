@@ -55,6 +55,10 @@ constexpr std::string_view AutoWind = "AutoWind";
 constexpr std::string_view ExternalWind = "ExternalWind";
 constexpr std::string_view HomeWaypoint = "HomeWaypoint";
 constexpr std::string_view HomeLocation = "HomeLocation";
+/** Last glider position in Simulator mode [lon lat degrees]. */
+constexpr std::string_view SimulatorLocation = "SimulatorLocation";
+/** Last GPS altitude in Simulator mode [m MSL]. */
+constexpr std::string_view SimulatorAltitude = "SimulatorAltitude";
 constexpr std::string_view LiftUnitsValue = "LiftUnit";
 constexpr std::string_view PressureUnitsValue = "Pressure";
 constexpr std::string_view WingLoadingUnitValue = "WingLoadingUnit";
@@ -406,4 +410,7 @@ constexpr std::string_view GlideConeCellSize = "GlideConeCellSize";
 constexpr std::string_view GlideConeOptionsMode = "GlideConeOptionsMode";
 constexpr std::string_view GlideConeOptionsRoutine = "GlideConeOptionsRoutine";
 constexpr std::string_view GlideConeOptionsOpacity = "GlideConeOptionsOpacity";
+constexpr std::string_view GlideConeWorstCaseRoute = "GlideConeWorstCaseRoute";
+constexpr std::string_view GlideConeHighestArrivalRoute =
+  "GlideConeHighestArrivalRoute";
 }

@@ -28,6 +28,15 @@ static constexpr StaticEnumChoice glide_cone_mode_list[] = {
   nullptr
 };
 
+static constexpr StaticEnumChoice worst_case_route_list[] = {
+  { GlideConeSettings::WorstCaseRoute::IF_BELOW, N_("If below"),
+    N_("Draw the pink terrain-limited path only when the green highest "
+       "arrival path is not shown.") },
+  { GlideConeSettings::WorstCaseRoute::ALWAYS, N_("Always"),
+    N_("Always draw the pink terrain-limited path.") },
+  nullptr
+};
+
 /**
  * Convert #GetMapScale() metres ↔ map-ruler metres (screen width).
  * factor = 8 × width / short_edge (see WindowProjection).
@@ -116,6 +125,8 @@ class GlideConeConfigPanel final : public ConfigListPanel {
   unsigned contours_min_scale_user;
   int label_spacing;
   bool pan_mode_path;
+  GlideConeSettings::WorstCaseRoute worst_case_route;
+  bool highest_arrival_route;
   int options_routine_s;
   int options_opacity;
   double map_scale_to_ruler;
@@ -235,6 +246,8 @@ GlideConeConfigPanel::LoadSettings() noexcept
   contours_min_scale_user = SnapThresholdChoice(ruler_user, list_max);
   label_spacing = int(glide_cone.label_spacing);
   pan_mode_path = glide_cone.pan_mode_path;
+  worst_case_route = glide_cone.worst_case_route;
+  highest_arrival_route = glide_cone.highest_arrival_route;
   options_routine_s = int(glide_cone.options_routine_s);
   options_opacity = int(glide_cone.options_opacity);
 }
@@ -328,6 +341,18 @@ GlideConeConfigPanel::Fill() noexcept
                 _("Draw the glide path and GlideCone altitude at the pan "
                   "crosshair while panning the map."),
                 pan_mode_path);
+
+  AddEnumItem(_("Worst case route"),
+              _("When to draw the pink terrain-limited relay path.  Red "
+                "marks path segments that are steeper than 80% of the "
+                "configured glide ratio when already below the cone, "
+                "and later critical contacts under that safety L/D."),
+              worst_case_route_list, worst_case_route);
+
+  AddToggleItem(_("Highest arrival route"),
+                _("Draw the green options path to the airport with the "
+                  "highest descending arrival."),
+                highest_arrival_route);
 }
 
 bool
@@ -373,6 +398,12 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
 
   changed |= Profile::Update(ProfileKeys::GlideConePanModePath,
                              glide_cone.pan_mode_path, pan_mode_path);
+
+  changed |= Profile::Update(ProfileKeys::GlideConeWorstCaseRoute,
+                             glide_cone.worst_case_route, worst_case_route);
+  changed |= Profile::Update(ProfileKeys::GlideConeHighestArrivalRoute,
+                             glide_cone.highest_arrival_route,
+                             highest_arrival_route);
 
   const unsigned routine_s = unsigned(std::clamp(options_routine_s, 1, 60));
   changed |= Profile::Update(ProfileKeys::GlideConeOptionsRoutine,

@@ -158,6 +158,9 @@ static constexpr uint8_t ALPHA_OVERLAY = 0xA0;
 /** Glide cone relay path overlay (pink; white border drawn under). */
 static constexpr Color COLOR_GLIDE_CONE = Color(0xff, 0x40, 0xb0);
 
+/** Options path to an airport seed (highest arrival); white border under. */
+static constexpr Color COLOR_GLIDE_CONE_OPTIONS = COLOR_LIGHT_GREEN;
+
 /** Full-screen Config menu tiles (Garmin-style). */
 static constexpr Color COLOR_CONFIG_MENU_TILE =
   Color(0x2a, 0x30, 0x38);
