@@ -156,6 +156,13 @@ struct MapSettings {
 
   /** Indicate extra distance reqd. if deviating from target heading */
   bool detour_cost_markers_enabled;
+
+  /**
+   * Draw the planned obstacle-avoiding route on the map.  The direct
+   * task bearing and terrain-warning marker stay independent of this.
+   */
+  bool enable_route_draw;
+
   /** Render track bearing on map */
   DisplayGroundTrack display_ground_track;
 

@@ -34,6 +34,13 @@ MapWindow::DrawTask(Canvas &canvas) noexcept
     }
   }
 
+  /* Route drawn off: hide the magenta planned route and the solid
+     magenta bearing; keep the dashed task leg and terrain warning. */
+  if (!GetMapSettings().enable_route_draw) {
+    draw_bearing = false;
+    draw_route = false;
+  }
+
   ProtectedTaskManager::Lease task_manager(*task);
   const AbstractTask *task = task_manager->GetActiveTask();
   if (task && !IsError(task->CheckTask())) {

@@ -6,6 +6,7 @@
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
+#include "MapSettings.hpp"
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 
@@ -60,6 +61,7 @@ static constexpr StaticEnumChoice final_glide_terrain_list[] = {
  * reach is drawn with.
  */
 class RouteConfigPanel final : public ConfigListPanel {
+  bool enable_route_draw;
   RoutePlannerConfig::Mode route_mode;
   bool allow_climb, use_ceiling;
 
@@ -85,6 +87,7 @@ RouteConfigPanel::LoadSettings() noexcept
   const RoutePlannerConfig &route_planner =
     settings_computer.task.route_planner;
 
+  enable_route_draw = CommonInterface::GetMapSettings().enable_route_draw;
   route_mode = route_planner.mode;
   allow_climb = route_planner.allow_climb;
   use_ceiling = route_planner.use_ceiling;
@@ -98,6 +101,12 @@ void
 RouteConfigPanel::Fill() noexcept
 {
   AddGroup(_("Route"));
+
+  AddToggleItem(_("Route drawn"),
+                _("Draw the planned route that avoids terrain and airspace. "
+                  "The direct bearing to the target and the terrain warning "
+                  "marker are not affected."),
+                enable_route_draw);
 
   AddEnumItem(_("Route mode"), nullptr, route_mode_list, route_mode);
 
@@ -138,6 +147,11 @@ RouteConfigPanel::Save(bool &_changed) noexcept
 
   ComputerSettings &settings_computer = CommonInterface::SetComputerSettings();
   RoutePlannerConfig &route_planner = settings_computer.task.route_planner;
+  MapSettings &settings_map = CommonInterface::SetMapSettings();
+
+  changed |= Profile::Update(ProfileKeys::EnableRouteDraw,
+                             settings_map.enable_route_draw,
+                             enable_route_draw);
 
   changed |= Profile::Update(ProfileKeys::RoutePlannerMode,
                              route_planner.mode, route_mode);

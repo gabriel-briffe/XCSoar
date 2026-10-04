@@ -31,6 +31,7 @@ constexpr std::string_view DisplayText = "DisplayText";
 constexpr std::string_view WaypointArrivalHeightDisplay = "WaypointArrivalHeightDisplay";
 constexpr std::string_view WaypointLabelSelection = "WayPointLabelSelection";
 constexpr std::string_view WaypointLabelStyle = "WayPointLabelStyle";
+constexpr std::string_view WaypointLabelPosition = "WaypointLabelPosition";
 constexpr std::string_view WaypointDisplayNonIcaoAirports =
   "WaypointDisplayNonIcaoAirports";
 constexpr std::string_view WeatherStations = "WeatherStations";
@@ -268,6 +269,7 @@ constexpr std::string_view MapOrientation = "DisplayOrientation";
 constexpr std::string_view ClimbMapScale = "ClimbMapScale";
 constexpr std::string_view CruiseMapScale = "CruiseMapScale";
 
+constexpr std::string_view EnableRouteDraw = "EnableRouteDraw";
 constexpr std::string_view RoutePlannerMode = "RoutePlannerMode";
 constexpr std::string_view RoutePlannerAllowClimb = "RoutePlannerAllowClimb";
 constexpr std::string_view RoutePlannerUseCeiling = "RoutePlannerUseCeiling";

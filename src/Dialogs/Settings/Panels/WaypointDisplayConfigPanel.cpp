@@ -11,6 +11,7 @@
 #include "Profile/Keys.hpp"
 #include "Profile/Profile.hpp"
 #include "Renderer/WaypointRendererSettings.hpp"
+#include "util/Macros.hpp"
 
 static constexpr StaticEnumChoice wp_labels_list[] = {
   { WaypointRendererSettings::DisplayTextType::NAME,
@@ -80,6 +81,26 @@ static constexpr StaticEnumChoice wp_selection_list[] = {
   nullptr
 };
 
+static constexpr StaticEnumChoice wp_label_position_list[] = {
+  { WaypointRendererSettings::LabelPosition::BOTTOM_RIGHT,
+    N_("Bottom right"),
+    N_("Place the label below and to the right of the waypoint symbol.") },
+  { WaypointRendererSettings::LabelPosition::BOTTOM_LEFT,
+    N_("Bottom left"),
+    N_("Place the label below and to the left of the waypoint symbol.") },
+  { WaypointRendererSettings::LabelPosition::TOP_RIGHT,
+    N_("Top right"),
+    N_("Place the label above and to the right of the waypoint symbol.") },
+  { WaypointRendererSettings::LabelPosition::TOP_LEFT,
+    N_("Top left"),
+    N_("Place the label above and to the left of the waypoint symbol.") },
+  nullptr
+};
+
+static_assert(ARRAY_SIZE(wp_label_position_list) ==
+                unsigned(WaypointRendererSettings::LabelPosition::COUNT) + 1,
+              "Array size must match enum COUNT");
+
 static constexpr StaticEnumChoice wp_style_list[] = {
   { WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE,
     N_("Purple circle"),
@@ -135,6 +156,10 @@ WaypointDisplayConfigPanel::Fill() noexcept
   AddEnumItem(_("Label format"),
               _("Determines how labels are displayed with each waypoint"),
               wp_labels_list, settings.display_text_type);
+
+  AddEnumItem(_("Label position"),
+              _("Where the label is drawn relative to the waypoint symbol."),
+              wp_label_position_list, settings.label_position);
 
   if (IsExpert()) {
     AddEnumItem(_("Arrival height"),
@@ -222,6 +247,10 @@ WaypointDisplayConfigPanel::Save(bool &_changed) noexcept
   changed |= Profile::Update(ProfileKeys::WaypointLabelSelection,
                              current.label_selection,
                              settings.label_selection);
+
+  changed |= Profile::Update(ProfileKeys::WaypointLabelPosition,
+                             current.label_position,
+                             settings.label_position);
 
   changed |= Profile::Update(ProfileKeys::AppIndLandable,
                              current.landable_style, settings.landable_style);

@@ -82,6 +82,9 @@ Version 7.46 - not yet released
   - fix RASP Auto update downloading again on every page switch
     because the file date stayed at the first download #3166
 * map
+  - Config → Route: Route drawn turns the planned obstacle-avoiding
+    route on or off; the direct bearing and terrain warning stay
+  - Map Display → Waypoints: Label position (top/bottom × left/right)
   - terrain overview is max-pooled at 4× and 16×; the map picks one
     level from DEM cells per screen pixel so mid zoom no longer loads
     full-resolution tiles
@@ -105,6 +108,8 @@ Version 7.46 - not yet released
     circling or cruise scale when leaving pan mode
 * documentation
   - document DEM 2 / DEM 3 scale thresholds on Map Display → Terrain
+  - document the Route drawn setting on Glide Computer → Route
+  - document waypoint Label position on Map Display → Waypoints
 * airspace
   - keep airspace altitude labels readable when they would overlap #771
   - fill airspaces with a transparent colour; hatch patterns and the

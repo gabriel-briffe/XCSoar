@@ -260,6 +260,9 @@ This page provides options for how waypoints are displayed on the map.
   {\bf First 5 letters}: The first 5 letters of the waypoint name are displayed. \\
   {\bf None}: No name is displayed with the waypoint.
 
+\item[Label position]  \label{conf:labelposition} Where the label sits relative
+  to the waypoint symbol: bottom right, bottom left, top right, or top left.
+
 \item[Arrival height*] \label{conf:arrivalheight} This setting allows arrival height
 and/or required glide ratio to also be shown in labels for landable waypoints. See Section~\ref{sec:waypoint-schemes} for more information.\\
   {\bf None}: Neither arrival height nor required glide ratio is displayed. \\
@@ -584,6 +587,9 @@ This page allows control over glide reach calculations and route
 optimisations.
 
 \begin{description}
+\item[Route drawn]  \label{conf:routedrawn} Draws the planned route that
+  avoids terrain and airspace on the map.  Off leaves the direct bearing
+  to the target and the terrain warning marker unchanged.
 \item[Route mode]  \label{conf:routemode} This controls which types
   of obstacles are used in route planning. Please have a look at Section~\ref{sec:route} 
   for a detailed description.

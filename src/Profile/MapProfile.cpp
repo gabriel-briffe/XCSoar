@@ -49,6 +49,7 @@ Profile::Load(const ProfileMap &map, MapSettings &settings)
   map.GetEnum(ProfileKeys::TrafficSymbolStyle, settings.traffic_symbol_style);
 
   map.Get(ProfileKeys::DetourCostMarker, settings.detour_cost_markers_enabled);
+  map.Get(ProfileKeys::EnableRouteDraw, settings.enable_route_draw);
   map.GetEnum(ProfileKeys::DisplayTrackBearing, settings.display_ground_track);
   map.Get(ProfileKeys::AutoZoom, settings.auto_zoom_enabled);
 

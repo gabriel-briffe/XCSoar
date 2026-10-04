@@ -41,6 +41,15 @@ struct WaypointRendererSettings {
     TASK_AND_AIRFIELD,
   } label_selection;
 
+  /** Where the label sits relative to the waypoint symbol. */
+  enum class LabelPosition : uint8_t {
+    BOTTOM_RIGHT,
+    BOTTOM_LEFT,
+    TOP_RIGHT,
+    TOP_LEFT,
+    COUNT,
+  } label_position;
+
   /** What type of waypoint labels to render */
   LabelShape landable_render_mode;
 
@@ -101,6 +110,7 @@ struct WaypointRendererSettings {
     display_text_type = DisplayTextType::SHORT_NAME;
     arrival_height_display = ArrivalHeightDisplay::GLIDE;
     label_selection = LabelSelection::ALL;
+    label_position = LabelPosition::BOTTOM_RIGHT;
     landable_render_mode = LabelShape::ROUNDED_BLACK;
 
     landable_style = LandableStyle::PURPLE_CIRCLE;

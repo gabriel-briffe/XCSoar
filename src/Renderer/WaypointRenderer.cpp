@@ -33,7 +33,7 @@
 #include "Look/WaypointLook.hpp"
 
 #include <cassert>
-#include <stdio.h>
+#include <cstdio>
 
 /**
  * Metadata for a Waypoint that is about to be drawn.
@@ -86,6 +86,44 @@ struct VisibleWaypoint {
              in_task);
   }
 };
+
+using LabelPosition = WaypointRendererSettings::LabelPosition;
+
+static void
+ApplyLabelPosition(PixelPoint &sc, TextInBoxMode &mode,
+                   LabelPosition position, int pad) noexcept
+{
+  switch (position) {
+  case LabelPosition::TOP_LEFT:
+    mode.align = TextInBoxMode::Alignment::RIGHT;
+    mode.vertical_position = TextInBoxMode::VerticalPosition::ABOVE;
+    sc.x -= pad;
+    sc.y -= pad;
+    break;
+
+  case LabelPosition::TOP_RIGHT:
+    mode.align = TextInBoxMode::Alignment::LEFT;
+    mode.vertical_position = TextInBoxMode::VerticalPosition::ABOVE;
+    sc.x += pad;
+    sc.y -= pad;
+    break;
+
+  case LabelPosition::BOTTOM_LEFT:
+    mode.align = TextInBoxMode::Alignment::RIGHT;
+    mode.vertical_position = TextInBoxMode::VerticalPosition::BELOW;
+    sc.x -= pad;
+    sc.y += pad;
+    break;
+
+  case LabelPosition::BOTTOM_RIGHT:
+  case LabelPosition::COUNT:
+    mode.align = TextInBoxMode::Alignment::LEFT;
+    mode.vertical_position = TextInBoxMode::VerticalPosition::BELOW;
+    sc.x += pad;
+    sc.y += pad;
+    break;
+  }
+}
 
 class WaypointVisitorMap final
   : public TaskPointConstVisitor
@@ -312,15 +350,17 @@ protected:
     FormatLabel(buffer, ARRAY_SIZE(buffer),
                 way_point, vwp.reachable, vwp.reach);
 
-    auto sc = vwp.point;
-    sc.x += 5;
+    /* Keep the gap tight; Layout::Scale(5) was far too large on phone DPI. */
+    int pad = 2;
     if (settings.IsLandableReachDecorated() &&
         ((vwp.IsReachable() &&
           settings.landable_style ==
             WaypointRendererSettings::LandableStyle::PURPLE_CIRCLE) ||
          settings.vector_landable_rendering))
-      // make space for the green circle
-      sc.x += 5;
+      pad += 2;
+
+    auto sc = vwp.point;
+    ApplyLabelPosition(sc, text_mode, settings.label_position, pad);
 
     labels.Add(buffer, sc, text_mode, bold,
                vwp.reachable != WaypointReachability::INVALID ? vwp.reach.direct : INT_MIN,
@@ -331,6 +371,10 @@ protected:
   void AddWaypoint(const WaypointPtr &way_point, bool in_task) noexcept {
     if (waypoints.full())
       return;
+
+    for (const VisibleWaypoint &vwp : waypoints)
+      if (vwp.waypoint->id == way_point->id)
+        return;
 
     const bool watched = way_point->flags.watched;
     if (!in_task && !watched &&

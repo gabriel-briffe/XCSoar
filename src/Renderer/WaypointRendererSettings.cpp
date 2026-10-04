@@ -41,6 +41,10 @@ WaypointRendererSettings::LoadFromProfile() noexcept
   GetEnum(ProfileKeys::WaypointLabelSelection, label_selection);
   GetEnum(ProfileKeys::WaypointArrivalHeightDisplay, arrival_height_display);
   GetEnum(ProfileKeys::WaypointLabelStyle, landable_render_mode);
+  if (LabelPosition position; GetEnum(ProfileKeys::WaypointLabelPosition,
+                                      position) &&
+      unsigned(position) < unsigned(LabelPosition::COUNT))
+    label_position = position;
 
   GetEnum(ProfileKeys::AppIndLandable, landable_style);
   Get(ProfileKeys::AppUseSWLandablesRendering, vector_landable_rendering);

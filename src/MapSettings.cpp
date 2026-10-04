@@ -29,6 +29,7 @@ MapSettings::SetDefaults() noexcept
   terrain.SetDefaults();
   aircraft_symbol = AircraftSymbol::SIMPLE;
   detour_cost_markers_enabled = false;
+  enable_route_draw = true;
   display_ground_track = DisplayGroundTrack::AUTO;
   auto_zoom_enabled = false;
   wind_arrow_style = WindArrowStyle::ARROW_HEAD;
