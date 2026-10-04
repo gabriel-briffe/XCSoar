@@ -5,10 +5,12 @@
 
 #include "Geo/GeoPoint.hpp"
 #include "Math/Angle.hpp"
+#include "ui/dim/Point.hpp"
 #include "ui/dim/Size.hpp"
 
 #include <chrono>
 #include <optional>
+#include <span>
 #include <vector>
 
 class Canvas;
@@ -77,13 +79,22 @@ public:
   /** Called when fresh contour polylines arrive on the field. */
   void OnContoursReady() noexcept;
 
-  void DrawTraces(Canvas &canvas, const WindowProjection &projection,
-                  const GlideConeField &field,
-                  GeoPoint aircraft, bool aircraft_valid,
-                  std::optional<double> aircraft_altitude,
-                  GeoPoint pan_probe,
-                  std::optional<double> pan_altitude,
-                  const MapLook &look) const noexcept;
+  /**
+   * Stroke worst-case relay path(s).  Returns red-disc centres to draw
+   * later (above the green highest-arrival path).
+   */
+  std::vector<PixelPoint>
+  DrawTraces(Canvas &canvas, const WindowProjection &projection,
+             const GlideConeField &field,
+             GeoPoint aircraft, bool aircraft_valid,
+             std::optional<double> aircraft_altitude,
+             GeoPoint pan_probe,
+             std::optional<double> pan_altitude,
+             const MapLook &look) const noexcept;
+
+  /** Draw critical discs collected from #DrawTraces (top-most). */
+  void DrawCriticalDiscs(Canvas &canvas,
+                         std::span<const PixelPoint> discs) const noexcept;
 
   /**
    * Stroke contour lines and manage / draw altitude labels when
@@ -118,5 +129,6 @@ private:
   void DrawTraceFrom(Canvas &canvas, const WindowProjection &projection,
                      const GlideConeField &field, GeoPoint from,
                      std::optional<double> start_altitude, bool pan_path,
-                     const MapLook &look) const noexcept;
+                     const MapLook &look,
+                     std::vector<PixelPoint> &critical) const noexcept;
 };

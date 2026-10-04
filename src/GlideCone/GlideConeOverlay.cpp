@@ -354,7 +354,8 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
                                 GeoPoint from,
                                 std::optional<double> start_altitude,
                                 bool pan_path,
-                                const MapLook &look) const noexcept
+                                const MapLook &look,
+                                std::vector<PixelPoint> &critical) const noexcept
 {
   if (!from.IsValid() || !field.IsValid())
     return;
@@ -395,7 +396,6 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
   };
 
   const double safety_ld = field.glide_ratio * 0.8;
-  std::vector<BulkPixelPoint> critical;
   const auto proof_at_from =
     field.RidgeSoaringProofGlideConeAltitude(from);
   const double start_alt = start_altitude.value_or(-1);
@@ -451,8 +451,10 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
       altitude = *h;
       track_alt = true;
     }
-    if (below_crit_seg > 1 && crit_geo.IsValid())
-      critical.push_back(projection.GeoToScreen(crit_geo));
+    if (below_crit_seg > 1 && crit_geo.IsValid()) {
+      const auto pt = projection.GeoToScreen(crit_geo);
+      critical.emplace_back(pt.x, pt.y);
+    }
     mode = below_crit_seg > 1 ? "below-steep+disc" : "below-steep-glider";
   } else if (pan_path && field.IsGroundAt(cells[0].x, cells[0].y)) {
     if (const auto h = CellStoredAltitude(field, cells[0].x, cells[0].y);
@@ -557,14 +559,16 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
         air_to_ground) {
       if (h_to) {
         if (await_first_contact) {
-          critical.push_back(projection.GeoToScreen(geo_to));
+          const auto pt = projection.GeoToScreen(geo_to);
+          critical.emplace_back(pt.x, pt.y);
           altitude = *h_to;
           track_alt = safety_ld > 0;
           await_first_contact = false;
           disc_here = true;
           disc_why = "pan-first-contact";
         } else if (altitude < *h_to) {
-          critical.push_back(projection.GeoToScreen(geo_to));
+          const auto pt = projection.GeoToScreen(geo_to);
+          critical.emplace_back(pt.x, pt.y);
           altitude = *h_to;
           disc_here = true;
           disc_why = "pretend<path_h";
@@ -639,19 +643,9 @@ GlideConeOverlay::DrawTraceFrom(Canvas &canvas,
     last_c0y = cells[0].y;
     last_log = now;
   }
-
-  if (critical.empty())
-    return;
-
-  const unsigned radius = std::max(3u, unsigned(Layout::Scale(5)));
-  const Brush disc(HasColors() ? COLOR_RED : COLOR_BLACK);
-  canvas.Select(disc);
-  canvas.SelectNullPen();
-  for (const auto &pt : critical)
-    canvas.DrawCircle(pt, radius);
 }
 
-void
+std::vector<PixelPoint>
 GlideConeOverlay::DrawTraces(Canvas &canvas,
                              const WindowProjection &projection,
                              const GlideConeField &field,
@@ -661,15 +655,34 @@ GlideConeOverlay::DrawTraces(Canvas &canvas,
                              std::optional<double> pan_altitude,
                              const MapLook &look) const noexcept
 {
+  std::vector<PixelPoint> critical;
+
   if (aircraft_valid)
     DrawTraceFrom(canvas, projection, field, aircraft, aircraft_altitude,
-                  false, look);
+                  false, look, critical);
 
   if (pan_probe.IsValid() &&
       (!aircraft_valid ||
        pan_probe.DistanceS(aircraft) > GLIDE_CONE_SEED_EPSILON_M))
     DrawTraceFrom(canvas, projection, field, pan_probe, pan_altitude,
-                  true, look);
+                  true, look, critical);
+
+  return critical;
+}
+
+void
+GlideConeOverlay::DrawCriticalDiscs(Canvas &canvas,
+                                    std::span<const PixelPoint> discs) const noexcept
+{
+  if (discs.empty())
+    return;
+
+  const unsigned radius = std::max(3u, unsigned(Layout::Scale(5)));
+  const Brush brush(HasColors() ? COLOR_RED : COLOR_BLACK);
+  canvas.Select(brush);
+  canvas.SelectNullPen();
+  for (const auto &pt : discs)
+    canvas.DrawCircle(pt, radius);
 }
 
 void

@@ -14,8 +14,11 @@
 #include "Renderer/WaypointRendererSettings.hpp"
 #include "ui/canvas/Canvas.hpp"
 
+#include "ui/dim/Point.hpp"
+
 #include <algorithm>
 #include <optional>
+#include <vector>
 
 void
 GlideConeRenderer::SetTarget(GeoPoint seed, double elevation) noexcept
@@ -150,14 +153,17 @@ GlideConeRenderer::DrawField(Canvas &canvas,
 
   const bool draw_highest = gc.highest_arrival_route;
   bool highest_drawn = false;
+  std::vector<PixelPoint> critical_discs;
 
-  /* Worst-case path under the green path when both are on. */
+  /* Worst-case path under the green path when both are on; discs
+     are deferred so green cannot cover them. */
   const bool draw_worst =
     gc.worst_case_route == GlideConeSettings::WorstCaseRoute::ALWAYS ||
     !draw_highest;
   if (draw_worst)
-    overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
-                       aircraft_altitude, pan_probe, pan_altitude, look);
+    critical_discs =
+      overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
+                         aircraft_altitude, pan_probe, pan_altitude, look);
 
   if (draw_highest)
     highest_drawn =
@@ -166,11 +172,14 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   /* IF_BELOW: if the green path was requested but not available, fall
      back to the pink path (unless ALWAYS already drew it). */
   if (!draw_worst && !highest_drawn)
-    overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
-                       aircraft_altitude, pan_probe, pan_altitude, look);
+    critical_discs =
+      overlay.DrawTraces(canvas, projection, field, aircraft, aircraft_valid,
+                         aircraft_altitude, pan_probe, pan_altitude, look);
 
   /* Pan only: pink aircraft → option cell, green cell → airport. */
   if (pan_probe.IsValid() && gc.pan_mode_path)
     GlideConeOptions::DrawPanPaths(canvas, projection, pan_probe,
                                    field, look);
+
+  overlay.DrawCriticalDiscs(canvas, critical_discs);
 }
