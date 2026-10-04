@@ -106,7 +106,7 @@ dlgInfoBoxAccessShowModeless(const int id, const InfoBoxPanel *panels)
     old_type == InfoBoxFactory::e_GlideCone ||
     old_type == InfoBoxFactory::e_GlideConeDist;
   if (glide_cone_box)
-    tab_widget.AddTab(LoadGlideConeOptionsPanel(id), _("Option"));
+    tab_widget.AddTab(LoadGlideConeOptionsPanel(id), _("Options"));
   else
     tab_widget.AddTab(std::make_unique<ActionWidget>(dialog.MakeModalResultCallback(mrOK)),
                       _("Close"));
