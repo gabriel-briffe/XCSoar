@@ -22,7 +22,7 @@ GlueMapWindow::GlueMapWindow(const Look &look) noexcept
    final_glide_bar_renderer(look.final_glide_bar, look.map.task),
    vario_bar_renderer(look.vario_bar),
    gesture_look(look.gesture),
-   map_timer_font(look.info_box.value_font)
+   info_box_look(look.info_box)
 {
   /* Redraw once when a GlideCone worker finishes — not a busy
      Invalidate loop while IsBusy(). */

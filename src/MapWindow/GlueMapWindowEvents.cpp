@@ -236,7 +236,9 @@ GlueMapWindow::OnMouseDown(PixelPoint p) noexcept
   if (MapTimerHitTest(p)) {
     drag_mode = DRAG_MAP_TIMER;
     map_timer_hold_armed = false;
-    map_timer_hold_timer.Schedule(InfoBoxArrange::LONG_PRESS);
+    /* Reset fires at 0.7s while the finger is still down so the pilot
+       can see the zero and release. */
+    map_timer_hold_timer.Schedule(std::chrono::milliseconds{700});
     SetCapture();
     return true;
   }
@@ -385,15 +387,11 @@ GlueMapWindow::OnMouseUp(PixelPoint p) noexcept
 
   case DRAG_MAP_TIMER: {
     map_timer_hold_timer.Cancel();
-    const bool on_target = MapTimerHitTest(p);
-    if (on_target) {
-      if (map_timer_hold_armed)
-        MapTimer::Reset();
-      else
-        MapTimer::ToggleRunning();
-      Invalidate();
-    }
+    /* Long-press already reset on the timer; a short tap toggles. */
+    if (!map_timer_hold_armed && MapTimerHitTest(p))
+      MapTimer::ToggleRunning();
     map_timer_hold_armed = false;
+    Invalidate();
     return true;
   }
 
@@ -732,7 +730,9 @@ GlueMapWindow::OnMapTimerHoldTimer() noexcept
     return;
 
   map_timer_hold_armed = true;
+  MapTimer::Reset();
   PlayHapticFeedback(HapticFeedbackType::LONG_PRESS);
+  Invalidate();
 }
 
 void

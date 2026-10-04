@@ -22,6 +22,7 @@
 
 struct Look;
 struct GestureLook;
+struct InfoBoxLook;
 class TopographyThread;
 class TerrainThread;
 
@@ -253,8 +254,8 @@ private:
   VarioBarRenderer vario_bar_renderer;
   const GestureLook &gesture_look;
 
-  /** Same face as InfoBox time main value line. */
-  const Font &map_timer_font;
+  /** Same face and colours as the InfoBox (navbox) style. */
+  const InfoBoxLook &info_box_look;
 
   UI::Timer map_item_timer{[this]{ OnMapItemTimer(); }};
 
