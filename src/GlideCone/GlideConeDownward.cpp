@@ -32,13 +32,6 @@ constexpr std::uint32_t FLAG_GROUND = 1u;
 constexpr std::uint32_t FLAG_CHANGED = 2u;
 
 /**
- * After the wavefront can possibly have quieted, read the change
- * counter this often (same stride as the upward cone batch).  First
- * check is at half the Manhattan diameter, not a fixed 300.
- */
-constexpr unsigned CHECK_EVERY = 64;
-
-/**
  * Flush the command stream this often without waiting so the driver
  * does not grow an unbounded queue before the first check.
  */
@@ -563,14 +556,50 @@ ReadChangeCount(std::uint32_t &changes) noexcept
   return true;
 }
 
+/**
+ * First convergence check for options: longest no-terrain reach from
+ * the glider in cells = (path to airport + ½·margin·L/D) / cell.
+ * Capped by the old half-grid bound so a huge margin cannot delay the
+ * first check past what we already know is safe.
+ */
+unsigned
+OptionsFirstCheckAt(unsigned width, unsigned height,
+                    double cell_x, double cell_y,
+                    double path_m, double margin_m, double ratio,
+                    unsigned pass_index) noexcept
+{
+  const unsigned half_grid = std::max(width, height) / 2 + 1;
+  const double cell = std::min(cell_x, cell_y);
+  const double half_ld_m =
+    0.5 * std::max(0.0, margin_m) * std::max(ratio, 1.0);
+  const double reach_m = std::max(0.0, path_m) + half_ld_m;
+  unsigned reach_cells = 0;
+  if (cell > 0 && reach_m > 0)
+    reach_cells = unsigned(std::ceil(reach_m / cell));
+
+  unsigned first = reach_cells > 0 ? reach_cells : half_grid;
+  if (first < 1)
+    first = 1;
+  if (first > half_grid)
+    first = half_grid;
+
+  LogFmt("GlideCone options: first_check pass={} path={:.0f}m "
+         "margin={:.0f}m half_ld={:.0f}m reach={:.0f}m cell={:.0f}m "
+         "cells={} half_grid={} using={} step={}",
+         pass_index, path_m, margin_m, half_ld_m, reach_m, cell,
+         reach_cells, half_grid, first, std::max(1u, first / 2));
+  return first;
+}
+
 bool
 RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
         double cell_x, double cell_y, float max_alt,
+        double path_distance_m, double margin_m, unsigned iteration_cap,
         const std::function<bool()> &should_abort,
         std::vector<float> *arrival_out,
         std::vector<int> *origin_out,
         std::vector<std::uint8_t> &mask,
-        unsigned &iterations,
+        unsigned &iterations, bool &hit_cap,
         [[maybe_unused]] unsigned pass_index) noexcept
 {
   const std::size_t count = std::size_t(width) * height;
@@ -664,11 +693,18 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   GLuint next = pool.cell_b;
   const unsigned wg_x = (width + 7) / 8;
   const unsigned wg_y = (height + 7) / 8;
-  const unsigned max_iterations = width + height;
-  /* Same early-skip idea as the upward cone: a wavefront cannot have
-     quieted before covering roughly half the Manhattan diameter. */
-  const unsigned first_check_at = std::max(width, height) / 2 + 1;
+  const unsigned max_iterations = iteration_cap > 0 ? iteration_cap : 2000u;
+  unsigned first_check_at =
+    OptionsFirstCheckAt(width, height, cell_x, cell_y,
+                        path_distance_m, margin_m, pass.ratio,
+                        pass_index);
+  if (first_check_at > max_iterations)
+    first_check_at = max_iterations;
+  /* If still noisy after the first check, wait half that reach again. */
+  const unsigned check_step = std::max(1u, first_check_at / 2);
   iterations = 0;
+  hit_cap = false;
+  bool converged = false;
   unsigned checks = 0;
   unsigned check_wait_ms = 0;
 
@@ -694,7 +730,8 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
     std::swap(cur, next);
 
     const bool check = iterations >= first_check_at &&
-      (iterations - first_check_at) % CHECK_EVERY == 0;
+      ((iterations - first_check_at) % check_step == 0 ||
+       iterations == max_iterations);
     if (!check) {
       if (iterations % FLUSH_EVERY == 0) {
         GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
@@ -750,9 +787,16 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
     GT::AppendSample(chk_list, iterations,
                      GT::Ms(last_read_change.wait_us), changes);
 #endif
-    if (changes == 0)
+    if (changes == 0) {
+      converged = true;
       break;
+    }
   }
+  hit_cap = !converged;
+  if (hit_cap)
+    LogFmt("GlideCone options: gpu pass={} hit iteration cap {} "
+           "iter={}",
+           pass_index, max_iterations, iterations);
   const unsigned loop_ms = ElapsedMs(t_loop);
   GLIDECONE_TIMING_ONLY(const std::uint64_t loop_us = GT::SinceUs(tp_loop);)
   GLIDECONE_GPU_TIMER(gpu_timer.End();)
@@ -835,7 +879,7 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
          "every={} reset={:.3f} sum_enqueue={:.3f} copy={:.3f} "
          "wait={:.3f} (min={:.3f} avg={:.3f} max={:.3f}) map={:.3f} "
          "total={:.3f} (min={:.3f} avg={:.3f} max={:.3f})",
-         pass_index, chk_total.n, first_check_at, CHECK_EVERY,
+         pass_index, chk_total.n, first_check_at, check_step,
          chk_reset.SumMs(), chk_sum.SumMs(), chk_copy.SumMs(),
          chk_wait.SumMs(), chk_wait.MinMs(), chk_wait.AvgMs(),
          chk_wait.MaxMs(), chk_map.SumMs(), chk_total.SumMs(),
@@ -932,10 +976,12 @@ RunGlideConeDownward(const GlideConeDownwardJob &job,
 #endif
 
   unsigned iterations = 0;
+  bool hit_cap = false;
   GLIDECONE_TIMING_ONLY(tp = GT::NowUs(); gap_us[0] = tp - prev_end;)
   if (!RunPass(job.passes[0], job.width, job.height, job.cell_x, job.cell_y,
-               job.max_alt, should_abort, &out.arrival, &out.origin,
-               out.mask, iterations, 0)) {
+               job.max_alt, job.path_distance_m, job.margin_m,
+               job.iteration_cap, should_abort, &out.arrival, &out.origin,
+               out.mask, iterations, hit_cap, 0)) {
     LogFmt("GlideCone options: gpu pass failed");
     return false;
   }
@@ -943,33 +989,40 @@ RunGlideConeDownward(const GlideConeDownwardJob &job,
                         passes_run = 1;)
 
   out.iterations = iterations;
+  out.hit_iteration_cap = hit_cap;
   out.floors = job.passes[0].floors;
   out.start_index = job.passes[0].gj * int(job.width) + job.passes[0].gi;
   out.ok = true;
 
   if (job.passes.size() > 1) {
     unsigned ignored = 0;
+    bool pass_hit = false;
     GLIDECONE_TIMING_ONLY(tp = GT::NowUs(); gap_us[1] = tp - prev_end;)
     if (!RunPass(job.passes[1], job.width, job.height, job.cell_x, job.cell_y,
-                 job.max_alt, should_abort, nullptr, nullptr,
-                 out.mask10, ignored, 1)) {
+                 job.max_alt, job.path_distance_m, job.margin_m,
+                 job.iteration_cap, should_abort, nullptr, nullptr,
+                 out.mask10, ignored, pass_hit, 1)) {
       if (should_abort && should_abort())
         return false;
       out.mask10.clear();
-    }
+    } else if (pass_hit)
+      out.hit_iteration_cap = true;
     GLIDECONE_TIMING_ONLY(prev_end = GT::NowUs(); pass_us[1] = prev_end - tp;
                           passes_run = 2;)
   }
   if (job.passes.size() > 2) {
     unsigned ignored = 0;
+    bool pass_hit = false;
     GLIDECONE_TIMING_ONLY(tp = GT::NowUs(); gap_us[2] = tp - prev_end;)
     if (!RunPass(job.passes[2], job.width, job.height, job.cell_x, job.cell_y,
-                 job.max_alt, should_abort, nullptr, nullptr,
-                 out.mask20, ignored, 2)) {
+                 job.max_alt, job.path_distance_m, job.margin_m,
+                 job.iteration_cap, should_abort, nullptr, nullptr,
+                 out.mask20, ignored, pass_hit, 2)) {
       if (should_abort && should_abort())
         return false;
       out.mask20.clear();
-    }
+    } else if (pass_hit)
+      out.hit_iteration_cap = true;
     GLIDECONE_TIMING_ONLY(prev_end = GT::NowUs(); pass_us[2] = prev_end - tp;
                           passes_run = 3;)
   }

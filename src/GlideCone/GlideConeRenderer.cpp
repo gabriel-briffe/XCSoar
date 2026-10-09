@@ -15,6 +15,8 @@
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Renderer/WaypointRendererSettings.hpp"
 #include "ui/canvas/Canvas.hpp"
+#include "Message.hpp"
+#include "Language/Language.hpp"
 
 #include "ui/dim/Point.hpp"
 
@@ -142,9 +144,12 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   if (gc.options_mode == GlideConeSettings::OptionsMode::OFF)
     jobs.CancelDownward();
   if (auto ready = jobs.TakeDownward()) {
-    if (ready->ok)
+    if (ready->ok) {
       GlideConeOptions::ApplyGpu(field, *ready, gc);
-    else {
+      if (ready->hit_iteration_cap)
+        Message::AddMessage(
+          _("GlideCone compute stopped, raise iteration cap"));
+    } else {
       LogFmt("GlideCone options: gpu result failed");
       GlideConeOptions::AbandonGpu();
     }

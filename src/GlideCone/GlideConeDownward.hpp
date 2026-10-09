@@ -40,6 +40,18 @@ struct GlideConeDownwardJob {
   /** Glider cell the seed was resolved from. */
   int aircraft_gi = -1;
   int aircraft_gj = -1;
+  /**
+   * Relay-path ground distance [m] glider → airport (InfoBox path).
+   * Used with #margin_m to pick the first convergence check.
+   */
+  double path_distance_m = 0;
+  /**
+   * Height above the cone [m]: nav altitude − proof altitude, floored
+   * at 0.  Half of this × L/D is the no-terrain reach beyond the path.
+   */
+  double margin_m = 0;
+  /** Same setting as the upward cone (#GlideConeSettings::iteration_cap). */
+  unsigned iteration_cap = 2000;
   GlideConeSettings::OptionsDisplay display =
     GlideConeSettings::OptionsDisplay::MARGIN;
   /**
@@ -53,6 +65,8 @@ struct GlideConeDownwardJob {
 struct GlideConeDownwardReady {
   std::uint64_t generation = 0;
   bool ok = false;
+  /** True when a pass hit #GlideConeDownwardJob::iteration_cap. */
+  bool hit_iteration_cap = false;
   unsigned iterations = 0;
   unsigned width = 0;
   unsigned height = 0;
@@ -76,9 +90,10 @@ struct GlideConeDownwardReady {
 /**
  * Run @p job on the current GLES 3.1 context.  Closest match to
  * gpu-MC computeDownward: propagate without atomics, a separate
- * change-sum pass starting at half the Manhattan diameter then every
- * 64 iterations, staging-buffer readback.  Buffer pool is reused for
- * the same cell count.
+ * change-sum pass: first check from options reach (path + half margin
+ * × L/D in cells, capped by half the grid); if still changing, wait
+ * half that reach again; staging-buffer readback.  Buffer pool is
+ * reused for the same cell count.
  */
 bool
 RunGlideConeDownward(const GlideConeDownwardJob &job,

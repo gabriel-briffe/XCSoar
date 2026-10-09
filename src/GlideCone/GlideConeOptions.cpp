@@ -607,6 +607,17 @@ FillGpuJob(const GlideConeField &field, double start_alt,
   job.start_location = start_location;
   job.aircraft_gi = gi;
   job.aircraft_gj = gj;
+  job.path_distance_m = 0;
+  job.margin_m = 0;
+  if (start_location.IsValid()) {
+    if (const auto path = field.PathDistance(start_location))
+      job.path_distance_m = *path;
+    if (const auto proof =
+          field.RidgeSoaringProofGlideConeAltitude(start_location))
+      job.margin_m = std::max(0.0, start_alt - *proof);
+  }
+  job.iteration_cap = settings.iteration_cap > 0 ? settings.iteration_cap
+                                                : 2000u;
   job.display = settings.options_display;
   return true;
 }
