@@ -37,6 +37,20 @@ static constexpr StaticEnumChoice worst_case_route_list[] = {
   nullptr
 };
 
+static constexpr StaticEnumChoice options_display_list[] = {
+  { GlideConeSettings::OptionsDisplay::SOLID, N_("Solid"),
+    N_("One colour for the whole optional area.") },
+  { GlideConeSettings::OptionsDisplay::MARGIN, N_("Margin"),
+    N_("Green is the largest margin above the cone.  Red is zero.") },
+  { GlideConeSettings::OptionsDisplay::DEGRADED, N_("Degraded"),
+    N_("Green is still reachable at 20% less L/D.  Yellow is lost only "
+       "at 20%.  Red is lost at 10%.") },
+  nullptr
+};
+
+static_assert(unsigned(GlideConeSettings::OptionsDisplay::COUNT) == 3,
+              "Options display choices must match the enum");
+
 /**
  * Convert #GetMapScale() metres ↔ map-ruler metres (screen width).
  * factor = 8 × width / short_edge (see WindowProjection).
@@ -129,6 +143,7 @@ class GlideConeConfigPanel final : public ConfigListPanel {
   bool highest_arrival_route;
   int options_routine_s;
   int options_opacity;
+  GlideConeSettings::OptionsDisplay options_display;
   double map_scale_to_ruler;
 
   void AddFixedItem(const char *caption, const char *help,
@@ -250,6 +265,7 @@ GlideConeConfigPanel::LoadSettings() noexcept
   highest_arrival_route = glide_cone.highest_arrival_route;
   options_routine_s = int(glide_cone.options_routine_s);
   options_opacity = int(glide_cone.options_opacity);
+  options_display = glide_cone.options_display;
 }
 
 void
@@ -315,6 +331,12 @@ GlideConeConfigPanel::Fill() noexcept
       Refresh();
   }, {.value = opacity.c_str(), .chevron = true,
       .help = _("Opacity of the optional area, from 20% to 100%.")});
+
+  AddEnumItem(_("Options display"),
+              _("Colour of the optional area.  Below the cone, the area "
+                "starts on the first ground cell whose descent is still "
+                "above the cone."),
+              options_display_list, options_display);
 
   AddToggleItem(_("Contours"),
                 _("Draw 100 m altitude contour lines of the reachable area."),
@@ -411,6 +433,8 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
   const unsigned opacity_pct = unsigned(std::clamp(options_opacity, 20, 100));
   changed |= Profile::Update(ProfileKeys::GlideConeOptionsOpacity,
                              glide_cone.options_opacity, opacity_pct);
+  changed |= Profile::Update(ProfileKeys::GlideConeOptionsDisplay,
+                             glide_cone.options_display, options_display);
 
   _changed |= changed;
   return true;

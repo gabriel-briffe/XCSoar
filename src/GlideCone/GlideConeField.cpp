@@ -264,13 +264,10 @@ GlideConeField::StoredAltitude(GeoPoint from) const noexcept
 }
 
 std::optional<double>
-GlideConeField::RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept
+GlideConeField::ProofAltitudeAtCell(int x, int y,
+                                    double ratio) const noexcept
 {
-  if (!IsValid() || glide_ratio <= 0)
-    return std::nullopt;
-
-  int x, y;
-  if (!GeoToCell(from, x, y))
+  if (!IsValid() || ratio <= 0 || !InGrid(result, x, y))
     return std::nullopt;
 
   const unsigned width = result.width;
@@ -296,7 +293,7 @@ GlideConeField::RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept
     MarkVisited(*this, index);
 
     if (!IsGroundCell(result, index))
-      return double(result.altitudes[index]) + distance_m / glide_ratio;
+      return double(result.altitudes[index]) + distance_m / ratio;
 
     const std::int32_t nx = result.origin_x[index];
     const std::int32_t ny = result.origin_y[index];
@@ -304,7 +301,7 @@ GlideConeField::RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept
         (nx == cx && ny == cy)) {
       /* ground all the way to the seed */
       return double(SeedArrivalAltitude(*this, cx, cy)) +
-        distance_m / glide_ratio;
+        distance_m / ratio;
     }
 
     distance_m += CellDistanceM(*this, cx, cy, nx, ny);
@@ -313,6 +310,80 @@ GlideConeField::RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept
   }
 
   return std::nullopt;
+}
+
+std::optional<double>
+GlideConeField::RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept
+{
+  if (!IsValid())
+    return std::nullopt;
+
+  int x, y;
+  if (!GeoToCell(from, x, y))
+    return std::nullopt;
+
+  return ProofAltitudeAtCell(x, y, glide_ratio);
+}
+
+GlideConeField::OptionsSeed
+GlideConeField::ResolveOptionsSeed(int x, int y, double start_alt,
+                                   double ratio) const noexcept
+{
+  OptionsSeed none;
+  if (!IsValid() || ratio <= 0 || !std::isfinite(start_alt) ||
+      !InGrid(result, x, y))
+    return none;
+
+  const unsigned width = result.width;
+  const unsigned height = result.height;
+  const std::size_t start_index = std::size_t(y) * width + x;
+  if (result.altitudes[start_index] >= max_alt)
+    return none;
+
+  const auto proof = ProofAltitudeAtCell(x, y, ratio);
+  const double floor = proof
+    ? *proof
+    : double(result.altitudes[start_index]);
+  if (start_alt > floor)
+    return {OptionsSeed::Kind::NORMAL, x, y, float(start_alt)};
+
+  const std::int32_t ox = result.origin_x[start_index];
+  const std::int32_t oy = result.origin_y[start_index];
+  if (!InGrid(result, ox, oy) || (ox == x && oy == y) ||
+      !IsGroundCell(result, std::size_t(oy) * width + ox))
+    return none;
+
+  double distance_m = 0;
+  int cx = x, cy = y;
+  BeginVisit(*this, std::size_t(width) * height);
+  const unsigned max_steps = width + height;
+
+  for (unsigned step = 0; step < max_steps; ++step) {
+    const std::size_t index = std::size_t(cy) * width + cx;
+    if (WasVisited(*this, index))
+      return none;
+    MarkVisited(*this, index);
+
+    const std::int32_t nx = result.origin_x[index];
+    const std::int32_t ny = result.origin_y[index];
+    if (!InGrid(result, nx, ny) || (nx == cx && ny == cy))
+      return none;
+    if (!IsGroundCell(result, std::size_t(ny) * width + nx))
+      return none;
+
+    distance_m += CellDistanceM(*this, cx, cy, nx, ny);
+    const double arrival = start_alt - distance_m / ratio;
+    const std::size_t next = std::size_t(ny) * width + nx;
+    if (result.altitudes[next] < max_alt &&
+        arrival > double(result.altitudes[next]))
+      return {OptionsSeed::Kind::ESCAPE, int(nx), int(ny),
+              float(arrival)};
+
+    cx = nx;
+    cy = ny;
+  }
+
+  return none;
 }
 
 /* marching squares tables (see gpu-MC contours.js) */

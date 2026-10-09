@@ -147,6 +147,38 @@ struct GlideConeField {
   RidgeSoaringProofGlideConeAltitude(GeoPoint from) const noexcept;
 
   /**
+   * Same walk as #RidgeSoaringProofGlideConeAltitude at cell
+   * (@p x,@p y), using @p ratio instead of #glide_ratio.
+   */
+  std::optional<double>
+  ProofAltitudeAtCell(int x, int y, double ratio) const noexcept;
+
+  /**
+   * Where an optional-area downward run may start.
+   *
+   * Above the proof altitude, the glider cell.  Below it, the first
+   * ground cell along the relay path whose descending arrival is above
+   * the stored cone, when that run stays on the ground.  Otherwise none.
+   */
+  struct OptionsSeed {
+    enum class Kind : std::uint8_t {
+      NONE,
+      NORMAL,
+      ESCAPE,
+    };
+
+    Kind kind = Kind::NONE;
+    int x = -1;
+    int y = -1;
+    /** Start altitude of the downward run [m MSL]. */
+    float arrival = 0;
+  };
+
+  [[nodiscard]]
+  OptionsSeed ResolveOptionsSeed(int x, int y, double start_alt,
+                                 double ratio) const noexcept;
+
+  /**
    * Total Euclidean ground distance [m] along the relay path from
    * @p from to the seed: first hop from @p from to the next cell
    * centre, then cell-centre hops.  Empty when no path exists.

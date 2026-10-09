@@ -161,6 +161,9 @@ static constexpr Color COLOR_GLIDE_CONE = Color(0xff, 0x40, 0xb0);
 /** Options path to an airport seed (highest arrival); white border under. */
 static constexpr Color COLOR_GLIDE_CONE_OPTIONS = COLOR_LIGHT_GREEN;
 
+/** Mid stop of the optional-area margin ramp (red → this → green). */
+static constexpr Color COLOR_GLIDE_CONE_MARGIN_MID = Color(0xff, 0xd6, 0x00);
+
 /** Full-screen Config menu tiles (Garmin-style). */
 static constexpr Color COLOR_CONFIG_MENU_TILE =
   Color(0x2a, 0x30, 0x38);

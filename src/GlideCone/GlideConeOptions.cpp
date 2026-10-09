@@ -12,6 +12,7 @@
 #include "Look/Colors.hpp"
 #include "Look/MapLook.hpp"
 #include "Projection/WindowProjection.hpp"
+#include "Asset.hpp"
 
 #ifdef ENABLE_OPENGL
 #include "ui/canvas/opengl/Scope.hpp"
@@ -48,6 +49,16 @@ struct State {
   int best_airport_index = -1;
   int start_index = -1;
   GeoPoint start_location = GeoPoint::Invalid();
+
+  /** Cone floors used by the last full-ratio downward (and pan). */
+  std::vector<float> floors;
+  GlideConeSettings::OptionsDisplay display =
+    GlideConeSettings::OptionsDisplay::MARGIN;
+  /**
+   * Paint step 0..8 for margin and degraded fills.  Empty when the
+   * overlay is a single colour.
+   */
+  std::vector<std::uint8_t> tone;
 
   /** Pan-mode secondary downward from the probe option cell. */
   int pan_cell = -1;
@@ -167,9 +178,119 @@ constexpr std::uint8_t GC = 1;
 
 [[gnu::pure]]
 bool
-HasConeFloor(const GlideConeField &field, std::size_t i) noexcept
+HasConeFloor(const std::vector<float> &floors, std::size_t i,
+             float max_alt) noexcept
 {
-  return field.result.altitudes[i] < field.max_alt;
+  return i < floors.size() && floors[i] < max_alt;
+}
+
+/**
+ * Stored cone on air cells.  On ground cells, the walked-back proof
+ * altitude when it is lower than stored terrain, so a ridge already
+ * clear of the cone can still seed.
+ *
+ * The walk uses a local memo.  #GlideConeField::visit_stamp is shared
+ * with the InfoBox proof query, so this must not call
+ * ProofAltitudeAtCell() once per cell.
+ */
+void
+BuildFloors(const GlideConeField &field, double ratio,
+            std::vector<float> &floors) noexcept
+{
+  floors = field.result.altitudes;
+  const unsigned width = field.result.width;
+  const unsigned height = field.result.height;
+  const std::size_t n = floors.size();
+  if (ratio <= 0 || width == 0 || height == 0 || n == 0)
+    return;
+
+  const double cell_x = field.cell_size_x_m;
+  const double cell_y = field.cell_size_y_m;
+
+  /* 0 unknown, 1 on the current chain, 2 proof stored in @c proof. */
+  std::vector<std::uint8_t> mark(n, 0);
+  std::vector<float> proof(n, 0);
+
+  for (std::size_t start = 0; start < n; ++start) {
+    if (mark[start] != 0)
+      continue;
+
+    const int sx = int(start % width);
+    const int sy = int(start / width);
+    if (!field.IsGroundAt(sx, sy)) {
+      proof[start] = floors[start];
+      mark[start] = 2;
+      continue;
+    }
+
+    std::vector<std::size_t> chain;
+    std::size_t cur = start;
+    bool have = false;
+    float base = 0;
+
+    while (mark[cur] == 0) {
+      const int cx = int(cur % width);
+      const int cy = int(cur / width);
+      if (!field.IsGroundAt(cx, cy)) {
+        proof[cur] = floors[cur];
+        mark[cur] = 2;
+        have = true;
+        base = proof[cur];
+        break;
+      }
+
+      mark[cur] = 1;
+      chain.push_back(cur);
+
+      const std::int32_t nx = field.result.origin_x[cur];
+      const std::int32_t ny = field.result.origin_y[cur];
+      const bool origin_ok = nx >= 0 && ny >= 0 &&
+        unsigned(nx) < width && unsigned(ny) < height &&
+        !(nx == cx && ny == cy);
+      if (!origin_ok) {
+        float seed = floors[cur];
+        for (const auto &s : field.seeds)
+          if (s.x == cx && s.y == cy)
+            seed = s.alt;
+        proof[cur] = seed;
+        mark[cur] = 2;
+        have = true;
+        base = seed;
+        chain.pop_back();
+        break;
+      }
+
+      cur = std::size_t(ny) * width + std::size_t(nx);
+    }
+
+    if (!have) {
+      if (mark[cur] == 2) {
+        have = true;
+        base = proof[cur];
+      } else {
+        for (const std::size_t idx : chain)
+          mark[idx] = 3;
+        continue;
+      }
+    }
+
+    double extra = 0;
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+      const std::size_t idx = *it;
+      const int cx = int(idx % width);
+      const int cy = int(idx / width);
+      const int nx = int(field.result.origin_x[idx]);
+      const int ny = int(field.result.origin_y[idx]);
+      extra += std::hypot((nx - cx) * cell_x, (ny - cy) * cell_y);
+      proof[idx] = float(double(base) + extra / ratio);
+      mark[idx] = 2;
+    }
+  }
+
+  for (std::size_t i = 0; i < n; ++i)
+    if (floors[i] < field.max_alt && mark[i] == 2 &&
+        proof[i] < floors[i])
+      floors[i] = proof[i];
 }
 
 /**
@@ -179,7 +300,8 @@ HasConeFloor(const GlideConeField &field, std::size_t i) noexcept
  */
 bool
 InView(const std::vector<float> &best,
-       const GlideConeField &field,
+       const std::vector<float> &floors,
+       float max_alt,
        unsigned width, unsigned height,
        int x0, int y0, int ox, int oy,
        double cell_x, double cell_y, double ratio) noexcept
@@ -201,11 +323,11 @@ InView(const std::vector<float> &best,
     if (x < 0 || y < 0 || x >= int(width) || y >= int(height))
       return false;
     const std::size_t i = std::size_t(y) * width + x;
-    if (!HasConeFloor(field, i))
+    if (!HasConeFloor(floors, i, max_alt))
       return false;
     const float alt = origin_alt -
       float(std::hypot((x - ox) * cell_x, (y - oy) * cell_y) / ratio);
-    if (alt < field.result.altitudes[i])
+    if (alt < floors[i])
       return false;
   }
   return true;
@@ -218,7 +340,8 @@ InView(const std::vector<float> &best,
  */
 bool
 PropagateDownward(const GlideConeField &field, int gi, int gj,
-                  float start_alt,
+                  float start_alt, double ratio,
+                  const std::vector<float> &floors,
                   std::vector<float> &best,
                   std::vector<int> &origin,
                   std::vector<std::uint8_t> &flags) noexcept
@@ -234,11 +357,8 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
   flags.assign(n, 0);
 
   const std::size_t start = std::size_t(gj) * width + gi;
-  const float terrain_floor =
-    field.elevation.size() == n ? field.elevation[start] : start_alt;
-  const float cone = field.result.altitudes[start];
-  if (start_alt < terrain_floor || !HasConeFloor(field, start) ||
-      start_alt < cone)
+  if (ratio <= 0 || !HasConeFloor(floors, start, field.max_alt) ||
+      start_alt < floors[start])
     return false;
 
   best[start] = start_alt;
@@ -250,7 +370,6 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
                                                : field.cell_size_m;
   const double cell_y = field.cell_size_y_m > 0 ? field.cell_size_y_m
                                                : field.cell_size_m;
-  const double ratio = field.glide_ratio > 0 ? field.glide_ratio : 1;
 
   while (!heap.Empty()) {
     const auto [index, arrival] = heap.Pop();
@@ -275,7 +394,7 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
 
         int elected = index;
         if (from_origin >= 0 &&
-            InView(best, field, width, height, nx, ny,
+            InView(best, floors, field.max_alt, width, height, nx, ny,
                    from_origin % int(width),
                    from_origin / int(width),
                    cell_x, cell_y, ratio))
@@ -289,12 +408,12 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
         const double dist = std::hypot((nx - ox) * cell_x, (ny - oy) * cell_y);
         const float next = best[std::size_t(elected)] - float(dist / ratio);
 
-        if (HasConeFloor(field, nidx) &&
-            next < field.result.altitudes[nidx]) {
-          if (best[nidx] >= field.result.altitudes[nidx])
+        if (HasConeFloor(floors, nidx, field.max_alt) &&
+            next < floors[nidx]) {
+          if (best[nidx] >= floors[nidx])
             continue;
           if (!(flags[nidx] & GC)) {
-            best[nidx] = field.result.altitudes[nidx];
+            best[nidx] = floors[nidx];
             origin[nidx] = elected;
             flags[nidx] = GC;
           }
@@ -313,7 +432,7 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
 }
 
 void
-BuildMask(const GlideConeField &field,
+BuildMask(const std::vector<float> &floors, float max_alt,
           const std::vector<float> &best,
           const std::vector<std::uint8_t> &flags,
           std::vector<std::uint8_t> &mask,
@@ -323,11 +442,83 @@ BuildMask(const GlideConeField &field,
   mask.assign(n, 0);
   arrival.assign(n, -1.f);
   for (std::size_t i = 0; i < n; ++i)
-    if (!(flags[i] & GC) && best[i] >= 0 && HasConeFloor(field, i) &&
-        best[i] >= field.result.altitudes[i]) {
+    if (!(flags[i] & GC) && best[i] >= 0 &&
+        HasConeFloor(floors, i, max_alt) &&
+        best[i] >= floors[i]) {
       mask[i] = 1;
       arrival[i] = best[i];
     }
+}
+
+struct DownwardRun {
+  std::vector<float> floors;
+  std::vector<float> arrival;
+  std::vector<int> origin;
+  std::vector<std::uint8_t> mask;
+  int start_index = -1;
+  bool ok = false;
+};
+
+bool
+RunDownward(const GlideConeField &field, int gi, int gj,
+            double start_alt, double ratio, DownwardRun &out) noexcept
+{
+  out = {};
+  const auto seed = field.ResolveOptionsSeed(gi, gj, start_alt, ratio);
+  if (seed.kind == GlideConeField::OptionsSeed::Kind::NONE)
+    return false;
+
+  BuildFloors(field, ratio, out.floors);
+  std::vector<float> best;
+  std::vector<std::uint8_t> flags;
+  if (!PropagateDownward(field, seed.x, seed.y, seed.arrival, ratio,
+                         out.floors, best, out.origin, flags))
+    return false;
+
+  BuildMask(out.floors, field.max_alt, best, flags, out.mask, out.arrival);
+  out.start_index = seed.y * int(field.result.width) + seed.x;
+  out.ok = true;
+  return true;
+}
+
+void
+PaintTone(const DownwardRun &full,
+          const std::vector<std::uint8_t> *mask10,
+          const std::vector<std::uint8_t> *mask20,
+          GlideConeSettings::OptionsDisplay display,
+          std::vector<std::uint8_t> &tone) noexcept
+{
+  tone.clear();
+  if (display == GlideConeSettings::OptionsDisplay::SOLID)
+    return;
+
+  tone.assign(full.mask.size(), 0);
+  if (display == GlideConeSettings::OptionsDisplay::DEGRADED) {
+    for (std::size_t i = 0; i < full.mask.size(); ++i) {
+      if (!full.mask[i])
+        continue;
+      if (mask20 != nullptr && i < mask20->size() && (*mask20)[i])
+        tone[i] = 8;
+      else if (mask10 != nullptr && i < mask10->size() && (*mask10)[i])
+        tone[i] = 4;
+    }
+    return;
+  }
+
+  float max_margin = 0;
+  for (std::size_t i = 0; i < full.mask.size(); ++i) {
+    if (!full.mask[i] || i >= full.floors.size())
+      continue;
+    max_margin = std::max(max_margin, full.arrival[i] - full.floors[i]);
+  }
+  for (std::size_t i = 0; i < full.mask.size(); ++i) {
+    if (!full.mask[i] || i >= full.floors.size())
+      continue;
+    const float t = max_margin > 0
+      ? (full.arrival[i] - full.floors[i]) / max_margin
+      : 0;
+    tone[i] = std::uint8_t(std::clamp(int(std::lround(t * 8)), 0, 8));
+  }
 }
 
 [[gnu::pure]]
@@ -364,6 +555,8 @@ GlideConeOptions::Clear() noexcept
   state.arrival.clear();
   state.origin.clear();
   state.is_seed.clear();
+  state.floors.clear();
+  state.tone.clear();
   state.best_airport_index = -1;
   state.start_index = -1;
   state.start_location = GeoPoint::Invalid();
@@ -416,15 +609,18 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
 
   const auto now = std::chrono::steady_clock::now();
   const bool once = settings.options_mode == GlideConeSettings::OptionsMode::ONCE;
+  const bool display_changed = settings.options_display != state.display;
   if (once) {
-    if (state.request == state.done && !state.mask.empty())
+    if (state.request == state.done && !state.mask.empty() &&
+        !display_changed)
       return;
     if (state.request == 0)
       return;
   } else {
     const auto interval = std::chrono::seconds(
       std::clamp(settings.options_routine_s, 1u, 60u));
-    if (state.has_last && now - state.last_at < interval && state.request == state.done)
+    if (state.has_last && now - state.last_at < interval &&
+        state.request == state.done && !display_changed)
       return;
   }
 
@@ -435,20 +631,35 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
     return;
 
   const auto t0 = std::chrono::steady_clock::now();
-  std::vector<float> best;
-  std::vector<int> origin;
-  std::vector<std::uint8_t> flags;
-  if (!PropagateDownward(field, gi, gj, float(start_alt),
-                         best, origin, flags)) {
-    /* Already at/below the upward cone (or terrain): no optional area. */
+  const double ratio = field.glide_ratio > 0 ? field.glide_ratio : 1;
+  DownwardRun full;
+  if (!RunDownward(field, gi, gj, start_alt, ratio, full)) {
+    /* Below the cone with no ground-only escape, or no cone floor. */
     Clear();
+    state.display = settings.options_display;
     state.has_last = true;
     state.last_at = std::chrono::steady_clock::now();
     return;
   }
 
-  BuildMask(field, best, flags, state.mask, state.arrival);
-  state.origin = std::move(origin);
+  std::vector<std::uint8_t> mask10, mask20;
+  if (settings.options_display ==
+      GlideConeSettings::OptionsDisplay::DEGRADED) {
+    DownwardRun ten, twenty;
+    if (RunDownward(field, gi, gj, start_alt, ratio * 0.9, ten))
+      mask10 = std::move(ten.mask);
+    if (RunDownward(field, gi, gj, start_alt, ratio * 0.8, twenty))
+      mask20 = std::move(twenty.mask);
+  }
+
+  PaintTone(full, mask10.empty() ? nullptr : &mask10,
+            mask20.empty() ? nullptr : &mask20,
+            settings.options_display, state.tone);
+  state.mask = std::move(full.mask);
+  state.arrival = std::move(full.arrival);
+  state.origin = std::move(full.origin);
+  state.floors = std::move(full.floors);
+  state.display = settings.options_display;
   state.is_seed.assign(n, 0);
   for (const auto &s : field.seeds) {
     if (s.x < 0 || s.y < 0 || s.x >= int(width) || s.y >= int(height))
@@ -457,7 +668,7 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   }
   state.best_airport_index =
     BestAirportIndex(state.mask, state.arrival, state.is_seed);
-  state.start_index = int(std::size_t(gj) * width + gi);
+  state.start_index = full.start_index;
   state.width = width;
   state.height = height;
   state.bounds = field.bounds;
@@ -465,9 +676,12 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
                                          : field.cell_size_m;
   state.cell_y = field.cell_size_y_m > 0 ? field.cell_size_y_m
                                          : field.cell_size_m;
-  state.start_location = start_location.IsValid()
+  const int sx = full.start_index % int(width);
+  const int sy = full.start_index / int(width);
+  state.start_location =
+    (sx == gi && sy == gj && start_location.IsValid())
     ? start_location
-    : field.CellToGeo(gi, gj);
+    : field.CellToGeo(sx, sy);
   state.pan_cell = -1;
   state.pan_origin.clear();
   state.pan_mask.clear();
@@ -490,11 +704,29 @@ GlideConeOptions::Draw(Canvas &canvas, const WindowProjection &projection,
     return;
 
   unsigned opacity = std::clamp(settings.options_opacity, 20u, 100u);
-  const Color color(COLOR_GLIDE_CONE.Red(), COLOR_GLIDE_CONE.Green(),
-                    COLOR_GLIDE_CONE.Blue(),
-                    std::uint8_t(opacity * 255 / 100));
+  const std::uint8_t alpha = std::uint8_t(opacity * 255 / 100);
+  const bool flat = !HasColors() || IsDithered() ||
+    settings.options_display == GlideConeSettings::OptionsDisplay::SOLID ||
+    state.tone.size() != state.mask.size();
+  const Color flat_color = flat && HasColors() && !IsDithered()
+    ? Color(COLOR_GLIDE_CONE.Red(), COLOR_GLIDE_CONE.Green(),
+            COLOR_GLIDE_CONE.Blue(), alpha)
+    : COLOR_BLACK;
+
+  Brush brushes[9];
+  if (!flat) {
+    for (unsigned step = 0; step < 9; ++step) {
+      const Color rgb = step <= 4
+        ? MixColors(COLOR_RED, COLOR_GLIDE_CONE_MARGIN_MID,
+                    std::uint8_t(255 - step * 255 / 4))
+        : MixColors(COLOR_GLIDE_CONE_MARGIN_MID, COLOR_LIGHT_GREEN,
+                    std::uint8_t(255 - (step - 4) * 255 / 4));
+      brushes[step] = Brush(Color(rgb.Red(), rgb.Green(), rgb.Blue(), alpha));
+    }
+  }
+
   canvas.SelectNullPen();
-  canvas.Select(Brush(color));
+  canvas.Select(flat ? Brush(flat_color) : brushes[0]);
 
 #ifdef ENABLE_OPENGL
   const ScopeAlphaBlend alpha_blend;
@@ -505,6 +737,8 @@ GlideConeOptions::Draw(Canvas &canvas, const WindowProjection &projection,
     for (unsigned x = 0; x < state.width; ++x) {
       if (!state.mask[std::size_t(y) * state.width + x])
         continue;
+      if (!flat)
+        canvas.Select(brushes[state.tone[std::size_t(y) * state.width + x]]);
       const GeoPoint center = state.bounds.GetCenter();
       (void)center;
       const double west = state.bounds.GetWest().Degrees() +
@@ -640,11 +874,13 @@ EnsurePanAirportPath(const GlideConeField &field, int pan_cell) noexcept
   std::vector<float> best;
   std::vector<std::uint8_t> flags;
   std::vector<float> arrival;
-  if (!PropagateDownward(field, gx, gy, start_alt,
-                         best, state.pan_origin, flags))
+  if (state.floors.size() != state.mask.size() ||
+      !PropagateDownward(field, gx, gy, start_alt, field.glide_ratio,
+                         state.floors, best, state.pan_origin, flags))
     return false;
 
-  BuildMask(field, best, flags, state.pan_mask, arrival);
+  BuildMask(state.floors, field.max_alt, best, flags, state.pan_mask,
+            arrival);
   state.pan_best_airport =
     BestAirportIndex(state.pan_mask, arrival, state.is_seed);
   return state.pan_best_airport >= 0;

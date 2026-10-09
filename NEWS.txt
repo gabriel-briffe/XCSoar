@@ -140,6 +140,10 @@ Version 7.46 - not yet released
     air-to-ground steps that go below the cone altitude at 80% of the
     configured glide ratio; origin shortcuts also clear the L/D slope
     against terrain along the ray
+  - colour the optional area by margin above the cone, or by whether
+    it remains reachable at 10% and 20% less L/D (Config / Glide
+    Computer / Glide Cone / Options display); below the cone the area
+    starts on the first ground cell that the descent still clears
   - fix best-glide speed and speed-to-fly at altitude when MacCready
     is set, so density scaling no longer inflates MacCready #2881
   - fix circling wind staying blank on paragliders and other aircraft

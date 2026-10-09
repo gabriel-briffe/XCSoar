@@ -41,7 +41,7 @@ CellCentre(const GlideConeField &f, int x, int y) noexcept
 int
 main()
 {
-  plan_tests(14);
+  plan_tests(17);
 
   GlideConeField air = MakeStrip();
   /* seed (air) <- air <- ground <- ground <- ground (aircraft) */
@@ -105,6 +105,23 @@ main()
 
   GeoPoint outside(Angle::Degrees(90), Angle::Degrees(90));
   ok1(!air.RidgeSoaringProofGlideConeAltitude(outside));
+
+  /* ridge escape: air 80, then ground stored 90 / 100 / 200 */
+  GlideConeField ridge = MakeStrip();
+  const float ridge_alt[] = {100, 80, 90, 100, 200};
+  for (unsigned i = 0; i < 5; ++i) {
+    ridge.result.altitudes[i] = ridge_alt[i];
+    ridge.result.origin_x[i] = i == 0 ? 0 : int(i) - 1;
+    ridge.result.ground[i] = i >= 2 ? 1 : 0;
+  }
+  const auto above = ridge.ResolveOptionsSeed(4, 0, 200, 20);
+  ok1(above.kind == GlideConeField::OptionsSeed::Kind::NORMAL &&
+      above.x == 4);
+  const auto escape = ridge.ResolveOptionsSeed(4, 0, 130, 20);
+  ok1(escape.kind == GlideConeField::OptionsSeed::Kind::ESCAPE &&
+      escape.x == 3 && equals(double(escape.arrival), 110));
+  const auto stuck = ridge.ResolveOptionsSeed(4, 0, 50, 20);
+  ok1(stuck.kind == GlideConeField::OptionsSeed::Kind::NONE);
 
   return exit_status();
 }

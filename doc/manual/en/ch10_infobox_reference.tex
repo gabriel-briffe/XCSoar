@@ -407,7 +407,10 @@ value is terrain, so the proof walks back to the first air cell on the relay
 path — otherwise the margin would look largely negative on the ridge while
 clearing terrain would show a huge positive versus stored height.  The title
 shows the current glide ratio (GC L/D).  Tap to choose the mode and adjust
-the glide ratio.  Requires OpenGL ES 3.1 (Android).}
+the glide ratio.  Options display (Config / Glide Computer / Glide Cone)
+colours that area by margin, or by reachability at 10\% and 20\% less L/D.
+Below the cone, the area starts on the first ground cell the descent still
+clears.  Requires OpenGL ES 3.1 (Android).}
 \ibi{Glide Cone Distance}{GC Dist}{Euclidean ground distance along the
 terrain-aware glide cone relay path from the aircraft to the Goto airport
 (or nearest landable, in combined mode).  Requires OpenGL ES 3.1 (Android).}

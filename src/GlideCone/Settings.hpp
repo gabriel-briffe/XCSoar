@@ -75,6 +75,19 @@ struct GlideConeSettings {
   unsigned options_opacity;
 
   /**
+   * How the optional area is painted.  Margin and degraded use the
+   * green–gold–red ramp; solid keeps one colour.
+   */
+  enum class OptionsDisplay : uint8_t {
+    SOLID,
+    MARGIN,
+    DEGRADED,
+    COUNT,
+  };
+
+  OptionsDisplay options_display;
+
+  /**
    * When to draw the pink worst-case relay path (terrain-limited).
    */
   enum class WorstCaseRoute : uint8_t {

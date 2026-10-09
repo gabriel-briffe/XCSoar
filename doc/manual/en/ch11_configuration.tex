@@ -580,6 +580,13 @@ compute).  It appears only on devices that support that feature.
 \item[Options routine]  How often the optional area is recomputed in Routine
   mode.
 \item[Options opacity]  Opacity of the optional area (20--100\,\%).
+\item[Options display]  How that area is coloured. \\
+  {\bf Solid}: one colour. \\
+  {\bf Margin}: green is the largest margin above the cone, red is zero. \\
+  {\bf Degraded}: green is still reachable at 20\% less L/D, yellow is lost
+  only at 20\%, red is lost at 10\%. \\
+  Below the cone, the area starts on the first ground cell the descent
+  still clears.
 \item[Contours]  Draw 100~m altitude contour lines of the reachable area.
 \item[Contours min scale]  Only show contours and labels when the map scale
   bar is at most this distance.
