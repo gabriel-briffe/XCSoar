@@ -87,6 +87,15 @@ struct GlideConeSettings {
 
   OptionsDisplay options_display;
 
+  /** Where the optional-area downward pass runs. */
+  enum class OptionsEngine : uint8_t {
+    CPU,
+    GPU,
+    COUNT,
+  };
+
+  OptionsEngine options_engine;
+
   /**
    * When to draw the pink worst-case relay path (terrain-limited).
    */

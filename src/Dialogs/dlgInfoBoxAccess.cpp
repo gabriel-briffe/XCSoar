@@ -19,6 +19,8 @@
 #include "Interface.hpp"
 #include "Language/Language.hpp"
 #include "MapWindow/GlueMapWindow.hpp"
+#include "GlideCone/GlideConeStatus.hpp"
+#include "NMEA/MoreData.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -110,6 +112,17 @@ dlgInfoBoxAccessShowModeless(const int id, const InfoBoxPanel *panels)
   else
     tab_widget.AddTab(std::make_unique<ActionWidget>(dialog.MakeModalResultCallback(mrOK)),
                       _("Close"));
+
+  /* GlideCone green (at/above proof): open Options; otherwise Setup. */
+  if (glide_cone_box && tab_widget.GetSize() > 0) {
+    const auto status = GlideConeStatus::Get();
+    const MoreData &basic = CommonInterface::Basic();
+    const bool above_cone =
+      status.valid && basic.NavAltitudeAvailable() &&
+      basic.nav_altitude >= status.ridge_soaring_proof_altitude;
+    if (above_cone)
+      tab_widget.SetCurrent(tab_widget.GetSize() - 1);
+  }
 
   /* Dock to the bottom of the map area and lift map overlays by the
      visible dialog height.  Size to the *current* tab so a short page

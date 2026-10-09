@@ -143,7 +143,8 @@ Version 7.46 - not yet released
   - colour the optional area by margin above the cone, or by whether
     it remains reachable at 10% and 20% less L/D (Config / Glide
     Computer / Glide Cone / Options display); below the cone the area
-    starts on the first ground cell that the descent still clears
+    starts on the first ground cell that the descent still clears;
+    Options engine selects CPU or GPU for that area
   - fix best-glide speed and speed-to-fly at altitude when MacCready
     is set, so density scaling no longer inflates MacCready #2881
   - fix circling wind staying blank on paragliders and other aircraft

@@ -3,6 +3,7 @@
 
 #include "GlideConeGpuWorker.hpp"
 #include "GlideConeCompute.hpp"
+#include "GlideConeDownward.hpp"
 #include "thread/StandbyThread.hpp"
 #include "thread/Mutex.hxx"
 
@@ -49,6 +50,38 @@ struct GlideConeGpuWorker::Impl
   std::unique_ptr<GlideConeGpuReady> TakeReady() noexcept {
     const std::lock_guard lock{mutex};
     return std::move(ready);
+  }
+
+  bool RequestDownward(std::unique_ptr<GlideConeDownwardJob> job) noexcept {
+    if (job == nullptr || job->width == 0)
+      return false;
+    try {
+      const std::lock_guard lock{mutex};
+      if (!EnsureSharedContext())
+        return false;
+      if (down_running_gen != 0)
+        down_cancel.store(down_running_gen, std::memory_order_relaxed);
+      down_next = std::move(job);
+      Trigger();
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  std::unique_ptr<GlideConeDownwardReady> TakeDownward() noexcept {
+    const std::lock_guard lock{mutex};
+    return std::move(down_ready);
+  }
+
+  void CancelDownward() noexcept {
+    const std::lock_guard lock{mutex};
+    std::uint64_t gen = down_running_gen;
+    if (gen == 0 && down_next != nullptr)
+      gen = down_next->generation;
+    if (gen != 0)
+      down_cancel.store(gen, std::memory_order_relaxed);
+    down_next.reset();
   }
 
   void Cancel() noexcept {
@@ -133,6 +166,7 @@ private:
 
     if (eglMakeCurrent(dpy, compute_surf, compute_surf, compute_ctx)) {
       session.DestroyGL();
+      DestroyGlideConeDownward();
       eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     }
     if (compute_surf != EGL_NO_SURFACE)
@@ -146,40 +180,69 @@ private:
   void Tick() noexcept override {
     /* Prefer throughput over idle niceness — UI has its own GL context. */
     std::unique_ptr<GlideConePreparedGrid> job = std::move(next);
-    if (job == nullptr)
+    std::unique_ptr<GlideConeDownwardJob> down = std::move(down_next);
+    if (job == nullptr && down == nullptr)
       return;
 
-    const std::uint64_t gen = job->generation;
+    const std::uint64_t gen = job != nullptr ? job->generation : 0;
+    const std::uint64_t down_gen = down != nullptr ? down->generation : 0;
     running_gen = gen;
+    down_running_gen = down_gen;
     cancel_gen.store(0, std::memory_order_relaxed);
+    if (down_gen != 0)
+      down_cancel.store(0, std::memory_order_relaxed);
 
     const auto should_abort = [&]() noexcept {
       if (IsStopped())
         return true;
-      return cancel_gen.load(std::memory_order_relaxed) == gen;
+      return cancel_gen.load(std::memory_order_relaxed) == gen && gen != 0;
+    };
+    const auto down_should_abort = [&]() noexcept {
+      if (IsStopped())
+        return true;
+      return down_cancel.load(std::memory_order_relaxed) == down_gen &&
+        down_gen != 0;
     };
 
     auto out = std::make_unique<GlideConeGpuReady>();
-    out->prepared = std::move(job);
+    std::unique_ptr<GlideConeDownwardReady> down_out;
+    if (job != nullptr)
+      out->prepared = std::move(job);
 
     bool ok = false;
     bool hit_cap = false;
+    bool down_ok = false;
     {
       const ScopeUnlock unlock{mutex};
 
       if (eglMakeCurrent(dpy, compute_surf, compute_surf, compute_ctx)) {
-        ok = session.Run(out->prepared->grid, should_abort, out->result,
-                         &hit_cap);
+        if (out->prepared != nullptr)
+          ok = session.Run(out->prepared->grid, should_abort, out->result,
+                           &hit_cap);
+        if (down != nullptr) {
+          down_out = std::make_unique<GlideConeDownwardReady>();
+          down_ok = RunGlideConeDownward(*down, down_should_abort, *down_out);
+          down_out->ok = down_ok;
+        }
         eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       }
     }
 
-    out->ok = ok;
-    out->hit_iteration_cap = hit_cap;
+    if (out->prepared != nullptr) {
+      out->ok = ok;
+      out->hit_iteration_cap = hit_cap;
+      if (ok)
+        ready = std::move(out);
+    }
     running_gen = 0;
-
-    if (ok)
-      ready = std::move(out);
+    down_running_gen = 0;
+    if (down != nullptr && down_out == nullptr) {
+      down_out = std::make_unique<GlideConeDownwardReady>();
+      down_out->generation = down_gen;
+      down_out->ok = false;
+    }
+    if (down_out != nullptr)
+      down_ready = std::move(down_out);
 
     NotifyReady();
   }
@@ -188,8 +251,12 @@ private:
 
   std::unique_ptr<GlideConePreparedGrid> next;
   std::unique_ptr<GlideConeGpuReady> ready;
+  std::unique_ptr<GlideConeDownwardJob> down_next;
+  std::unique_ptr<GlideConeDownwardReady> down_ready;
   std::uint64_t running_gen = 0;
+  std::uint64_t down_running_gen = 0;
   std::atomic<std::uint64_t> cancel_gen{0};
+  std::atomic<std::uint64_t> down_cancel{0};
   std::function<void()> ready_callback;
 
   EGLDisplay dpy = EGL_NO_DISPLAY;
@@ -205,6 +272,13 @@ private:
   std::unique_ptr<GlideConeGpuReady> TakeReady() noexcept {
     return nullptr;
   }
+  bool RequestDownward(std::unique_ptr<GlideConeDownwardJob>) noexcept {
+    return false;
+  }
+  std::unique_ptr<GlideConeDownwardReady> TakeDownward() noexcept {
+    return nullptr;
+  }
+  void CancelDownward() noexcept {}
   void Cancel() noexcept {}
   void SetReadyCallback(std::function<void()>) noexcept {}
   bool IsBusy() noexcept {
@@ -231,6 +305,24 @@ std::unique_ptr<GlideConeGpuReady>
 GlideConeGpuWorker::TakeReady() noexcept
 {
   return impl->TakeReady();
+}
+
+bool
+GlideConeGpuWorker::RequestDownward(std::unique_ptr<GlideConeDownwardJob> job) noexcept
+{
+  return impl->RequestDownward(std::move(job));
+}
+
+std::unique_ptr<GlideConeDownwardReady>
+GlideConeGpuWorker::TakeDownward() noexcept
+{
+  return impl->TakeDownward();
+}
+
+void
+GlideConeGpuWorker::CancelDownward() noexcept
+{
+  impl->CancelDownward();
 }
 
 void

@@ -58,6 +58,7 @@ GlideConeJobController::Abort(GlideConeOverlay &overlay) noexcept
   const bool busy = awaiting_grid || awaiting_gpu || awaiting_contours ||
     gpu_worker.IsBusy() || contour_worker.IsBusy();
   gpu_worker.Cancel();
+  gpu_worker.CancelDownward();
   contour_worker.Cancel();
   awaiting_grid = false;
   awaiting_gpu = false;
@@ -69,7 +70,27 @@ GlideConeJobController::Abort(GlideConeOverlay &overlay) noexcept
   }
   (void)worker.TakeReady();
   (void)gpu_worker.TakeReady();
+  (void)gpu_worker.TakeDownward();
   (void)contour_worker.TakeReady();
+}
+
+bool
+GlideConeJobController::RequestDownward(
+  std::unique_ptr<GlideConeDownwardJob> job) noexcept
+{
+  return gpu_worker.RequestDownward(std::move(job));
+}
+
+std::unique_ptr<GlideConeDownwardReady>
+GlideConeJobController::TakeDownward() noexcept
+{
+  return gpu_worker.TakeDownward();
+}
+
+void
+GlideConeJobController::CancelDownward() noexcept
+{
+  gpu_worker.CancelDownward();
 }
 
 void

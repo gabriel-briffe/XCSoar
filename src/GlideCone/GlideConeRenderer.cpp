@@ -3,7 +3,9 @@
 
 #include "GlideConeRenderer.hpp"
 #include "GlideConeOptions.hpp"
+#include "GlideConeDownward.hpp"
 #include "Interface.hpp"
+#include "LogFile.hpp"
 #include "NMEA/MoreData.hpp"
 #include "GlideConeStatus.hpp"
 #include "Computer/Settings.hpp"
@@ -17,6 +19,7 @@
 #include "ui/dim/Point.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -136,11 +139,37 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   }
 
   const MoreData &basic = CommonInterface::Basic();
+  if (gc.options_mode == GlideConeSettings::OptionsMode::OFF)
+    jobs.CancelDownward();
+  if (auto ready = jobs.TakeDownward()) {
+    if (ready->ok)
+      GlideConeOptions::ApplyGpu(field, *ready, gc);
+    else {
+      LogFmt("GlideCone options: gpu result failed");
+      GlideConeOptions::AbandonGpu();
+    }
+  }
   if (aircraft_valid) {
     int gi = -1, gj = -1;
-    if (field.GeoToCell(aircraft, gi, gj) && basic.NavAltitudeAvailable())
+    if (field.GeoToCell(aircraft, gi, gj) && basic.NavAltitudeAvailable()) {
+      const bool gpu =
+        gc.options_engine == GlideConeSettings::OptionsEngine::GPU;
+      GlideConeDownwardJob gpu_job;
       GlideConeOptions::Update(field, basic.nav_altitude, aircraft,
-                               gi, gj, gc);
+                               gi, gj, gc, gpu ? &gpu_job : nullptr);
+      if (gpu && gpu_job.width != 0) {
+        LogFmt("GlideCone options: queue gpu {}x{} passes={}",
+               gpu_job.width, gpu_job.height, gpu_job.passes.size());
+        GlideConeOptions::NoteGpuQueued(gpu_job);
+        if (!jobs.RequestDownward(
+              std::make_unique<GlideConeDownwardJob>(std::move(gpu_job)))) {
+          LogFmt("GlideCone options: gpu queue failed, using cpu");
+          GlideConeOptions::AbandonGpu();
+          GlideConeOptions::Update(field, basic.nav_altitude, aircraft,
+                                   gi, gj, gc, nullptr);
+        }
+      }
+    }
   }
   GlideConeOptions::Draw(canvas, projection, gc);
 

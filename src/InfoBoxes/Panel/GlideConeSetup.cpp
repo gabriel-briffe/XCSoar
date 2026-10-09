@@ -17,9 +17,11 @@
 #include "Renderer/TextButtonRenderer.hpp"
 #include "util/StaticString.hxx"
 #include "GlideCone/GlideConeOptions.hpp"
+#include "ui/event/Timer.hpp"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <memory>
 
 namespace {
@@ -329,6 +331,11 @@ class GlideConeOptionsWidget final : public NullWidget {
   const DialogLook &look;
   std::array<std::unique_ptr<Button>, 3> modes;
   std::unique_ptr<WndFrame> duration;
+  /** Refresh "Last compute" while this tab is visible. */
+  UI::Timer refresh_timer{[this]{
+    UpdateDuration();
+    refresh_timer.Schedule(std::chrono::milliseconds{250});
+  }};
 
   struct Cells {
     PixelRect off, once, routine, info;
@@ -424,9 +431,11 @@ public:
     duration->MoveAndShow(cells.info);
     UpdateButtons();
     UpdateDuration();
+    refresh_timer.Schedule(std::chrono::milliseconds{250});
   }
 
   void Hide() noexcept override {
+    refresh_timer.Cancel();
     for (auto &button : modes)
       button->Hide();
     duration->Hide();

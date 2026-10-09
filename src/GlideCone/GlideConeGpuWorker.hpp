@@ -5,6 +5,7 @@
 
 #include "GlideConeGridBuilder.hpp"
 #include "GlideConeData.hpp"
+#include "GlideConeDownward.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -46,6 +47,16 @@ public:
 
   /** Latest completed job, or nullptr. */
   std::unique_ptr<GlideConeGpuReady> TakeReady() noexcept;
+
+  /**
+   * Queue optional-area downward passes.  Same context rules as
+   * Request().  Replaces any downward job not yet started.
+   */
+  bool RequestDownward(std::unique_ptr<GlideConeDownwardJob> job) noexcept;
+
+  std::unique_ptr<GlideConeDownwardReady> TakeDownward() noexcept;
+
+  void CancelDownward() noexcept;
 
   /** Ask the in-flight job to abort at the next batch boundary. */
   void Cancel() noexcept;

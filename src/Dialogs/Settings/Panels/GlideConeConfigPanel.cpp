@@ -51,6 +51,17 @@ static constexpr StaticEnumChoice options_display_list[] = {
 static_assert(unsigned(GlideConeSettings::OptionsDisplay::COUNT) == 3,
               "Options display choices must match the enum");
 
+static constexpr StaticEnumChoice options_engine_list[] = {
+  { GlideConeSettings::OptionsEngine::CPU, N_("CPU"),
+    N_("Compute the optional area on the CPU.") },
+  { GlideConeSettings::OptionsEngine::GPU, N_("GPU"),
+    N_("Compute the optional area on the glide-cone GPU.") },
+  nullptr
+};
+
+static_assert(unsigned(GlideConeSettings::OptionsEngine::COUNT) == 2,
+              "Options engine choices must match the enum");
+
 /**
  * Convert #GetMapScale() metres ↔ map-ruler metres (screen width).
  * factor = 8 × width / short_edge (see WindowProjection).
@@ -144,6 +155,7 @@ class GlideConeConfigPanel final : public ConfigListPanel {
   int options_routine_s;
   int options_opacity;
   GlideConeSettings::OptionsDisplay options_display;
+  GlideConeSettings::OptionsEngine options_engine;
   double map_scale_to_ruler;
 
   void AddFixedItem(const char *caption, const char *help,
@@ -266,6 +278,7 @@ GlideConeConfigPanel::LoadSettings() noexcept
   options_routine_s = int(glide_cone.options_routine_s);
   options_opacity = int(glide_cone.options_opacity);
   options_display = glide_cone.options_display;
+  options_engine = glide_cone.options_engine;
 }
 
 void
@@ -337,6 +350,10 @@ GlideConeConfigPanel::Fill() noexcept
                 "starts on the first ground cell whose descent is still "
                 "above the cone."),
               options_display_list, options_display);
+
+  AddEnumItem(_("Options engine"),
+              _("Compute the optional area on the CPU or on the GPU."),
+              options_engine_list, options_engine);
 
   AddToggleItem(_("Contours"),
                 _("Draw 100 m altitude contour lines of the reachable area."),
@@ -435,6 +452,8 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
                              glide_cone.options_opacity, opacity_pct);
   changed |= Profile::Update(ProfileKeys::GlideConeOptionsDisplay,
                              glide_cone.options_display, options_display);
+  changed |= Profile::Update(ProfileKeys::GlideConeOptionsEngine,
+                             glide_cone.options_engine, options_engine);
 
   _changed |= changed;
   return true;

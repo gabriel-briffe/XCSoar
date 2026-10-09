@@ -411,6 +411,7 @@ constexpr std::string_view GlideConeOptionsMode = "GlideConeOptionsMode";
 constexpr std::string_view GlideConeOptionsRoutine = "GlideConeOptionsRoutine";
 constexpr std::string_view GlideConeOptionsOpacity = "GlideConeOptionsOpacity";
 constexpr std::string_view GlideConeOptionsDisplay = "GlideConeOptionsDisplay";
+constexpr std::string_view GlideConeOptionsEngine = "GlideConeOptionsEngine";
 constexpr std::string_view GlideConeWorstCaseRoute = "GlideConeWorstCaseRoute";
 constexpr std::string_view GlideConeHighestArrivalRoute =
   "GlideConeHighestArrivalRoute";

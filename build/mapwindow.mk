@@ -18,6 +18,7 @@ LIBMAPWINDOW_SOURCES = \
 	$(SRC)/GlideCone/GlideConeContourWorker.cpp \
 	$(SRC)/GlideCone/GlideConeGpuWorker.cpp \
 	$(SRC)/GlideCone/GlideConeCompute.cpp \
+	$(SRC)/GlideCone/GlideConeDownward.cpp \
 	$(SRC)/GlideCone/GlideConeJobController.cpp \
 	$(SRC)/GlideCone/GlideConeOverlay.cpp \
 $(SRC)/GlideCone/GlideConeOptions.cpp \

@@ -12,6 +12,8 @@
 
 struct GlideConeField;
 struct GlideConeSettings;
+struct GlideConeDownwardJob;
+struct GlideConeDownwardReady;
 struct MapLook;
 class Canvas;
 class WindowProjection;
@@ -39,7 +41,24 @@ std::optional<double> QueryArrivalAltitude(GeoPoint location) noexcept;
 
 void Update(const GlideConeField &field, double start_alt,
             GeoPoint start_location, int gi, int gj,
-            const GlideConeSettings &settings) noexcept;
+            const GlideConeSettings &settings,
+            GlideConeDownwardJob *gpu_job = nullptr) noexcept;
+
+/**
+ * Install a finished GPU downward result.  Ignores a stale generation.
+ */
+void ApplyGpu(const GlideConeField &field,
+              const GlideConeDownwardReady &ready,
+              const GlideConeSettings &settings) noexcept;
+
+/** Mark the job just passed to the compute thread as the one in flight. */
+void NoteGpuQueued(GlideConeDownwardJob &job) noexcept;
+
+/**
+ * Drop the in-flight GPU generation.  Keeps the routine cooldown so the
+ * next map frame does not immediately start another GPU job.
+ */
+void AbandonGpu() noexcept;
 
 void Draw(Canvas &canvas, const WindowProjection &projection,
           const GlideConeSettings &settings) noexcept;

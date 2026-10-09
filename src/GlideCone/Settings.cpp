@@ -18,6 +18,7 @@ GlideConeSettings::SetDefaults() noexcept
   options_routine_s = 10;
   options_opacity = 50;
   options_display = OptionsDisplay::MARGIN;
+  options_engine = OptionsEngine::CPU;
   worst_case_route = WorstCaseRoute::IF_BELOW;
   highest_arrival_route = true;
   pan_mode_path = true;

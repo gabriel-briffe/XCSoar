@@ -6,6 +6,7 @@
 #include "GlideConeWorker.hpp"
 #include "GlideConeContourWorker.hpp"
 #include "GlideConeGpuWorker.hpp"
+#include "GlideConeDownward.hpp"
 #include "GlideConeGridBuilder.hpp"
 #include "GlideConeData.hpp"
 #include "Geo/GeoPoint.hpp"
@@ -90,6 +91,10 @@ public:
 
   /** Drop in-flight CPU/GPU/contour work. */
   void Abort(GlideConeOverlay &overlay) noexcept;
+
+  bool RequestDownward(std::unique_ptr<GlideConeDownwardJob> job) noexcept;
+  std::unique_ptr<GlideConeDownwardReady> TakeDownward() noexcept;
+  void CancelDownward() noexcept;
 
   void ClearFieldClaim(bool field_valid) noexcept;
 
