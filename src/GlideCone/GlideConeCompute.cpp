@@ -12,6 +12,9 @@ GlideConeGpuSession::Available() noexcept
 
 #ifdef HAVE_GLES_COMPUTE
 
+#include "GlideConeTiming.hpp"
+#include "LogFile.hpp"
+
 #include <GLES3/gl31.h>
 
 #include <algorithm>
@@ -446,6 +449,47 @@ WaitGpuFence() noexcept
   }
 }
 
+#if GLIDECONE_TIMING
+namespace GT = GlideConeTiming;
+
+/**
+ * Timings of the current GlideConeGpuSession::Run() (upward cone),
+ * microseconds.  Reset at the start of Run(); only touched on the GLES
+ * compute thread.
+ */
+struct ConeTimes {
+  std::uint64_t programs_us = 0;
+  std::uint64_t buffers_us = 0;
+  std::uint64_t elev_upload_us = 0;
+  std::uint64_t clear_us = 0;
+  std::uint64_t seeds_us = 0;
+  unsigned seeds = 0;
+  std::uint64_t copy_us = 0;
+  std::uint64_t setup_us = 0;
+  std::uint64_t begin_us = 0;
+  /* CPU time enqueuing propagate dispatches (bind x2, dispatch,
+     barrier) summed over all batches */
+  std::uint64_t enqueue_us = 0;
+  /* glBufferSubData resetting change_count before checked batches */
+  std::uint64_t reset_us = 0;
+  std::uint64_t flush_us = 0;
+  unsigned flushes = 0;
+  GT::Stat check_wait;
+  GT::Stat check_map;
+  std::string check_list; /* iteration:wait_ms/changed_cells */
+  std::uint64_t loop_us = 0;
+  std::uint64_t finish_wait_us = 0;
+  std::uint64_t finish_map_us = 0;
+  std::uint64_t finish_cpu_us = 0;
+  std::uint64_t finish_unmap_us = 0;
+#if GLIDECONE_TIMING_ISOLATE
+  std::uint64_t iso_begin_us = 0;
+#endif
+};
+
+ConeTimes cone_times;
+#endif
+
 } // anonymous namespace
 
 void
@@ -567,9 +611,13 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   if (!grid.IsValid() || !IsComputeContext()) {
     return false;
   }
+  GLIDECONE_TIMING_ONLY(const std::uint64_t t_begin = GT::NowUs();
+                        std::uint64_t tp = t_begin;)
   if (!EnsureProgram() || !EnsureClearProgram()) {
     return false;
   }
+  GLIDECONE_TIMING_ONLY(cone_times.programs_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   width = grid.width;
   height = grid.height;
@@ -581,11 +629,15 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   if (!EnsureBuffers(count)) {
     return false;
   }
+  GLIDECONE_TIMING_ONLY(cone_times.buffers_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, elev_buf);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                   GLsizeiptr(count * sizeof(float)),
                   grid.elevation.data());
+  GLIDECONE_TIMING_ONLY(cone_times.elev_upload_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   /* Fill cell_a on the GPU, then poke only seed cells from the host. */
   glUseProgram(clear_program);
@@ -597,6 +649,8 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   glDispatchCompute(GLuint((count + 63) / 64), 1, 1);
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT |
                   GL_BUFFER_UPDATE_BARRIER_BIT);
+  GLIDECONE_TIMING_ONLY(cone_times.clear_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, cell_a);
   for (const auto &s : grid.seeds) {
@@ -608,7 +662,10 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
     glBufferSubData(GL_SHADER_STORAGE_BUFFER,
                     GLintptr(seed * sizeof(GpuCell)),
                     sizeof(cell), &cell);
+    GLIDECONE_TIMING_ONLY(++cone_times.seeds;)
   }
+  GLIDECONE_TIMING_ONLY(cone_times.seeds_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   glBindBuffer(GL_COPY_READ_BUFFER, cell_a);
   glBindBuffer(GL_COPY_WRITE_BUFFER, cell_b);
@@ -618,6 +675,8 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   const std::uint32_t zero = 0;
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(zero), &zero);
+  GLIDECONE_TIMING_ONLY(cone_times.copy_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   glUseProgram(program);
   glUniform1i(glGetUniformLocation(program, "uWidth"), int(width));
@@ -636,6 +695,8 @@ GlideConeGpuSession::Begin(const GlideConeGrid &grid) noexcept
   cell_next = cell_b;
   iterations_done = 0;
   active = true;
+  GLIDECONE_TIMING_ONLY(cone_times.setup_us = GT::SinceUs(tp);
+                        cone_times.begin_us = GT::SinceUs(t_begin);)
   return true;
 }
 
@@ -658,11 +719,14 @@ GlideConeGpuSession::Dispatch(unsigned n) noexcept
     iterations_done + batch > first_check_after;
 
   if (check_changes) {
+    GLIDECONE_TIMING_ONLY(const std::uint64_t t_reset = GT::NowUs();)
     const std::uint32_t zero = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(zero), &zero);
+    GLIDECONE_TIMING_ONLY(cone_times.reset_us += GT::SinceUs(t_reset);)
   }
 
+  GLIDECONE_TIMING_ONLY(const std::uint64_t t_enqueue = GT::NowUs();)
   for (unsigned i = 0; i < batch; ++i) {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, cell_cur);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, cell_next);
@@ -672,12 +736,17 @@ GlideConeGpuSession::Dispatch(unsigned n) noexcept
     --remaining;
     ++iterations_done;
   }
+  GLIDECONE_TIMING_ONLY(cone_times.enqueue_us += GT::SinceUs(t_enqueue);)
 
   if (!check_changes)
     return false;
 
   /* Wait for the whole batch before mapping change_count. */
+  GLIDECONE_TIMING_ONLY(std::uint64_t tp = GT::NowUs();)
   WaitGpuFence();
+  GLIDECONE_TIMING_ONLY(const std::uint64_t wait_us = GT::SinceUs(tp);
+                        cone_times.check_wait.Add(wait_us);
+                        tp = GT::NowUs();)
 
   std::uint32_t changes = 1;
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, change_buf);
@@ -688,6 +757,10 @@ GlideConeGpuSession::Dispatch(unsigned n) noexcept
     changes = *mapped;
     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   }
+  GLIDECONE_TIMING_ONLY(cone_times.check_map.Add(GT::SinceUs(tp));
+                        GT::AppendSample(cone_times.check_list,
+                                         iterations_done, GT::Ms(wait_us),
+                                         changes);)
 
   if (changes == 0) {
     remaining = 0;
@@ -702,8 +775,11 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
   if (!active || remaining != 0)
     return false;
 
+  GLIDECONE_TIMING_ONLY(std::uint64_t tp = GT::NowUs();)
   glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
   WaitGpuFence();
+  GLIDECONE_TIMING_ONLY(cone_times.finish_wait_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
 
   const std::size_t count = std::size_t(width) * height;
   out.width = width;
@@ -718,6 +794,8 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
   const auto *mapped = static_cast<const GpuCell *>(
     glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, cell_bytes,
                      GL_MAP_READ_BIT));
+  GLIDECONE_TIMING_ONLY(cone_times.finish_map_us = GT::SinceUs(tp);
+                        tp = GT::NowUs();)
   if (mapped != nullptr) {
     for (std::size_t i = 0; i < count; ++i) {
       out.altitudes[i] = mapped[i].alt;
@@ -725,7 +803,10 @@ GlideConeGpuSession::Finish(GlideConeResult &out) noexcept
       out.origin_y[i] = mapped[i].oy;
       out.ground[i] = std::uint8_t(mapped[i].flags & 1u);
     }
+    GLIDECONE_TIMING_ONLY(cone_times.finish_cpu_us = GT::SinceUs(tp);
+                          tp = GT::NowUs();)
     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    GLIDECONE_TIMING_ONLY(cone_times.finish_unmap_us = GT::SinceUs(tp);)
   } else {
     ok = false;
     out.Clear();
@@ -746,8 +827,30 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
   if (hit_iteration_cap != nullptr)
     *hit_iteration_cap = false;
 
+#if GLIDECONE_TIMING
+  cone_times = {};
+  const std::uint64_t t_run = GT::NowUs();
+  std::uint64_t tp = t_run;
+#endif
+
   if (!Begin(grid))
     return false;
+
+#if GLIDECONE_TIMING && GLIDECONE_TIMING_ISOLATE
+  /* EXTRA SYNC (debug only): finish uploads + clear shader so they are
+     not charged to the first change-count wait. */
+  tp = GT::NowUs();
+  WaitGpuFence();
+  cone_times.iso_begin_us = GT::SinceUs(tp);
+#endif
+
+#if GLIDECONE_TIMING && GLIDECONE_TIMING_GPU
+  /* one GL_TIME_ELAPSED_EXT query around all propagate batches (the
+     change counting is an atomic inside the propagate shader here) */
+  GT::GpuTimerSet gpu_timer;
+  gpu_timer.Begin(0);
+#endif
+  GLIDECONE_TIMING_ONLY(const std::uint64_t t_loop = GT::NowUs();)
 
   bool converged = false;
   while (remaining > 0) {
@@ -758,14 +861,65 @@ GlideConeGpuSession::Run(const GlideConeGrid &grid,
 
     if (Dispatch(BATCH)) {
       converged = true;
+      GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
       glFlush();
+      GLIDECONE_TIMING_ONLY(cone_times.flush_us += GT::SinceUs(tp);
+                            ++cone_times.flushes;)
       break;
     }
+    GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
     glFlush();
+    GLIDECONE_TIMING_ONLY(cone_times.flush_us += GT::SinceUs(tp);
+                          ++cone_times.flushes;)
   }
+  GLIDECONE_TIMING_ONLY(cone_times.loop_us = GT::SinceUs(t_loop);)
+  GLIDECONE_GPU_TIMER(gpu_timer.End();)
 
   if (!Finish(out))
     return false;
+
+#if GLIDECONE_TIMING
+  {
+    const auto &t = cone_times;
+    const std::uint64_t read_us = t.finish_wait_us + t.finish_map_us +
+      t.finish_cpu_us + t.finish_unmap_us;
+    LogFmt("GlideCone cone: gpu {}x{} iter={} checks={} converged={} "
+           "begin={:.3f}ms (programs={:.3f} buffers={:.3f} "
+           "elev_upload={:.3f} clear={:.3f} seeds={:.3f} n={} "
+           "copy={:.3f} setup={:.3f}) loop={:.3f}ms enqueue={:.3f} "
+           "reset={:.3f} flush={:.3f} (n={}) checkwait={:.3f} "
+           "(min={:.3f} avg={:.3f} max={:.3f}) checkmap={:.3f} "
+           "read={:.3f}ms (wait={:.3f} map={:.3f} cpu_copy={:.3f} "
+           "unmap={:.3f}) total={:.3f}ms",
+           width, height, iterations_done, t.check_wait.n, converged,
+           GT::Ms(t.begin_us), GT::Ms(t.programs_us), GT::Ms(t.buffers_us),
+           GT::Ms(t.elev_upload_us), GT::Ms(t.clear_us), GT::Ms(t.seeds_us),
+           t.seeds, GT::Ms(t.copy_us), GT::Ms(t.setup_us),
+           GT::Ms(t.loop_us), GT::Ms(t.enqueue_us), GT::Ms(t.reset_us),
+           GT::Ms(t.flush_us), t.flushes, t.check_wait.SumMs(),
+           t.check_wait.MinMs(), t.check_wait.AvgMs(), t.check_wait.MaxMs(),
+           t.check_map.SumMs(), GT::Ms(read_us), GT::Ms(t.finish_wait_us),
+           GT::Ms(t.finish_map_us), GT::Ms(t.finish_cpu_us),
+           GT::Ms(t.finish_unmap_us), GT::Ms(GT::SinceUs(t_run)));
+    LogFmt("GlideCone cone: gpu check_list iter:wait_ms/changed=[{}]",
+           t.check_list);
+#if GLIDECONE_TIMING_GPU
+    if (gpu_timer.IsEnabled()) {
+      /* Finish() already waited on a fence covering the query */
+      const auto gpu = gpu_timer.Collect();
+      LogFmt("GlideCone cone: gpu gpu_timer=ok{} propagate={:.3f}ms "
+             "queries={} pending={} disjoint={}",
+             GT::GetGpuTimerSupport().get_ui64 != nullptr ? "" : "(32bit)",
+             gpu.MsOf(0), gpu.ready, gpu.pending, gpu.disjoint);
+    } else
+      LogFmt("GlideCone cone: gpu gpu_timer=unavailable");
+#endif
+#if GLIDECONE_TIMING_ISOLATE
+    LogFmt("GlideCone cone: gpu ISOLATE (extra sync) begin_gpu={:.3f}ms",
+           GT::Ms(t.iso_begin_us));
+#endif
+  }
+#endif
 
   if (!converged && hit_iteration_cap != nullptr)
     *hit_iteration_cap = true;

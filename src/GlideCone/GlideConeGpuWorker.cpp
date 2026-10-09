@@ -10,6 +10,8 @@
 #ifdef HAVE_GLES_COMPUTE
 #include "ui/egl/System.hpp"
 #include "ui/opengl/GLESCompute.hpp"
+#include "GlideConeTiming.hpp"
+#include "LogFile.hpp"
 #endif
 
 #include <atomic>
@@ -40,6 +42,7 @@ struct GlideConeGpuWorker::Impl
         cancel_gen.store(running_gen, std::memory_order_relaxed);
 
       next = std::move(prepared);
+      GLIDECONE_TIMING_ONLY(cone_request_us = GlideConeTiming::NowUs();)
       Trigger();
       return true;
     } catch (...) {
@@ -62,6 +65,7 @@ struct GlideConeGpuWorker::Impl
       if (down_running_gen != 0)
         down_cancel.store(down_running_gen, std::memory_order_relaxed);
       down_next = std::move(job);
+      GLIDECONE_TIMING_ONLY(down_request_us = GlideConeTiming::NowUs();)
       Trigger();
       return true;
     } catch (...) {
@@ -183,6 +187,18 @@ private:
     std::unique_ptr<GlideConeDownwardJob> down = std::move(down_next);
     if (job == nullptr && down == nullptr)
       return;
+#if GLIDECONE_TIMING
+    /* queue wait = Request*() (last, superseding one) -> Tick start */
+    namespace GT = GlideConeTiming;
+    const std::uint64_t t_tick = GT::NowUs();
+    const bool timed_cone = job != nullptr;
+    const bool timed_down = down != nullptr;
+    const std::uint64_t cone_queue_us =
+      timed_cone && cone_request_us != 0 ? t_tick - cone_request_us : 0;
+    const std::uint64_t down_queue_us =
+      timed_down && down_request_us != 0 ? t_tick - down_request_us : 0;
+    std::uint64_t make_current_us = 0, cone_run_us = 0, down_run_us = 0;
+#endif
 
     const std::uint64_t gen = job != nullptr ? job->generation : 0;
     const std::uint64_t down_gen = down != nullptr ? down->generation : 0;
@@ -215,17 +231,42 @@ private:
     {
       const ScopeUnlock unlock{mutex};
 
+      GLIDECONE_TIMING_ONLY(std::uint64_t tp = GT::NowUs();)
       if (eglMakeCurrent(dpy, compute_surf, compute_surf, compute_ctx)) {
+        GLIDECONE_TIMING_ONLY(make_current_us = GT::SinceUs(tp);
+                              tp = GT::NowUs();)
         if (out->prepared != nullptr)
           ok = session.Run(out->prepared->grid, should_abort, out->result,
                            &hit_cap);
+        GLIDECONE_TIMING_ONLY(cone_run_us = GT::SinceUs(tp);
+                              tp = GT::NowUs();)
         if (down != nullptr) {
           down_out = std::make_unique<GlideConeDownwardReady>();
           down_ok = RunGlideConeDownward(*down, down_should_abort, *down_out);
           down_out->ok = down_ok;
         }
+        GLIDECONE_TIMING_ONLY(down_run_us = GT::SinceUs(tp);)
         eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       }
+#if GLIDECONE_TIMING
+      /* logged outside the mutex; the cone job runs before the
+         optional-area job in the same Tick, so the latter's latency
+         includes cone_run */
+      if (timed_cone)
+        LogFmt("GlideCone cone: gpu worker queue={:.3f}ms "
+               "make_current={:.3f}ms run={:.3f}ms ok={} "
+               "request_to_ready={:.3f}ms",
+               GT::Ms(cone_queue_us), GT::Ms(make_current_us),
+               GT::Ms(cone_run_us), ok,
+               GT::Ms(cone_queue_us + make_current_us + cone_run_us));
+      if (timed_down)
+        LogFmt("GlideCone options: gpu worker queue={:.3f}ms "
+               "make_current={:.3f}ms cone_before={:.3f}ms run={:.3f}ms "
+               "ok={} request_to_ready={:.3f}ms",
+               GT::Ms(down_queue_us), GT::Ms(make_current_us),
+               GT::Ms(cone_run_us), GT::Ms(down_run_us), down_ok,
+               GT::Ms(GT::SinceUs(t_tick) + down_queue_us));
+#endif
     }
 
     if (out->prepared != nullptr) {
@@ -258,6 +299,12 @@ private:
   std::atomic<std::uint64_t> cancel_gen{0};
   std::atomic<std::uint64_t> down_cancel{0};
   std::function<void()> ready_callback;
+#if GLIDECONE_TIMING
+  /** GlideConeTiming::NowUs() of the last Request()/RequestDownward()
+      (protected by mutex). */
+  std::uint64_t cone_request_us = 0;
+  std::uint64_t down_request_us = 0;
+#endif
 
   EGLDisplay dpy = EGL_NO_DISPLAY;
   EGLConfig config{};

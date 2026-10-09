@@ -7,6 +7,7 @@
 #ifdef HAVE_GLES_COMPUTE
 
 #include "ui/opengl/GLESCompute.hpp"
+#include "GlideConeTiming.hpp"
 
 #include <GLES3/gl31.h>
 
@@ -370,6 +371,33 @@ WaitGpuFence() noexcept
   }
 }
 
+#if GLIDECONE_TIMING
+namespace GT = GlideConeTiming;
+
+#if GLIDECONE_TIMING_GPU
+/** GPU timer-query categories (GT::GpuTimerSet kinds). */
+constexpr unsigned GPU_PROPAGATE = 0;
+constexpr unsigned GPU_SUM = 1;
+#endif
+
+/**
+ * Sub-step times of the last ReadChangeCount() call, microseconds.
+ * Only touched on the GLES compute thread.
+ */
+struct ReadChangeTimes {
+  std::uint64_t copy_us = 0;
+  std::uint64_t wait_us = 0;
+  std::uint64_t map_us = 0;
+};
+
+ReadChangeTimes last_read_change;
+
+/** EnsurePrograms() time and buffer (re)allocation flag of the last
+    EnsurePool() call. */
+std::uint64_t last_ensure_programs_us = 0;
+bool last_pool_realloc = false;
+#endif
+
 GLuint
 Compile(const char *src, const char *label) noexcept
 {
@@ -446,12 +474,16 @@ EnsurePrograms() noexcept
 bool
 EnsurePool(std::size_t count) noexcept
 {
+  GLIDECONE_TIMING_ONLY(last_pool_realloc = false;
+                        const std::uint64_t t_programs = GT::NowUs();)
   if (!EnsurePrograms())
     return false;
+  GLIDECONE_TIMING_ONLY(last_ensure_programs_us = GT::SinceUs(t_programs);)
 
   if (pool.count == count && pool.floors != 0)
     return true;
 
+  GLIDECONE_TIMING_ONLY(last_pool_realloc = true;)
   DeleteBuffers();
   GLuint bufs[6] = {};
   glGenBuffers(6, bufs);
@@ -504,19 +536,30 @@ MaskFromArrivals(const std::vector<float> &arrival,
 bool
 ReadChangeCount(std::uint32_t &changes) noexcept
 {
+  GLIDECONE_TIMING_ONLY(last_read_change = {};
+                        std::uint64_t t = GT::NowUs();)
   glBindBuffer(GL_COPY_READ_BUFFER, pool.change);
   glBindBuffer(GL_COPY_WRITE_BUFFER, pool.change_read);
   glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
                       0, 0, sizeof(changes));
+  GLIDECONE_TIMING_ONLY(last_read_change.copy_us = GT::SinceUs(t);
+                        t = GT::NowUs();)
+  /* CPU-GPU sync: blocks until every queued propagate/sum dispatch and
+     the copy above have finished on the GPU. */
   WaitGpuFence();
+  GLIDECONE_TIMING_ONLY(last_read_change.wait_us = GT::SinceUs(t);
+                        t = GT::NowUs();)
   glBindBuffer(GL_COPY_WRITE_BUFFER, pool.change_read);
   const auto *mapped = static_cast<const std::uint32_t *>(
     glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, sizeof(changes),
                      GL_MAP_READ_BIT));
-  if (mapped == nullptr)
+  if (mapped == nullptr) {
+    GLIDECONE_TIMING_ONLY(last_read_change.map_us = GT::SinceUs(t);)
     return false;
+  }
   changes = *mapped;
   glUnmapBuffer(GL_COPY_WRITE_BUFFER);
+  GLIDECONE_TIMING_ONLY(last_read_change.map_us = GT::SinceUs(t);)
   return true;
 }
 
@@ -527,7 +570,8 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
         std::vector<float> *arrival_out,
         std::vector<int> *origin_out,
         std::vector<std::uint8_t> &mask,
-        unsigned &iterations) noexcept
+        unsigned &iterations,
+        [[maybe_unused]] unsigned pass_index) noexcept
 {
   const std::size_t count = std::size_t(width) * height;
   if (pass.floors.size() != count || pass.ratio <= 0 ||
@@ -536,6 +580,32 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
     return false;
 
   const auto t_pass = Clock::now();
+#if GLIDECONE_TIMING
+  /* Instrumentation only (GlideConeTiming.hpp); microseconds. */
+  const std::uint64_t tp_pass = GT::NowUs();
+  std::uint64_t tp = tp_pass;
+  std::uint64_t build_us = 0;
+  std::uint64_t up_floors_us = 0, up_cells_us = 0, up_copy_us = 0;
+  std::uint64_t setup_us = 0;
+  /* CPU time spent enqueuing propagate dispatches (glUseProgram,
+     glBindBufferBase x3, glDispatchCompute, glMemoryBarrier). */
+  std::uint64_t enqueue_us = 0;
+  std::uint64_t flush_us = 0;
+  unsigned flushes = 0;
+  std::uint64_t abort_poll_us = 0;
+  GT::Stat chk_reset, chk_sum, chk_copy, chk_wait, chk_map, chk_total;
+  std::uint64_t first_wait_us = 0;
+  std::string chk_list; /* iteration:wait_ms/changed_cells */
+  std::uint64_t rb_copy_us = 0, rb_wait_us = 0, rb_map_us = 0;
+  std::uint64_t rb_cpu_us = 0, rb_unmap_us = 0;
+#if GLIDECONE_TIMING_ISOLATE
+  std::uint64_t iso_upload_us = 0, iso_tail_us = 0;
+  GT::Stat iso_prop;
+#endif
+#if GLIDECONE_TIMING_GPU
+  GT::GpuTimerSet gpu_timer;
+#endif
+#endif
   const std::size_t start = std::size_t(pass.gj) * width + pass.gi;
   std::vector<GpuCell> cells(count);
   for (std::size_t i = 0; i < count; ++i) {
@@ -556,17 +626,30 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   cells[start].oy = pass.gj;
 
   const auto t_upload = Clock::now();
+  GLIDECONE_TIMING_ONLY(build_us = GT::SinceUs(tp_pass); tp = GT::NowUs();)
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, pool.floors);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                   GLsizeiptr(count * sizeof(float)), pass.floors.data());
+  GLIDECONE_TIMING_ONLY(up_floors_us = GT::SinceUs(tp); tp = GT::NowUs();)
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, pool.cell_a);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, pool.cell_bytes, cells.data());
+  GLIDECONE_TIMING_ONLY(up_cells_us = GT::SinceUs(tp); tp = GT::NowUs();)
   glBindBuffer(GL_COPY_READ_BUFFER, pool.cell_a);
   glBindBuffer(GL_COPY_WRITE_BUFFER, pool.cell_b);
   glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
                       0, 0, pool.cell_bytes);
+  GLIDECONE_TIMING_ONLY(up_copy_us = GT::SinceUs(tp);)
   const unsigned upload_ms = ElapsedMs(t_upload);
 
+#if GLIDECONE_TIMING && GLIDECONE_TIMING_ISOLATE
+  /* EXTRA SYNC (debug only): make the GPU finish the uploads so their
+     cost is not charged to the first convergence check. */
+  tp = GT::NowUs();
+  WaitGpuFence();
+  iso_upload_us = GT::SinceUs(tp);
+#endif
+
+  GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
   glUseProgram(pool.program);
   glUniform1i(pool.loc_width, int(width));
   glUniform1i(pool.loc_height, int(height));
@@ -575,6 +658,7 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   glUniform1f(pool.loc_ratio, float(pass.ratio));
   glUniform1f(pool.loc_max_alt, max_alt);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, pool.floors);
+  GLIDECONE_TIMING_ONLY(setup_us = GT::SinceUs(tp);)
 
   GLuint cur = pool.cell_a;
   GLuint next = pool.cell_b;
@@ -589,33 +673,56 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   unsigned check_wait_ms = 0;
 
   const auto t_loop = Clock::now();
+  GLIDECONE_TIMING_ONLY(const std::uint64_t tp_loop = GT::NowUs();)
   for (unsigned iter = 0; iter < max_iterations; ++iter) {
+    /* no-op while a propagate query is already open */
+    GLIDECONE_GPU_TIMER(gpu_timer.Begin(GPU_PROPAGATE);)
+    GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
     if (should_abort && should_abort())
       return false;
+    GLIDECONE_TIMING_ONLY(abort_poll_us += GT::SinceUs(tp);)
     ++iterations;
 
+    GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
     glUseProgram(pool.program);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, pool.floors);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, cur);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, next);
     glDispatchCompute(wg_x, wg_y, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    GLIDECONE_TIMING_ONLY(enqueue_us += GT::SinceUs(tp);)
     std::swap(cur, next);
 
     const bool check = iterations >= first_check_at &&
       (iterations - first_check_at) % CHECK_EVERY == 0;
     if (!check) {
-      if (iterations % FLUSH_EVERY == 0)
+      if (iterations % FLUSH_EVERY == 0) {
+        GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
         glFlush();
+        GLIDECONE_TIMING_ONLY(flush_us += GT::SinceUs(tp); ++flushes;)
+      }
       continue;
     }
 
     ++checks;
+    GLIDECONE_GPU_TIMER(gpu_timer.End();)
+#if GLIDECONE_TIMING && GLIDECONE_TIMING_ISOLATE
+    /* EXTRA SYNC (debug only): drain the propagate dispatches so the
+       check timers below only see the sum shader + readback. */
+    tp = GT::NowUs();
+    WaitGpuFence();
+    iso_prop.Add(GT::SinceUs(tp));
+#endif
     const auto t_check = Clock::now();
+    GLIDECONE_TIMING_ONLY(const std::uint64_t tp_check = GT::NowUs();
+                          tp = tp_check;)
     const std::uint32_t zero = 0;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, pool.change);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(zero), &zero);
+    GLIDECONE_TIMING_ONLY(const std::uint64_t reset_us = GT::SinceUs(tp);
+                          tp = GT::NowUs();)
 
+    GLIDECONE_GPU_TIMER(gpu_timer.Begin(GPU_SUM);)
     glUseProgram(pool.sum_program);
     glUniform1i(pool.sum_loc_width, int(width));
     glUniform1i(pool.sum_loc_height, int(height));
@@ -624,26 +731,54 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
     glDispatchCompute(wg_x, wg_y, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT |
                     GL_BUFFER_UPDATE_BARRIER_BIT);
+    GLIDECONE_GPU_TIMER(gpu_timer.End();)
+    GLIDECONE_TIMING_ONLY(const std::uint64_t sum_us = GT::SinceUs(tp);)
 
     std::uint32_t changes = 1;
     if (!ReadChangeCount(changes))
       changes = 1;
     check_wait_ms += ElapsedMs(t_check);
+#if GLIDECONE_TIMING
+    if (chk_wait.n == 0)
+      first_wait_us = last_read_change.wait_us;
+    chk_reset.Add(reset_us);
+    chk_sum.Add(sum_us);
+    chk_copy.Add(last_read_change.copy_us);
+    chk_wait.Add(last_read_change.wait_us);
+    chk_map.Add(last_read_change.map_us);
+    chk_total.Add(GT::SinceUs(tp_check));
+    GT::AppendSample(chk_list, iterations,
+                     GT::Ms(last_read_change.wait_us), changes);
+#endif
     if (changes == 0)
       break;
   }
   const unsigned loop_ms = ElapsedMs(t_loop);
+  GLIDECONE_TIMING_ONLY(const std::uint64_t loop_us = GT::SinceUs(tp_loop);)
+  GLIDECONE_GPU_TIMER(gpu_timer.End();)
+
+#if GLIDECONE_TIMING && GLIDECONE_TIMING_ISOLATE
+  /* EXTRA SYNC (debug only): drain trailing propagate dispatches (only
+     non-zero when the loop hit max_iterations without converging). */
+  tp = GT::NowUs();
+  WaitGpuFence();
+  iso_tail_us = GT::SinceUs(tp);
+#endif
 
   const auto t_read = Clock::now();
+  GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
   glBindBuffer(GL_COPY_READ_BUFFER, cur);
   glBindBuffer(GL_COPY_WRITE_BUFFER, pool.cell_read);
   glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
                       0, 0, pool.cell_bytes);
+  GLIDECONE_TIMING_ONLY(rb_copy_us = GT::SinceUs(tp); tp = GT::NowUs();)
   WaitGpuFence();
+  GLIDECONE_TIMING_ONLY(rb_wait_us = GT::SinceUs(tp); tp = GT::NowUs();)
   glBindBuffer(GL_COPY_WRITE_BUFFER, pool.cell_read);
   const auto *mapped = static_cast<const GpuCell *>(
     glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, pool.cell_bytes,
                      GL_MAP_READ_BIT));
+  GLIDECONE_TIMING_ONLY(rb_map_us = GT::SinceUs(tp); tp = GT::NowUs();)
   if (mapped == nullptr)
     return false;
 
@@ -655,11 +790,21 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
         unsigned(mapped[i].ox) < width && unsigned(mapped[i].oy) < height)
       origin[i] = mapped[i].oy * int(width) + mapped[i].ox;
   }
+  GLIDECONE_TIMING_ONLY(rb_cpu_us = GT::SinceUs(tp); tp = GT::NowUs();)
   glUnmapBuffer(GL_COPY_WRITE_BUFFER);
+  GLIDECONE_TIMING_ONLY(rb_unmap_us = GT::SinceUs(tp);)
   const unsigned read_ms = ElapsedMs(t_read);
 
+#if GLIDECONE_TIMING && GLIDECONE_TIMING_GPU
+  /* The readback fence above already covered every query, so this does
+     not stall (unready queries are reported as pending). */
+  const auto gpu = gpu_timer.Collect();
+#endif
+
   const auto t_mask = Clock::now();
+  GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
   MaskFromArrivals(arrival, pass.floors, max_alt, mask);
+  GLIDECONE_TIMING_ONLY(const std::uint64_t mask_us = GT::SinceUs(tp);)
   const unsigned mask_ms = ElapsedMs(t_mask);
 
   if (arrival_out != nullptr)
@@ -667,11 +812,81 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   if (origin_out != nullptr)
     *origin_out = std::move(origin);
 
+#if GLIDECONE_TIMING
+  const std::uint64_t total_us = GT::SinceUs(tp_pass);
+  /* Same fields as the uninstrumented line, plus the pass index. */
+  LogFmt("GlideCone options: gpu pass={} ratio={:.2f} iter={} checks={} "
+         "upload={}ms loop={}ms checkwait={}ms read={}ms mask={}ms "
+         "total={}ms",
+         pass_index, pass.ratio, iterations, checks, upload_ms, loop_ms,
+         check_wait_ms, read_ms, mask_ms, ElapsedMs(t_pass));
+  const std::uint64_t upload_us = up_floors_us + up_cells_us + up_copy_us;
+  LogFmt("GlideCone options: gpu pass={} cpu_ms build={:.3f} "
+         "upload={:.3f} (floors={:.3f} cells={:.3f} copy={:.3f}) "
+         "setup={:.3f} loop={:.3f} enqueue={:.3f} (iter={} avg={:.3f}us) "
+         "flush={:.3f} (n={}) abort_poll={:.3f} mask={:.3f} total={:.3f}",
+         pass_index, GT::Ms(build_us), GT::Ms(upload_us),
+         GT::Ms(up_floors_us), GT::Ms(up_cells_us), GT::Ms(up_copy_us),
+         GT::Ms(setup_us), GT::Ms(loop_us), GT::Ms(enqueue_us), iterations,
+         iterations > 0 ? double(enqueue_us) / iterations : 0.,
+         GT::Ms(flush_us), flushes, GT::Ms(abort_poll_us), GT::Ms(mask_us),
+         GT::Ms(total_us));
+  LogFmt("GlideCone options: gpu pass={} check_ms n={} first_at={} "
+         "every={} reset={:.3f} sum_enqueue={:.3f} copy={:.3f} "
+         "wait={:.3f} (min={:.3f} avg={:.3f} max={:.3f}) map={:.3f} "
+         "total={:.3f} (min={:.3f} avg={:.3f} max={:.3f})",
+         pass_index, chk_total.n, first_check_at, CHECK_EVERY,
+         chk_reset.SumMs(), chk_sum.SumMs(), chk_copy.SumMs(),
+         chk_wait.SumMs(), chk_wait.MinMs(), chk_wait.AvgMs(),
+         chk_wait.MaxMs(), chk_map.SumMs(), chk_total.SumMs(),
+         chk_total.MinMs(), chk_total.AvgMs(), chk_total.MaxMs());
+  LogFmt("GlideCone options: gpu pass={} check_list iter:wait_ms/changed=[{}]",
+         pass_index, chk_list);
+  LogFmt("GlideCone options: gpu pass={} read_ms copy={:.3f} wait={:.3f} "
+         "map={:.3f} cpu_copy={:.3f} unmap={:.3f} total={:.3f}",
+         pass_index, GT::Ms(rb_copy_us), GT::Ms(rb_wait_us),
+         GT::Ms(rb_map_us), GT::Ms(rb_cpu_us), GT::Ms(rb_unmap_us),
+         GT::Ms(rb_copy_us + rb_wait_us + rb_map_us + rb_cpu_us +
+                rb_unmap_us));
+  /* CPU-side estimate of GPU work, valid with or without timer queries:
+     first_wait ~ GPU time of the first first_check_at iterations (they
+     are only flushed, never waited for, before the first check);
+     blocking = all CPU time blocked in fences; span = loop start to
+     readback fence complete (upper bound of GPU busy time). */
+  LogFmt("GlideCone options: gpu pass={} gpu_est_ms first_wait={:.3f} "
+         "blocking={:.3f} span={:.3f}",
+         pass_index, GT::Ms(first_wait_us),
+         GT::Ms(chk_wait.sum + rb_wait_us),
+         GT::Ms(loop_us + rb_copy_us + rb_wait_us));
+#if GLIDECONE_TIMING_GPU
+  if (gpu_timer.IsEnabled())
+    LogFmt("GlideCone options: gpu pass={} gpu_timer=ok{} "
+           "propagate={:.3f}ms sum={:.3f}ms queries={} pending={} "
+           "disjoint={}",
+           pass_index,
+           GT::GetGpuTimerSupport().get_ui64 != nullptr ? "" : "(32bit)",
+           gpu.MsOf(GPU_PROPAGATE), gpu.MsOf(GPU_SUM), gpu.ready,
+           gpu.pending, gpu.disjoint);
+  else
+    LogFmt("GlideCone options: gpu pass={} gpu_timer=unavailable",
+           pass_index);
+#else
+  LogFmt("GlideCone options: gpu pass={} gpu_timer=disabled", pass_index);
+#endif
+#if GLIDECONE_TIMING_ISOLATE
+  LogFmt("GlideCone options: gpu pass={} ISOLATE (extra syncs, timings "
+         "perturbed) upload_gpu={:.3f} propagate_gpu={:.3f} "
+         "(n={} max={:.3f}) tail={:.3f}",
+         pass_index, GT::Ms(iso_upload_us), iso_prop.SumMs(), iso_prop.n,
+         iso_prop.MaxMs(), GT::Ms(iso_tail_us));
+#endif
+#else
   LogFmt("GlideCone options: gpu pass ratio={:.2f} iter={} checks={} "
          "upload={}ms loop={}ms checkwait={}ms read={}ms mask={}ms "
          "total={}ms",
          pass.ratio, iterations, checks, upload_ms, loop_ms,
          check_wait_ms, read_ms, mask_ms, ElapsedMs(t_pass));
+#endif
   return true;
 }
 
@@ -693,6 +908,7 @@ RunGlideConeDownward(const GlideConeDownwardJob &job,
   out.height = job.height;
 
   const auto t0 = Clock::now();
+  GLIDECONE_TIMING_ONLY(const std::uint64_t t_run = GT::NowUs();)
   LogFmt("GlideCone options: gpu run {}x{} passes={}",
          job.width, job.height, job.passes.size());
 
@@ -700,18 +916,31 @@ RunGlideConeDownward(const GlideConeDownwardJob &job,
     return false;
 
   const std::size_t count = std::size_t(job.width) * job.height;
+  GLIDECONE_TIMING_ONLY(std::uint64_t tp = GT::NowUs();)
   if (!EnsurePool(count)) {
     LogFmt("GlideCone options: gpu pool failed");
     return false;
   }
+#if GLIDECONE_TIMING
+  const std::uint64_t pool_us = GT::SinceUs(tp);
+  /* per pass: RunPass wall time, and CPU gap since the previous pass
+     returned (gap[0] = since EnsurePool) */
+  std::uint64_t pass_us[3] = {};
+  std::uint64_t gap_us[3] = {};
+  unsigned passes_run = 0;
+  std::uint64_t prev_end = GT::NowUs();
+#endif
 
   unsigned iterations = 0;
+  GLIDECONE_TIMING_ONLY(tp = GT::NowUs(); gap_us[0] = tp - prev_end;)
   if (!RunPass(job.passes[0], job.width, job.height, job.cell_x, job.cell_y,
                job.max_alt, should_abort, &out.arrival, &out.origin,
-               out.mask, iterations)) {
+               out.mask, iterations, 0)) {
     LogFmt("GlideCone options: gpu pass failed");
     return false;
   }
+  GLIDECONE_TIMING_ONLY(prev_end = GT::NowUs(); pass_us[0] = prev_end - tp;
+                        passes_run = 1;)
 
   out.iterations = iterations;
   out.floors = job.passes[0].floors;
@@ -720,28 +949,46 @@ RunGlideConeDownward(const GlideConeDownwardJob &job,
 
   if (job.passes.size() > 1) {
     unsigned ignored = 0;
+    GLIDECONE_TIMING_ONLY(tp = GT::NowUs(); gap_us[1] = tp - prev_end;)
     if (!RunPass(job.passes[1], job.width, job.height, job.cell_x, job.cell_y,
                  job.max_alt, should_abort, nullptr, nullptr,
-                 out.mask10, ignored)) {
+                 out.mask10, ignored, 1)) {
       if (should_abort && should_abort())
         return false;
       out.mask10.clear();
     }
+    GLIDECONE_TIMING_ONLY(prev_end = GT::NowUs(); pass_us[1] = prev_end - tp;
+                          passes_run = 2;)
   }
   if (job.passes.size() > 2) {
     unsigned ignored = 0;
+    GLIDECONE_TIMING_ONLY(tp = GT::NowUs(); gap_us[2] = tp - prev_end;)
     if (!RunPass(job.passes[2], job.width, job.height, job.cell_x, job.cell_y,
                  job.max_alt, should_abort, nullptr, nullptr,
-                 out.mask20, ignored)) {
+                 out.mask20, ignored, 2)) {
       if (should_abort && should_abort())
         return false;
       out.mask20.clear();
     }
+    GLIDECONE_TIMING_ONLY(prev_end = GT::NowUs(); pass_us[2] = prev_end - tp;
+                          passes_run = 3;)
   }
   unsigned mask_n = 0;
   for (const std::uint8_t cell : out.mask)
     if (cell != 0)
       ++mask_n;
+#if GLIDECONE_TIMING
+  LogFmt("GlideCone options: gpu run timing passes={} ensure_pool={:.3f}ms "
+         "(programs={:.3f} realloc={}) pass_ms=[{:.3f},{:.3f},{:.3f}] "
+         "sum_passes={:.3f}ms gaps_ms=[{:.3f},{:.3f},{:.3f}] "
+         "wall={:.3f}ms",
+         passes_run, GT::Ms(pool_us), GT::Ms(last_ensure_programs_us),
+         last_pool_realloc, GT::Ms(pass_us[0]), GT::Ms(pass_us[1]),
+         GT::Ms(pass_us[2]),
+         GT::Ms(pass_us[0] + pass_us[1] + pass_us[2]),
+         GT::Ms(gap_us[0]), GT::Ms(gap_us[1]), GT::Ms(gap_us[2]),
+         GT::Ms(GT::SinceUs(t_run)));
+#endif
   LogFmt("GlideCone options: gpu run done mask={} iter={} {}ms ok={}",
          mask_n, out.iterations, ElapsedMs(t0), out.ok);
   return out.ok;
