@@ -7,6 +7,8 @@
 namespace {
 Mutex mutex;
 GlideConeStatus::Snapshot current;
+unsigned last_compute_ms = 0;
+bool has_compute_ms = false;
 }
 
 void
@@ -38,4 +40,21 @@ GlideConeStatus::Get() noexcept
 {
   const std::lock_guard lock{mutex};
   return current;
+}
+
+void
+GlideConeStatus::NoteLastComputeMs(unsigned ms) noexcept
+{
+  const std::lock_guard lock{mutex};
+  last_compute_ms = ms;
+  has_compute_ms = true;
+}
+
+std::optional<unsigned>
+GlideConeStatus::LastComputeMs() noexcept
+{
+  const std::lock_guard lock{mutex};
+  if (!has_compute_ms)
+    return std::nullopt;
+  return last_compute_ms;
 }

@@ -51,6 +51,17 @@ static constexpr StaticEnumChoice options_display_list[] = {
 static_assert(unsigned(GlideConeSettings::OptionsDisplay::COUNT) == 3,
               "Options display choices must match the enum");
 
+static constexpr StaticEnumChoice cone_engine_list[] = {
+  { GlideConeSettings::ConeEngine::CPU, N_("CPU"),
+    N_("Compute the glide cone on the CPU.") },
+  { GlideConeSettings::ConeEngine::GPU, N_("GPU"),
+    N_("Compute the glide cone on the GPU (OpenGL ES 3.1).") },
+  nullptr
+};
+
+static_assert(unsigned(GlideConeSettings::ConeEngine::COUNT) == 2,
+              "Cone engine choices must match the enum");
+
 static constexpr StaticEnumChoice options_engine_list[] = {
   { GlideConeSettings::OptionsEngine::CPU, N_("CPU"),
     N_("Compute the optional area on the CPU.") },
@@ -142,6 +153,7 @@ SnapThresholdChoice(double value_user, unsigned max_user) noexcept
  */
 class GlideConeConfigPanel final : public ConfigListPanel {
   GlideConeSettings::Mode mode;
+  GlideConeSettings::ConeEngine cone_engine;
   double glide_ratio;
   double max_altitude;
   double cell_size;
@@ -265,6 +277,7 @@ GlideConeConfigPanel::LoadSettings() noexcept
     glide_cone.contours_min_scale * map_scale_to_ruler);
 
   mode = glide_cone.mode;
+  cone_engine = glide_cone.cone_engine;
   glide_ratio = glide_cone.glide_ratio;
   max_altitude = glide_cone.max_altitude;
   cell_size = glide_cone.cell_size;
@@ -287,13 +300,16 @@ GlideConeConfigPanel::Fill() noexcept
   AddGroup(_("Glide cone"));
 
   AddEnumItem(_("Glide cone"),
-              _("Terrain-aware glide cone mode.  This is a GPU "
-                "(OpenGL ES 3.1) feature and has no effect on devices "
-                "without compute support."),
+              _("Terrain-aware glide cone mode.  Propagation can run on "
+                "the CPU or on a GLES 3.1 GPU."),
               glide_cone_mode_list, mode);
 
   if (mode == GlideConeSettings::Mode::OFF)
     return;
+
+  AddEnumItem(_("Cone engine"),
+              _("Compute the upward glide cone on the CPU or on the GPU."),
+              cone_engine_list, cone_engine);
 
   AddFixedItem(_("Glide ratio"),
                _("Fixed glide ratio (L/D) used for the glide cone "
@@ -405,6 +421,8 @@ GlideConeConfigPanel::Save(bool &_changed) noexcept
 
   changed |= Profile::Update(ProfileKeys::GlideConeMode,
                              glide_cone.mode, mode);
+  changed |= Profile::Update(ProfileKeys::GlideConeEngine,
+                             glide_cone.cone_engine, cone_engine);
   changed |= Profile::Update(ProfileKeys::GlideConeGlideRatio,
                              glide_cone.glide_ratio, glide_ratio);
   changed |= Profile::Update(ProfileKeys::GlideConeMaxAltitude,

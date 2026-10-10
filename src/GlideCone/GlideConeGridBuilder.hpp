@@ -32,6 +32,9 @@ struct GlideConeGridRequest {
   double cell_size = 400;
   unsigned iteration_cap = 2000;
 
+  /** When true, the worker also runs #PropagateUpwardCpu. */
+  bool cpu_propagate = false;
+
   double clearance = 0;
   double arrival = 0;
 
@@ -52,6 +55,12 @@ struct GlideConePreparedGrid {
   GeoPoint center = GeoPoint::Invalid();
   GeoBounds bounds = GeoBounds::Invalid();
   GlideConeGrid grid;
+  /** Filled when #GlideConeGridRequest::cpu_propagate was set. */
+  bool cpu_ok = false;
+  bool hit_iteration_cap = false;
+  GlideConeResult cpu_result;
+  /** Wall time for grid build (+ CPU propagate when requested) [ms]. */
+  unsigned compute_ms = 0;
 };
 
 /**

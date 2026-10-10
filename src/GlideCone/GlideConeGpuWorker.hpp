@@ -21,6 +21,8 @@ struct GlideConeGpuReady {
   bool ok = false;
   /** True when Finish succeeded but the iteration cap was exhausted. */
   bool hit_iteration_cap = false;
+  /** Grid build + GPU propagate wall time [ms]. */
+  unsigned compute_ms = 0;
 };
 
 /**

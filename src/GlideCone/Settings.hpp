@@ -8,11 +8,10 @@
 /**
  * Settings for the terrain-aware glide cone overlay.
  *
- * The glide cone is a GPU (OpenGL ES 3.1 compute) reachability field
- * computed around a "Goto" airport; the resulting relay path from the
- * aircraft back to the airport is drawn on the map.  The computation is
- * only available on targets that provide a GLES 3.1 compute context
- * (currently Android); on other targets these settings are inert.
+ * The glide cone is a reachability field around a Goto airport (or
+ * combined landables).  Propagation runs on the GPU (GLES 3.1 compute)
+ * or on the CPU (Dijkstra); without GLES the GPU choice falls back to
+ * CPU.
  */
 struct GlideConeSettings {
   enum class Mode : uint8_t {
@@ -32,6 +31,15 @@ struct GlideConeSettings {
 
   /** Glide cone mode. */
   Mode mode;
+
+  /** Where the upward cone propagation runs. */
+  enum class ConeEngine : uint8_t {
+    CPU,
+    GPU,
+    COUNT,
+  };
+
+  ConeEngine cone_engine;
 
   /**
    * Fixed glide ratio (L/D) used for the cone propagation: horizontal

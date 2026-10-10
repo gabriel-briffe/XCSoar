@@ -102,7 +102,7 @@ public:
    * Schedule grid/GPU work and install completed results into @p field.
    * Updates @p overlay when a new field is installed or contours arrive.
    *
-   * @return false if the cone should clear (mode off / no GPU / no seed).
+   * @return false if the cone should clear (mode off / no seed).
    */
   bool Update(GlideConeField &field, GlideConeOverlay &overlay,
               GeoPoint aircraft, bool aircraft_valid,

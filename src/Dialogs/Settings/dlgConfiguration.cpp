@@ -35,7 +35,6 @@
 #include "Panels/TopographyDisplayConfigPanel.hpp"
 #include "Panels/GlideComputerConfigPanel.hpp"
 #include "Panels/GlideConeConfigPanel.hpp"
-#include "GlideCone/GlideConeCompute.hpp"
 #include "Panels/WindConfigPanel.hpp"
 #include "Panels/SafetyFactorsConfigPanel.hpp"
 #include "Panels/RouteConfigPanel.hpp"
@@ -163,8 +162,7 @@ static constexpr ConfigPage map_pages[] = {
 static constexpr ConfigPage computer_pages[] = {
   { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
   { N_("Glide Computer"), CreateGlideComputerConfigPanel },
-  { N_("Glide Cone"), CreateGlideConeConfigPanel, nullptr,
-    GlideConeGpuSession::Available },
+  { N_("Glide Cone"), CreateGlideConeConfigPanel },
   { N_("Wind"), CreateWindConfigPanel },
   { N_("Route"), CreateRouteConfigPanel },
   { N_("Scoring"), CreateScoringConfigPanel },

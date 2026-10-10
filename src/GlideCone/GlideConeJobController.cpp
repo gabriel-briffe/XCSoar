@@ -5,6 +5,7 @@
 #include "GlideConeCompute.hpp"
 #include "GlideConeField.hpp"
 #include "GlideConeOverlay.hpp"
+#include "GlideConeStatus.hpp"
 #include "Computer/Settings.hpp"
 #include "Engine/Waypoint/Waypoints.hpp"
 #include "Engine/Waypoint/Waypoint.hpp"
@@ -12,6 +13,7 @@
 #include "Terrain/RasterTerrain.hpp"
 #include "Message.hpp"
 #include "Language/Language.hpp"
+#include "LogFile.hpp"
 
 #include <cmath>
 #include <functional>
@@ -33,6 +35,7 @@ SettingsSignature(const GlideConeSettings &s,
                   double clearance, double arrival) noexcept
 {
   std::size_t h = std::hash<int>{}(int(s.mode));
+  h = h * 31 + std::hash<int>{}(int(s.cone_engine));
   h = h * 31 + std::hash<double>{}(s.glide_ratio);
   h = h * 31 + std::hash<double>{}(s.max_altitude);
   h = h * 31 + std::hash<double>{}(s.cell_size);
@@ -213,8 +216,11 @@ GlideConeJobController::Update(GlideConeField &field,
   if (mode == GlideConeSettings::Mode::COMBINED)
     signature = signature * 31 + WaypointDisplaySignature(waypoint_settings);
 
-  if (mode == GlideConeSettings::Mode::OFF || terrain == nullptr ||
-      !GlideConeGpuSession::Available()) {
+  const bool want_gpu =
+    gc.cone_engine == GlideConeSettings::ConeEngine::GPU &&
+    GlideConeGpuSession::Available();
+
+  if (mode == GlideConeSettings::Mode::OFF || terrain == nullptr) {
     Abort(overlay);
     field.Clear();
     computed_center = GeoPoint::Invalid();
@@ -311,11 +317,18 @@ GlideConeJobController::Update(GlideConeField &field,
     request.max_altitude = gc.max_altitude;
     request.cell_size = gc.cell_size;
     request.iteration_cap = gc.iteration_cap;
+    request.cpu_propagate = !want_gpu;
     request.clearance = clearance;
     request.arrival = arrival;
     request.combined = mode == GlideConeSettings::Mode::COMBINED;
     request.seeds = std::move(single_seeds);
     request.waypoint_settings = waypoint_settings;
+    LogFmt("GlideCone cone: queue gen={} engine={} {} center={:.5f},{:.5f} "
+           "radius={:.0f}m ld={:.1f} cell={:.0f}m cap={}",
+           job_generation, want_gpu ? "gpu" : "cpu",
+           mode == GlideConeSettings::Mode::COMBINED ? "combined" : "single",
+           job_center.latitude.Degrees(), job_center.longitude.Degrees(),
+           radius_m, gc.glide_ratio, gc.cell_size, gc.iteration_cap);
     if (worker.Request(std::move(request), waypoints, terrain)) {
       awaiting_grid = true;
       computed_center = job_center;
@@ -323,20 +336,45 @@ GlideConeJobController::Update(GlideConeField &field,
       if (mode == GlideConeSettings::Mode::COMBINED)
         computed_waypoint_serial = waypoint_serial;
     } else {
+      LogFmt("GlideCone cone: queue failed gen={}", job_generation);
       awaiting_grid = false;
       ClearFieldClaim(field.IsValid());
     }
   }
 
   if (auto prepared = worker.TakeReady()) {
-    if (prepared->generation == job_generation) {
+    if (prepared->generation != job_generation) {
+      LogFmt("GlideCone cone: ignore stale worker gen={}/{}",
+             prepared->generation, job_generation);
+    } else {
       awaiting_grid = false;
-      if (prepared->grid.IsValid()) {
+      if (prepared->cpu_ok && prepared->cpu_result.IsValid()) {
+        if (prepared->hit_iteration_cap)
+          Message::AddMessage(
+            _("GlideCone compute stopped, raise iteration cap"));
+        LogFmt("GlideCone cone: install cpu gen={} {}x{}",
+               prepared->generation, prepared->cpu_result.width,
+               prepared->cpu_result.height);
+        GlideConeStatus::NoteLastComputeMs(prepared->compute_ms);
+        auto result = std::move(prepared->cpu_result);
+        InstallField(field, overlay, std::move(*prepared),
+                     std::move(result));
+      } else if (prepared->grid.IsValid() && want_gpu) {
+        LogFmt("GlideCone cone: handoff gpu gen={} {}x{}",
+               prepared->generation, prepared->grid.width,
+               prepared->grid.height);
         if (gpu_worker.Request(std::move(prepared)))
           awaiting_gpu = true;
-        else
+        else {
+          LogFmt("GlideCone cone: gpu queue failed gen={}",
+                 job_generation);
           ClearFieldClaim(field.IsValid());
+        }
       } else {
+        LogFmt("GlideCone cone: worker result unusable gen={} "
+               "grid={} cpu_ok={} want_gpu={}",
+               prepared->generation, prepared->grid.IsValid(),
+               prepared->cpu_ok, want_gpu);
         ClearFieldClaim(field.IsValid());
       }
     }
@@ -350,6 +388,7 @@ GlideConeJobController::Update(GlideConeField &field,
       if (gpu_ready->hit_iteration_cap)
         Message::AddMessage(
           _("GlideCone compute stopped, raise iteration cap"));
+      GlideConeStatus::NoteLastComputeMs(gpu_ready->compute_ms);
       InstallField(field, overlay,
                    std::move(*gpu_ready->prepared),
                    std::move(gpu_ready->result));

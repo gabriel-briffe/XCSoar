@@ -9,6 +9,7 @@ void
 GlideConeSettings::SetDefaults() noexcept
 {
   mode = Mode::OFF;
+  cone_engine = ConeEngine::GPU;
   glide_ratio = 25;
   max_altitude = 3000;
   cell_size = DEFAULT_CELL_SIZE_M;

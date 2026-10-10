@@ -399,6 +399,7 @@ constexpr std::string_view LastSeenNewsVersion =
   "LastSeenNewsVersion";
 
 constexpr std::string_view GlideConeMode = "GlideConeMode";
+constexpr std::string_view GlideConeEngine = "GlideConeEngine";
 constexpr std::string_view GlideConeGlideRatio = "GlideConeGlideRatio";
 constexpr std::string_view GlideConeMaxAltitude = "GlideConeMaxAltitude";
 constexpr std::string_view GlideConeIterationCap = "GlideConeIterationCap";

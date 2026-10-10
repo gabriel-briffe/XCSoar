@@ -11,7 +11,6 @@
 #include "Dialogs/Settings/Panels/GaugesConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/GlideComputerConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/GlideConeConfigPanel.hpp"
-#include "GlideCone/GlideConeCompute.hpp"
 #include "Dialogs/Settings/Panels/InfoBoxLayoutConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/InfoBoxesConfigPanel.hpp"
 #include "Dialogs/Settings/Panels/MapDisplayConfigPanel.hpp"
@@ -1235,8 +1234,7 @@ static constexpr TabMenuPage infoboxes_pages[] = {
 static constexpr TabMenuPage computer_pages[] = {
   { N_("Safety Factors"), CreateSafetyFactorsConfigPanel },
   { N_("Settings"), CreateGlideComputerConfigPanel },
-  { N_("Glide Cone"), CreateGlideConeConfigPanel,
-    GlideConeGpuSession::Available },
+  { N_("Glide Cone"), CreateGlideConeConfigPanel },
   { N_("Route"), CreateRouteConfigPanel },
   { N_("Scoring"), CreateScoringConfigPanel },
   { nullptr, nullptr }

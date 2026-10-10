@@ -15,6 +15,7 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <utility>
 
@@ -232,12 +233,18 @@ private:
       const ScopeUnlock unlock{mutex};
 
       GLIDECONE_TIMING_ONLY(std::uint64_t tp = GT::NowUs();)
+      unsigned gpu_run_ms = 0;
       if (eglMakeCurrent(dpy, compute_surf, compute_surf, compute_ctx)) {
         GLIDECONE_TIMING_ONLY(make_current_us = GT::SinceUs(tp);
                               tp = GT::NowUs();)
-        if (out->prepared != nullptr)
+        if (out->prepared != nullptr) {
+          using Clock = std::chrono::steady_clock;
+          const auto t_run = Clock::now();
           ok = session.Run(out->prepared->grid, should_abort, out->result,
                            &hit_cap);
+          gpu_run_ms = unsigned(std::chrono::duration_cast<
+            std::chrono::milliseconds>(Clock::now() - t_run).count());
+        }
         GLIDECONE_TIMING_ONLY(cone_run_us = GT::SinceUs(tp);
                               tp = GT::NowUs();)
         if (down != nullptr) {
@@ -248,6 +255,8 @@ private:
         GLIDECONE_TIMING_ONLY(down_run_us = GT::SinceUs(tp);)
         eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       }
+      if (out->prepared != nullptr)
+        out->compute_ms = out->prepared->compute_ms + gpu_run_ms;
 #if GLIDECONE_TIMING
       /* logged outside the mutex; the cone job runs before the
          optional-area job in the same Tick, so the latter's latency

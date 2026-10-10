@@ -17,6 +17,7 @@
 #include "Renderer/TextButtonRenderer.hpp"
 #include "util/StaticString.hxx"
 #include "GlideCone/GlideConeOptions.hpp"
+#include "GlideCone/GlideConeStatus.hpp"
 #include "ui/event/Timer.hpp"
 
 #include <algorithm>
@@ -75,7 +76,7 @@ MakeActiveButton(ContainerWindow &parent, const ButtonLook &look,
 } // namespace
 
 /**
- * Setup tab: L/D stepper and Off/Single/Combined mode bar.
+ * Setup tab: L/D stepper, Off/Single/Combined, CPU/GPU, last compute.
  */
 class GlideConeSetupWidget final : public NullWidget {
   static constexpr std::array<GlideConeSettings::Mode, 3> MODES = {
@@ -89,6 +90,13 @@ class GlideConeSetupWidget final : public NullWidget {
   std::unique_ptr<Button> minus, plus;
   std::unique_ptr<WndFrame> value;
   std::array<std::unique_ptr<Button>, 3> modes;
+  std::array<std::unique_ptr<Button>, 2> engines;
+  std::unique_ptr<WndFrame> duration;
+  /** Refresh "Last compute" while this tab is visible. */
+  UI::Timer refresh_timer{[this]{
+    UpdateDuration();
+    refresh_timer.Schedule(std::chrono::milliseconds{250});
+  }};
 
 public:
   explicit GlideConeSetupWidget(const DialogLook &_look) noexcept
@@ -96,12 +104,17 @@ public:
 
 private:
   struct Cells {
-    std::array<PixelRect, 3> top;
-    std::array<PixelRect, 3> bottom;
+    std::array<PixelRect, 3> ratio;
+    std::array<PixelRect, 3> mode;
+    PixelRect cpu, gpu;
+    PixelRect info;
   };
 
   static Cells Layout(const PixelRect &rc) noexcept {
-    const int mid = (rc.top + rc.bottom) / 2;
+    const int y1 = rc.top + rc.GetHeight() / 4;
+    const int y2 = rc.top + 2 * rc.GetHeight() / 4;
+    const int y3 = rc.top + 3 * rc.GetHeight() / 4;
+    const int half = (rc.left + rc.right) / 2;
     const auto thirds = [](int left, int right, int top, int bottom) {
       std::array<PixelRect, 3> cells{};
       const int width = right - left;
@@ -111,8 +124,11 @@ private:
       return cells;
     };
 
-    return {thirds(rc.left, rc.right, rc.top, mid),
-            thirds(rc.left, rc.right, mid, rc.bottom)};
+    return {thirds(rc.left, rc.right, rc.top, y1),
+            thirds(rc.left, rc.right, y1, y2),
+            PixelRect{rc.left, y2, half, y3},
+            PixelRect{half, y2, rc.right, y3},
+            PixelRect{rc.left, y3, rc.right, rc.bottom}};
   }
 
   void UpdateValue() noexcept {
@@ -124,10 +140,27 @@ private:
   }
 
   void UpdateModes() noexcept {
-    const auto mode = CommonInterface::GetComputerSettings().glide_cone.mode;
+    const auto &gc = CommonInterface::GetComputerSettings().glide_cone;
     for (unsigned i = 0; i < MODES.size(); ++i)
       if (modes[i] != nullptr)
-        SetButtonActive(*modes[i], MODES[i] == mode);
+        SetButtonActive(*modes[i], MODES[i] == gc.mode);
+
+    const bool cpu = gc.cone_engine == GlideConeSettings::ConeEngine::CPU;
+    if (engines[0] != nullptr)
+      SetButtonActive(*engines[0], cpu);
+    if (engines[1] != nullptr)
+      SetButtonActive(*engines[1], !cpu);
+  }
+
+  void UpdateDuration() noexcept {
+    if (duration == nullptr)
+      return;
+    StaticString<64> text;
+    if (const auto ms = GlideConeStatus::LastComputeMs())
+      text.UnsafeFormat(_("Last compute: %u ms"), *ms);
+    else
+      text.UnsafeFormat("%s", _("Last compute: —"));
+    duration->SetText(text.c_str());
   }
 
   void Adjust(int delta) noexcept {
@@ -144,15 +177,26 @@ private:
     UpdateModes();
   }
 
+  void SetEngine(GlideConeSettings::ConeEngine engine) noexcept {
+    auto &gc = CommonInterface::SetComputerSettings().glide_cone;
+    if (gc.cone_engine == engine) {
+      UpdateModes();
+      return;
+    }
+    gc.cone_engine = engine;
+    Profile::Set(ProfileKeys::GlideConeEngine, int(engine));
+    UpdateModes();
+  }
+
 public:
   PixelSize GetMinimumSize() const noexcept override {
     return {3u * Layout::GetMinimumControlHeight(),
-            2u * Layout::GetMinimumControlHeight()};
+            4u * Layout::GetMinimumControlHeight()};
   }
 
   PixelSize GetMaximumSize() const noexcept override {
     return {6u * Layout::GetMaximumControlHeight(),
-            2u * Layout::GetMaximumControlHeight()};
+            4u * Layout::GetMaximumControlHeight()};
   }
 
   void Prepare(ContainerWindow &parent, const PixelRect &rc) noexcept override {
@@ -164,52 +208,78 @@ public:
     WindowStyle button_style{style};
     button_style.TabStop();
 
-    minus = std::make_unique<Button>(parent, look.button, "-", cells.top[0],
+    minus = std::make_unique<Button>(parent, look.button, "-", cells.ratio[0],
                                      button_style, [this](){ Adjust(-1); });
-    value = std::make_unique<WndFrame>(parent, look, cells.top[1], style);
+    value = std::make_unique<WndFrame>(parent, look, cells.ratio[1], style);
     value->SetAlignCenter();
     value->SetVAlignCenter();
-    plus = std::make_unique<Button>(parent, look.button, "+", cells.top[2],
+    plus = std::make_unique<Button>(parent, look.button, "+", cells.ratio[2],
                                     button_style, [this](){ Adjust(1); });
 
     for (unsigned i = 0; i < MODES.size(); ++i) {
       const auto mode = MODES[i];
       modes[i] = MakeActiveButton(parent, look.button,
                                   gettext(GLIDE_CONE_MODE_LABELS[i]),
-                                  cells.bottom[i], button_style,
+                                  cells.mode[i], button_style,
                                   [this, mode](){ SetMode(mode); });
     }
 
+    engines[0] = MakeActiveButton(parent, look.button, _("CPU"),
+                                  cells.cpu, button_style,
+                                  [this](){
+                                    SetEngine(GlideConeSettings::ConeEngine::CPU);
+                                  });
+    engines[1] = MakeActiveButton(parent, look.button, _("GPU"),
+                                  cells.gpu, button_style,
+                                  [this](){
+                                    SetEngine(GlideConeSettings::ConeEngine::GPU);
+                                  });
+    duration = std::make_unique<WndFrame>(parent, look, cells.info, style);
+    duration->SetVAlignCenter();
+
     UpdateValue();
     UpdateModes();
+    UpdateDuration();
   }
 
   void Show(const PixelRect &rc) noexcept override {
     const auto cells = Layout(rc);
-    minus->MoveAndShow(cells.top[0]);
-    value->MoveAndShow(cells.top[1]);
-    plus->MoveAndShow(cells.top[2]);
+    minus->MoveAndShow(cells.ratio[0]);
+    value->MoveAndShow(cells.ratio[1]);
+    plus->MoveAndShow(cells.ratio[2]);
     for (unsigned i = 0; i < modes.size(); ++i)
-      modes[i]->MoveAndShow(cells.bottom[i]);
+      modes[i]->MoveAndShow(cells.mode[i]);
+    engines[0]->MoveAndShow(cells.cpu);
+    engines[1]->MoveAndShow(cells.gpu);
+    duration->MoveAndShow(cells.info);
     UpdateValue();
     UpdateModes();
+    UpdateDuration();
+    refresh_timer.Schedule(std::chrono::milliseconds{250});
   }
 
   void Hide() noexcept override {
+    refresh_timer.Cancel();
     minus->Hide();
     value->Hide();
     plus->Hide();
     for (auto &b : modes)
       b->Hide();
+    for (auto &b : engines)
+      b->Hide();
+    duration->Hide();
   }
 
   void Move(const PixelRect &rc) noexcept override {
     const auto cells = Layout(rc);
-    minus->Move(cells.top[0]);
-    value->Move(cells.top[1]);
-    plus->Move(cells.top[2]);
+    minus->Move(cells.ratio[0]);
+    value->Move(cells.ratio[1]);
+    plus->Move(cells.ratio[2]);
     for (unsigned i = 0; i < modes.size(); ++i)
-      modes[i]->Move(cells.bottom[i]);
+      modes[i]->Move(cells.mode[i]);
+    engines[0]->Move(cells.cpu);
+    engines[1]->Move(cells.gpu);
+    duration->Move(cells.info);
   }
 
   bool SetFocus() noexcept override {
@@ -223,7 +293,7 @@ public:
     for (const auto &b : modes)
       if (b->HasFocus())
         return true;
-    return false;
+    return engines[0]->HasFocus() || engines[1]->HasFocus();
   }
 };
 

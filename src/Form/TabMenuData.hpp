@@ -14,7 +14,7 @@ struct TabMenuPage {
 
   /**
    * Optional gate: when non-null, the page is omitted unless this
-   * returns true (e.g. Glide Cone needs GLES 3.1 compute).
+   * returns true.
    */
   bool (*available)() noexcept = nullptr;
 };

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <optional>
+
 /**
  * Thread-safe channel publishing the latest glide cone result at the
  * aircraft position.  Written by the draw thread (GlideConeRenderer) and
@@ -39,5 +41,11 @@ void SetInvalid() noexcept;
 
 [[gnu::pure]]
 Snapshot Get() noexcept;
+
+/** Record wall time of the last successful cone install [ms]. */
+void NoteLastComputeMs(unsigned ms) noexcept;
+
+[[gnu::pure]]
+std::optional<unsigned> LastComputeMs() noexcept;
 
 } // namespace GlideConeStatus
