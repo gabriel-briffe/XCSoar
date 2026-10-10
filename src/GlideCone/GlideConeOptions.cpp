@@ -11,13 +11,17 @@
 #include "ui/canvas/Brush.hpp"
 #include "ui/canvas/Pen.hpp"
 #include "ui/canvas/Color.hpp"
+#include "ui/canvas/RawBitmap.hpp"
 #include "ui/dim/BulkPoint.hpp"
+#include "ui/dim/Size.hpp"
 #include "Look/Colors.hpp"
 #include "Look/MapLook.hpp"
 #include "Projection/WindowProjection.hpp"
 #include "Asset.hpp"
 
 #ifdef ENABLE_OPENGL
+#include "Renderer/GeoBitmapRenderer.hpp"
+#include "ui/canvas/opengl/ConstantAlpha.hpp"
 #include "ui/canvas/opengl/Scope.hpp"
 #endif
 
@@ -25,6 +29,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -63,6 +68,12 @@ struct State {
    */
   std::vector<std::uint8_t> tone;
 
+  /**
+   * OpenGL: mask+tone baked to RGBA; drawn as a geo bitmap (8×8 mesh).
+   * Null when empty or on memory-canvas builds.
+   */
+  std::unique_ptr<RawBitmap> overlay;
+
   /** Bumped when a GPU job is queued or the mask is cleared. */
   std::uint64_t gpu_generation = 0;
   /** True while a GPU downward job is queued or running. */
@@ -87,6 +98,64 @@ struct State {
 static constexpr std::chrono::milliseconds PAN_DOWNWARD_DEBOUNCE{400};
 
 State state;
+
+/**
+ * Bake #state.mask / #state.tone into #state.overlay for OpenGL draw.
+ * Call on the draw thread after installing a new mask.  Requires
+ * per-pixel source alpha so empty cells stay transparent.
+ */
+void
+BakeOverlay() noexcept
+{
+#ifdef ENABLE_OPENGL
+  if (!HaveBitmapSourceAlpha() || state.mask.empty() ||
+      state.width == 0 || state.height == 0 || !state.bounds.IsValid()) {
+    state.overlay.reset();
+    return;
+  }
+
+  const PixelSize size{state.width, state.height};
+  if (state.overlay == nullptr || state.overlay->GetSize() != size)
+    state.overlay = std::make_unique<RawBitmap>(size);
+
+  const bool flat = !HasColors() || IsDithered() ||
+    state.display == GlideConeSettings::OptionsDisplay::SOLID ||
+    state.tone.size() != state.mask.size();
+
+  Color tone_rgb[9];
+  if (!flat) {
+    for (unsigned step = 0; step < 9; ++step) {
+      tone_rgb[step] = step <= 4
+        ? MixColors(COLOR_RED, COLOR_GLIDE_CONE_MARGIN_MID,
+                    std::uint8_t(255 - step * 255 / 4))
+        : MixColors(COLOR_GLIDE_CONE_MARGIN_MID, COLOR_LIGHT_GREEN,
+                    std::uint8_t(255 - (step - 4) * 255 / 4));
+    }
+  }
+
+  const Color flat_rgb = flat && HasColors() && !IsDithered()
+    ? COLOR_GLIDE_CONE
+    : COLOR_BLACK;
+
+  RawColor *pixel = state.overlay->GetTopRow();
+  for (unsigned y = 0; y < state.height; ++y) {
+    for (unsigned x = 0; x < state.width; ++x) {
+      const std::size_t i = std::size_t(y) * state.width + x;
+      if (!state.mask[i]) {
+        *pixel++ = RawColor(0, 0, 0, 0);
+        continue;
+      }
+      const Color c = flat
+        ? flat_rgb
+        : tone_rgb[state.tone[i]];
+      *pixel++ = RawColor(c.Red(), c.Green(), c.Blue(), 255);
+    }
+  }
+  state.overlay->SetDirty();
+#else
+  state.overlay.reset();
+#endif
+}
 
 [[gnu::pure]]
 bool
@@ -605,6 +674,7 @@ GlideConeOptions::Clear() noexcept
   state.is_seed.clear();
   state.floors.clear();
   state.tone.clear();
+  state.overlay.reset();
   state.best_airport_index = -1;
   state.start_index = -1;
   state.start_location = GeoPoint::Invalid();
@@ -887,6 +957,7 @@ GlideConeOptions::ApplyCpu(const GlideConeField &field,
   state.has_duration = true;
   state.has_last = true;
   state.last_at = std::chrono::steady_clock::now();
+  BakeOverlay();
   (void)settings;
 }
 
@@ -963,6 +1034,7 @@ GlideConeOptions::ApplyGpu(const GlideConeField &field,
   LogFmt("GlideCone options: gpu apply {}x{} mask={} iter={} {}ms",
          width, height, MaskCount(state.mask), ready.iterations,
          state.last_ms);
+  BakeOverlay();
   (void)settings;
 }
 
@@ -1018,6 +1090,20 @@ GlideConeOptions::Draw(Canvas &canvas, const WindowProjection &projection,
     return;
 
   unsigned opacity = std::clamp(settings.options_opacity, 20u, 100u);
+
+#ifdef ENABLE_OPENGL
+  /* One geo bitmap (≥8×8 mesh) instead of per-cell quads — same path
+     as MapOverlayBitmap / terrain. */
+  if (state.overlay != nullptr) {
+    const ScopeTextureConstantAlpha blend(true, float(opacity) / 100.f);
+    DrawGeoBitmap(*state.overlay,
+                  PixelSize{state.width, state.height},
+                  state.bounds, projection);
+    return;
+  }
+#endif
+
+  /* Memory canvas / no source alpha: per-cell polygons. */
   const std::uint8_t alpha = std::uint8_t(opacity * 255 / 100);
   const bool flat = !HasColors() || IsDithered() ||
     settings.options_display == GlideConeSettings::OptionsDisplay::SOLID ||
@@ -1053,8 +1139,6 @@ GlideConeOptions::Draw(Canvas &canvas, const WindowProjection &projection,
         continue;
       if (!flat)
         canvas.Select(brushes[state.tone[std::size_t(y) * state.width + x]]);
-      const GeoPoint center = state.bounds.GetCenter();
-      (void)center;
       const double west = state.bounds.GetWest().Degrees() +
         (double(x) / state.width) * state.bounds.GetWidth().Degrees();
       const double east = state.bounds.GetWest().Degrees() +
