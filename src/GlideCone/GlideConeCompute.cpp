@@ -77,7 +77,6 @@ uniform float uMaxAlt;
 
 const uint FLAG_GROUND = 1u;
 const uint FLAG_CHANGED = 2u;
-const float ALT_EPSILON = 0.001;
 
 int idx(int x, int y) { return y * uWidth + x; }
 
@@ -347,9 +346,10 @@ void main() {
   cout[i].ox = newOx;
   cout[i].oy = newOy;
 
+  /* Any altitude change counts (no epsilon). */
   bool changed = newOx != myOx
     || newOy != myOy
-    || abs(newAlt - curAlt) > ALT_EPSILON
+    || newAlt != curAlt
     || newGround != isGroundCell(curFlags);
   cout[i].flags = packFlags(newGround, changed);
   if (changed)

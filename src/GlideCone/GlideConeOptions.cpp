@@ -301,10 +301,33 @@ BuildFloors(const GlideConeField &field, double ratio,
 }
 
 /**
- * Bresenham LOS from (@p x0,@p y0) to origin (@p ox,@p oy).  Blocked
- * when descent altitude from the origin would fall below the upward
- * glide-cone floor (Option flags alone do not block).
+ * Same as the GLES downward / upward #isInViewToOrigin: extended
+ * Bresenham with diagonal corner samples.  A ray cell blocks when the
+ * descent from the origin is at or below the cone floor (no floor =
+ * does not block).  Option flags alone do not block.
  */
+[[gnu::pure]]
+bool
+CellBlocksRay(const std::vector<float> &best,
+              const std::vector<float> &floors,
+              float max_alt,
+              unsigned width, unsigned height,
+              int cx, int cy, int ox, int oy,
+              double cell_x, double cell_y, double ratio) noexcept
+{
+  if (cx < 0 || cy < 0 || cx >= int(width) || cy >= int(height))
+    return true;
+  if (cx == ox && cy == oy)
+    return false;
+  const std::size_t i = std::size_t(cy) * width + cx;
+  if (!HasConeFloor(floors, i, max_alt))
+    return false;
+  const float descent = best[std::size_t(oy) * width + ox] -
+    float(std::sqrt((cx - ox) * (cx - ox) * cell_x * cell_x +
+                    (cy - oy) * (cy - oy) * cell_y * cell_y) / ratio);
+  return floors[i] >= descent;
+}
+
 bool
 InView(const std::vector<float> &best,
        const std::vector<float> &floors,
@@ -313,29 +336,68 @@ InView(const std::vector<float> &best,
        int x0, int y0, int ox, int oy,
        double cell_x, double cell_y, double ratio) noexcept
 {
-  const std::size_t origin_i = std::size_t(oy) * width + ox;
-  const float origin_alt = best[origin_i];
-  int dx = std::abs(ox - x0);
-  int dy = std::abs(oy - y0);
-  int sx = x0 < ox ? 1 : -1;
-  int sy = y0 < oy ? 1 : -1;
-  int err = dx - dy;
-  int x = x0, y = y0;
-  while (x != ox || y != oy) {
-    const int e2 = 2 * err;
-    if (e2 > -dy) { err -= dy; x += sx; }
-    if (e2 < dx) { err += dx; y += sy; }
-    if (x == ox && y == oy)
-      break;
-    if (x < 0 || y < 0 || x >= int(width) || y >= int(height))
-      return false;
-    const std::size_t i = std::size_t(y) * width + x;
-    if (!HasConeFloor(floors, i, max_alt))
-      return false;
-    const float alt = origin_alt -
-      float(std::hypot((x - ox) * cell_x, (y - oy) * cell_y) / ratio);
-    if (alt < floors[i])
-      return false;
+  if (ox < 0 || oy < 0 || ox >= int(width) || oy >= int(height))
+    return false;
+  if (x0 == ox && y0 == oy)
+    return true;
+
+  const int adx = std::abs(ox - x0);
+  const int ady = std::abs(oy - y0);
+  int x1 = x0;
+  int y1 = y0;
+  const int xstep = ox > x1 ? 1 : -1;
+  const int ystep = oy > y1 ? 1 : -1;
+  const int dx = adx;
+  const int dy = ady;
+  const int ddy = dy * 2;
+  const int ddx = dx * 2;
+  int error = dx;
+  int errorprev = error;
+
+  if (dx >= dy) {
+    for (int s = 0; s < dx; ++s) {
+      x1 += xstep;
+      error += ddy;
+      if (error > ddx) {
+        y1 += ystep;
+        error -= ddx;
+        if (error + errorprev < ddx) {
+          if (CellBlocksRay(best, floors, max_alt, width, height,
+                            x1, y1 - ystep, ox, oy, cell_x, cell_y, ratio))
+            return false;
+        } else if (error + errorprev > ddx) {
+          if (CellBlocksRay(best, floors, max_alt, width, height,
+                            x1 - xstep, y1, ox, oy, cell_x, cell_y, ratio))
+            return false;
+        }
+      }
+      if (CellBlocksRay(best, floors, max_alt, width, height,
+                        x1, y1, ox, oy, cell_x, cell_y, ratio))
+        return false;
+      errorprev = error;
+    }
+  } else {
+    for (int s = 0; s < dy; ++s) {
+      y1 += ystep;
+      error += ddx;
+      if (error > ddy) {
+        x1 += xstep;
+        error -= ddy;
+        if (error + errorprev < ddy) {
+          if (CellBlocksRay(best, floors, max_alt, width, height,
+                            x1 - xstep, y1, ox, oy, cell_x, cell_y, ratio))
+            return false;
+        } else if (error + errorprev > ddy) {
+          if (CellBlocksRay(best, floors, max_alt, width, height,
+                            x1, y1 - ystep, ox, oy, cell_x, cell_y, ratio))
+            return false;
+        }
+      }
+      if (CellBlocksRay(best, floors, max_alt, width, height,
+                        x1, y1, ox, oy, cell_x, cell_y, ratio))
+        return false;
+      errorprev = error;
+    }
   }
   return true;
 }
@@ -386,7 +448,7 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
     const std::size_t ui = std::size_t(index);
     if (!(flags[ui] & OPTION))
       continue;
-    if (arrival < best[ui] - 0.05f)
+    if (arrival < best[ui])
       continue;
     const int x = index % int(width);
     const int y = index / int(width);

@@ -293,7 +293,7 @@ void main() {
   cout[i].ox = bestOx;
   cout[i].oy = bestOy;
   bool changed = bestOx != myOx || bestOy != myOy
-    || abs(bestArrival - curAlt) > 0.001
+    || bestArrival > curAlt
     || !isOptionCell(curFlags);
   cout[i].flags = packFlags(true, changed);
 }
