@@ -478,9 +478,11 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
         const double dist = std::hypot((nx - ox) * cell_x, (ny - oy) * cell_y);
         const float next = best[std::size_t(elected)] - float(dist / ratio);
 
+        /* No upward-cone value (capped / unreachable): not an Option. */
+        if (!HasConeFloor(floors, nidx, field.max_alt))
+          continue;
         /* At/below the floor: leave empty (no GC freeze). */
-        if (HasConeFloor(floors, nidx, field.max_alt) &&
-            next <= floors[nidx])
+        if (next <= floors[nidx])
           continue;
 
         if (next <= best[nidx])

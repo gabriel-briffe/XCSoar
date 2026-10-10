@@ -283,8 +283,13 @@ void main() {
     return;
   }
 
+  /* No upward-cone value (capped / unreachable): not an Option. */
+  if (!hasConeFloor(i)) {
+    passthrough(i, myOx, myOy, curAlt, curFlags);
+    return;
+  }
   /* Below / on the cone floor: leave empty so a better path can fill. */
-  if (hasConeFloor(i) && bestArrival <= floors[i]) {
+  if (bestArrival <= floors[i]) {
     passthrough(i, myOx, myOy, curAlt, curFlags);
     return;
   }
@@ -632,8 +637,8 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
     cells[i].flags = 0;
   }
   const float floor = pass.floors[start];
-  /* Seed is an Option only when arrival clears the cone floor. */
-  if (!(floor < max_alt) || pass.start_alt > floor) {
+  /* Seed only where the upward cone has a floor and arrival clears it. */
+  if (floor < max_alt && pass.start_alt > floor) {
     cells[start].alt = pass.start_alt;
     cells[start].ox = pass.gi;
     cells[start].oy = pass.gj;
