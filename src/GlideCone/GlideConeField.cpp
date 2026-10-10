@@ -337,21 +337,13 @@ GlideConeField::ResolveOptionsSeed(int x, int y, double start_alt,
   const unsigned width = result.width;
   const unsigned height = result.height;
   const std::size_t start_index = std::size_t(y) * width + x;
-  if (result.altitudes[start_index] >= max_alt)
+  const double stored = double(result.altitudes[start_index]);
+  if (!(stored < max_alt))
     return none;
 
-  const auto proof = ProofAltitudeAtCell(x, y, ratio);
-  const double floor = proof
-    ? *proof
-    : double(result.altitudes[start_index]);
-  if (start_alt > floor)
+  /* Stored cone only — proof-lowered floors let options tunnel ridges. */
+  if (start_alt > stored)
     return {OptionsSeed::Kind::NORMAL, x, y, float(start_alt)};
-
-  const std::int32_t ox = result.origin_x[start_index];
-  const std::int32_t oy = result.origin_y[start_index];
-  if (!InGrid(result, ox, oy) || (ox == x && oy == y) ||
-      !IsGroundCell(result, std::size_t(oy) * width + ox))
-    return none;
 
   double distance_m = 0;
   int cx = x, cy = y;
@@ -368,16 +360,20 @@ GlideConeField::ResolveOptionsSeed(int x, int y, double start_alt,
     const std::int32_t ny = result.origin_y[index];
     if (!InGrid(result, nx, ny) || (nx == cx && ny == cy))
       return none;
-    if (!IsGroundCell(result, std::size_t(ny) * width + nx))
-      return none;
 
     distance_m += CellDistanceM(*this, cx, cy, nx, ny);
     const double arrival = start_alt - distance_m / ratio;
     const std::size_t next = std::size_t(ny) * width + nx;
-    if (result.altitudes[next] < max_alt &&
-        arrival > double(result.altitudes[next]))
+    const double next_stored = double(result.altitudes[next]);
+    const bool next_ground = IsGroundCell(result, next);
+
+    if (next_stored < max_alt && arrival > next_stored)
       return {OptionsSeed::Kind::ESCAPE, int(nx), int(ny),
               float(arrival)};
+
+    /* Still below stored: only continue through ground. */
+    if (!next_ground)
+      return none;
 
     cx = nx;
     cy = ny;

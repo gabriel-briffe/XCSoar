@@ -177,8 +177,8 @@ struct Heap {
 };
 
 /**
- * Downward optional area: the upward glide-cone altitudes are the floor
- * (not terrain).  OPTION marks cells whose arrival clears that floor;
+ * Downward optional area: stored upward-cone altitudes are the floor
+ * (reach and LOS).  OPTION marks cells whose arrival clears that floor;
  * the wavefront grows only through those cells (same as the GPU).
  */
 constexpr std::uint8_t OPTION = 1;
@@ -192,119 +192,21 @@ HasConeFloor(const std::vector<float> &floors, std::size_t i,
 }
 
 /**
- * Stored cone on air cells.  On ground cells, the walked-back proof
- * altitude when it is lower than stored terrain, so a ridge already
- * clear of the cone can still seed.
- *
- * The walk uses a local memo.  #GlideConeField::visit_stamp is shared
- * with the InfoBox proof query, so this must not call
- * ProofAltitudeAtCell() once per cell.
+ * Stored upward-cone altitudes only.  Proof-lowered ground floors let
+ * options LOS tunnel through ridges (terrain+clearance must still block).
  */
 void
-BuildFloors(const GlideConeField &field, double ratio,
+BuildFloors(const GlideConeField &field,
             std::vector<float> &floors) noexcept
 {
   floors = field.result.altitudes;
-  const unsigned width = field.result.width;
-  const unsigned height = field.result.height;
-  const std::size_t n = floors.size();
-  if (ratio <= 0 || width == 0 || height == 0 || n == 0)
-    return;
-
-  const double cell_x = field.cell_size_x_m;
-  const double cell_y = field.cell_size_y_m;
-
-  /* 0 unknown, 1 on the current chain, 2 proof stored in @c proof. */
-  std::vector<std::uint8_t> mark(n, 0);
-  std::vector<float> proof(n, 0);
-
-  for (std::size_t start = 0; start < n; ++start) {
-    if (mark[start] != 0)
-      continue;
-
-    const int sx = int(start % width);
-    const int sy = int(start / width);
-    if (!field.IsGroundAt(sx, sy)) {
-      proof[start] = floors[start];
-      mark[start] = 2;
-      continue;
-    }
-
-    std::vector<std::size_t> chain;
-    std::size_t cur = start;
-    bool have = false;
-    float base = 0;
-
-    while (mark[cur] == 0) {
-      const int cx = int(cur % width);
-      const int cy = int(cur / width);
-      if (!field.IsGroundAt(cx, cy)) {
-        proof[cur] = floors[cur];
-        mark[cur] = 2;
-        have = true;
-        base = proof[cur];
-        break;
-      }
-
-      mark[cur] = 1;
-      chain.push_back(cur);
-
-      const std::int32_t nx = field.result.origin_x[cur];
-      const std::int32_t ny = field.result.origin_y[cur];
-      const bool origin_ok = nx >= 0 && ny >= 0 &&
-        unsigned(nx) < width && unsigned(ny) < height &&
-        !(nx == cx && ny == cy);
-      if (!origin_ok) {
-        float seed = floors[cur];
-        for (const auto &s : field.seeds)
-          if (s.x == cx && s.y == cy)
-            seed = s.alt;
-        proof[cur] = seed;
-        mark[cur] = 2;
-        have = true;
-        base = seed;
-        chain.pop_back();
-        break;
-      }
-
-      cur = std::size_t(ny) * width + std::size_t(nx);
-    }
-
-    if (!have) {
-      if (mark[cur] == 2) {
-        have = true;
-        base = proof[cur];
-      } else {
-        for (const std::size_t idx : chain)
-          mark[idx] = 3;
-        continue;
-      }
-    }
-
-    double extra = 0;
-    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
-      const std::size_t idx = *it;
-      const int cx = int(idx % width);
-      const int cy = int(idx / width);
-      const int nx = int(field.result.origin_x[idx]);
-      const int ny = int(field.result.origin_y[idx]);
-      extra += std::hypot((nx - cx) * cell_x, (ny - cy) * cell_y);
-      proof[idx] = float(double(base) + extra / ratio);
-      mark[idx] = 2;
-    }
-  }
-
-  for (std::size_t i = 0; i < n; ++i)
-    if (floors[i] < field.max_alt && mark[i] == 2 &&
-        proof[i] < floors[i])
-      floors[i] = proof[i];
 }
 
 /**
- * Same as the GLES downward / upward #isInViewToOrigin: extended
- * Bresenham with diagonal corner samples.  A ray cell blocks when the
- * descent from the origin is at or below the cone floor (no floor =
- * does not block).  Option flags alone do not block.
+ * Same as the GLES downward #isInViewToOrigin: extended Bresenham with
+ * diagonal corner samples.  A ray cell blocks when the descent from the
+ * origin is at or below the *stored* cone floor (no floor = does not
+ * block).  Option flags alone do not block.
  */
 [[gnu::pure]]
 bool
@@ -533,7 +435,7 @@ RunDownward(const GlideConeField &field, int gi, int gj,
   if (seed.kind == GlideConeField::OptionsSeed::Kind::NONE)
     return false;
 
-  BuildFloors(field, ratio, out.floors);
+  BuildFloors(field, out.floors);
   std::vector<float> best;
   std::vector<std::uint8_t> flags;
   if (!PropagateDownward(field, seed.x, seed.y, seed.arrival, ratio,
@@ -627,7 +529,7 @@ FillPass(const GlideConeField &field, int gi, int gj, double start_alt,
   pass.gi = seed.x;
   pass.gj = seed.y;
   pass.start_alt = seed.arrival;
-  BuildFloors(field, ratio, pass.floors);
+  BuildFloors(field, pass.floors);
   return true;
 }
 
@@ -781,7 +683,7 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   if (gpu_job != nullptr) {
     if (!FillGpuJob(field, start_alt, start_location, gi, gj, settings,
                     *gpu_job)) {
-      /* Below the cone with no ground-only escape, or no cone floor. */
+      /* Below the cone with no escape seed, or no cone floor. */
       Clear();
       state.display = settings.options_display;
       state.has_last = true;
@@ -794,7 +696,7 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   const double ratio = field.glide_ratio > 0 ? field.glide_ratio : 1;
   DownwardRun full;
   if (!RunDownward(field, gi, gj, start_alt, ratio, full)) {
-    /* Below the cone with no ground-only escape, or no cone floor. */
+    /* Below the cone with no escape seed, or no cone floor. */
     LogFmt("GlideCone options: cpu no seed {},{} alt={:.0f}",
            gi, gj, start_alt);
     Clear();

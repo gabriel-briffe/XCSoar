@@ -41,7 +41,7 @@ CellCentre(const GlideConeField &f, int x, int y) noexcept
 int
 main()
 {
-  plan_tests(17);
+  plan_tests(19);
 
   GlideConeField air = MakeStrip();
   /* seed (air) <- air <- ground <- ground <- ground (aircraft) */
@@ -114,7 +114,8 @@ main()
     ridge.result.origin_x[i] = i == 0 ? 0 : int(i) - 1;
     ridge.result.ground[i] = i >= 2 ? 1 : 0;
   }
-  const auto above = ridge.ResolveOptionsSeed(4, 0, 200, 20);
+  /* Above the stored cone (200), not walked-back proof. */
+  const auto above = ridge.ResolveOptionsSeed(4, 0, 201, 20);
   ok1(above.kind == GlideConeField::OptionsSeed::Kind::NORMAL &&
       above.x == 4);
   const auto escape = ridge.ResolveOptionsSeed(4, 0, 130, 20);
@@ -122,6 +123,23 @@ main()
       escape.x == 3 && equals(double(escape.arrival), 110));
   const auto stuck = ridge.ResolveOptionsSeed(4, 0, 50, 20);
   ok1(stuck.kind == GlideConeField::OptionsSeed::Kind::NONE);
+
+  /* Below stored → seed at first air when L/D clears that air cell. */
+  GlideConeField to_air = MakeStrip();
+  to_air.result.width = 2;
+  to_air.result.altitudes = {100.f, 2080.f};
+  to_air.result.origin_x = {0, 0};
+  to_air.result.origin_y = {0, 0};
+  to_air.result.ground = {0, 1};
+  to_air.elevation = {0.f, 0.f};
+  const auto air_escape = to_air.ResolveOptionsSeed(1, 0, 2000, 20);
+  ok1(air_escape.kind == GlideConeField::OptionsSeed::Kind::ESCAPE &&
+      air_escape.x == 0 && equals(double(air_escape.arrival), 1980));
+
+  /* First air still above arrival → no options. */
+  to_air.result.altitudes[0] = 2500.f;
+  const auto air_stuck = to_air.ResolveOptionsSeed(1, 0, 2000, 20);
+  ok1(air_stuck.kind == GlideConeField::OptionsSeed::Kind::NONE);
 
   return exit_status();
 }

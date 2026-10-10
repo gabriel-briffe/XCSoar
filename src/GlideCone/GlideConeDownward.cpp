@@ -50,10 +50,11 @@ ElapsedMs(Clock::time_point t0) noexcept
 /*
  * Downward optional-area propagate (GLES 3.1).
  *
- * Cells that stay above the cone floor are Options.  The wavefront
- * grows only through Option neighbours — no GC freeze.  Arrivals that
- * would fall at/below the floor are simply not written, so a better
- * path can still fill that cell later.
+ * Cells that stay above the stored cone floor are Options.  The
+ * wavefront grows only through Option neighbours — no GC freeze.
+ * Arrivals that would fall at/below the floor are simply not written,
+ * so a better path can still fill that cell later.  LOS uses the same
+ * stored floors (not proof-lowered ground heights).
  *
  * No atomics here — change counting is a separate sum pass, run only
  * on convergence-check iterations.

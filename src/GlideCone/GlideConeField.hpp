@@ -156,9 +156,12 @@ struct GlideConeField {
   /**
    * Where an optional-area downward run may start.
    *
-   * Above the proof altitude, the glider cell.  Below it, the first
-   * ground cell along the relay path whose descending arrival is above
-   * the stored cone, when that run stays on the ground.  Otherwise none.
+   * Compare @p start_alt to the *stored* glide cone only (not
+   * walked-back proof).  Above it → the glider cell.  Below it → fly
+   * L/D along the origin path and seed at the first cell (ground or
+   * air) where arrival clears the stored cone.  Typically that is the
+   * first air cell after a ground run.  If the first air cell is still
+   * below the stored cone → none.
    */
   struct OptionsSeed {
     enum class Kind : std::uint8_t {
