@@ -36,6 +36,7 @@ build/local-config.mk
 .*.swp
 
 .idea
+.vscode/
 .ccache
 messages.mo
 po/*.mo
