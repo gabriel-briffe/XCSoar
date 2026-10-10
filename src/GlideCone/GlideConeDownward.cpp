@@ -28,7 +28,8 @@ struct GpuCell {
 
 static_assert(sizeof(GpuCell) == 16, "GpuCell must match std430 layout");
 
-constexpr std::uint32_t FLAG_GROUND = 1u;
+/** Cell is in the optional area (arrival above the cone floor). */
+constexpr std::uint32_t FLAG_OPTION = 1u;
 constexpr std::uint32_t FLAG_CHANGED = 2u;
 
 /**
@@ -47,9 +48,15 @@ ElapsedMs(Clock::time_point t0) noexcept
 }
 
 /*
- * GLES 3.1 port of gpu-MC DOWNWARD_PROPAGATE_SHADER.
- * No atomics here — change counting is a separate sum pass (gpu-MC
- * CHANGED_SUM_SHADER), run only on convergence-check iterations.
+ * Downward optional-area propagate (GLES 3.1).
+ *
+ * Cells that stay above the cone floor are Options.  The wavefront
+ * grows only through Option neighbours — no GC freeze.  Arrivals that
+ * would fall at/below the floor are simply not written, so a better
+ * path can still fill that cell later.
+ *
+ * No atomics here — change counting is a separate sum pass, run only
+ * on convergence-check iterations.
  */
 constexpr char DOWNWARD_SHADER[] = R"GLSL(#version 310 es
 precision highp float;
@@ -75,7 +82,7 @@ uniform float uCellSizeY;
 uniform float uGlideRatio;
 uniform float uMaxAlt;
 
-const uint FLAG_GROUND = 1u;
+const uint FLAG_OPTION = 1u;
 const uint FLAG_CHANGED = 2u;
 
 int idx(int x, int y) { return y * uWidth + x; }
@@ -92,18 +99,18 @@ bool hasStoredOrigin(int ox, int oy) {
 
 bool hasConeFloor(int i) { return floors[i] < uMaxAlt; }
 
-bool isGcAt(int x, int y) {
+bool isOptionAt(int x, int y) {
   if (!inBounds(x, y))
     return false;
-  return (cin[idx(x, y)].flags & FLAG_GROUND) != 0u;
+  return (cin[idx(x, y)].flags & FLAG_OPTION) != 0u;
 }
 
-bool isGcCell(uint flags) { return (flags & FLAG_GROUND) != 0u; }
+bool isOptionCell(uint flags) { return (flags & FLAG_OPTION) != 0u; }
 bool wasModified(uint flags) { return (flags & FLAG_CHANGED) != 0u; }
 
-uint packFlags(bool gc, bool changed) {
+uint packFlags(bool option, bool changed) {
   uint f = 0u;
-  if (gc) f = f | FLAG_GROUND;
+  if (option) f = f | FLAG_OPTION;
   if (changed) f = f | FLAG_CHANGED;
   return f;
 }
@@ -188,11 +195,11 @@ float arrivalFrom(int ox, int oy, int x, int y) {
   return cin[idx(ox, oy)].alt - sqrt(dx * dx + dy * dy) / uGlideRatio;
 }
 
-bool neighborIsActiveAir(int nx, int ny, int myOx, int myOy) {
+bool neighborIsActiveOption(int nx, int ny, int myOx, int myOy) {
   if (!inBounds(nx, ny))
     return false;
   uint nflags = cin[idx(nx, ny)].flags;
-  if (isGcCell(nflags) || !wasModified(nflags))
+  if (!isOptionCell(nflags) || !wasModified(nflags))
     return false;
   int nox = cin[idx(nx, ny)].ox;
   int noy = cin[idx(nx, ny)].oy;
@@ -201,7 +208,7 @@ bool neighborIsActiveAir(int nx, int ny, int myOx, int myOy) {
 
 void consider(int nx, int ny, int x, int y, int myOx, int myOy,
               inout float bestArrival, inout int bestOx, inout int bestOy) {
-  if (!neighborIsActiveAir(nx, ny, myOx, myOy))
+  if (!neighborIsActiveOption(nx, ny, myOx, myOy))
     return;
   int electedX = nx;
   int electedY = ny;
@@ -211,7 +218,7 @@ void consider(int nx, int ny, int x, int y, int myOx, int myOy,
     electedX = pox;
     electedY = poy;
   }
-  if (!originValid(electedX, electedY) || isGcAt(electedX, electedY))
+  if (!originValid(electedX, electedY) || !isOptionAt(electedX, electedY))
     return;
   float arrival = arrivalFrom(electedX, electedY, x, y);
   if (arrival > bestArrival) {
@@ -225,7 +232,7 @@ void passthrough(int i, int ox, int oy, float alt, uint flags) {
   cout[i].alt = alt;
   cout[i].ox = ox;
   cout[i].oy = oy;
-  cout[i].flags = flags & FLAG_GROUND;
+  cout[i].flags = flags & FLAG_OPTION;
 }
 
 void main() {
@@ -239,20 +246,14 @@ void main() {
   float curAlt = cin[i].alt;
   uint curFlags = cin[i].flags;
 
-  if (isGcCell(curFlags)) {
-    passthrough(i, myOx, myOy, curAlt, curFlags);
-    cout[i].flags = FLAG_GROUND;
-    return;
-  }
-
-  bool hasNeighbor = neighborIsActiveAir(x - 1, y - 1, myOx, myOy)
-    || neighborIsActiveAir(x, y - 1, myOx, myOy)
-    || neighborIsActiveAir(x + 1, y - 1, myOx, myOy)
-    || neighborIsActiveAir(x - 1, y, myOx, myOy)
-    || neighborIsActiveAir(x + 1, y, myOx, myOy)
-    || neighborIsActiveAir(x - 1, y + 1, myOx, myOy)
-    || neighborIsActiveAir(x, y + 1, myOx, myOy)
-    || neighborIsActiveAir(x + 1, y + 1, myOx, myOy);
+  bool hasNeighbor = neighborIsActiveOption(x - 1, y - 1, myOx, myOy)
+    || neighborIsActiveOption(x, y - 1, myOx, myOy)
+    || neighborIsActiveOption(x + 1, y - 1, myOx, myOy)
+    || neighborIsActiveOption(x - 1, y, myOx, myOy)
+    || neighborIsActiveOption(x + 1, y, myOx, myOy)
+    || neighborIsActiveOption(x - 1, y + 1, myOx, myOy)
+    || neighborIsActiveOption(x, y + 1, myOx, myOy)
+    || neighborIsActiveOption(x + 1, y + 1, myOx, myOy);
   if (!hasNeighbor) {
     passthrough(i, myOx, myOy, curAlt, curFlags);
     return;
@@ -282,18 +283,19 @@ void main() {
     return;
   }
 
-  float newAlt = bestArrival;
-  bool newGc = false;
-  if (hasConeFloor(i) && bestArrival < floors[i]) {
-    newAlt = floors[i];
-    newGc = true;
+  /* Below / on the cone floor: leave empty so a better path can fill. */
+  if (hasConeFloor(i) && bestArrival <= floors[i]) {
+    passthrough(i, myOx, myOy, curAlt, curFlags);
+    return;
   }
-  cout[i].alt = newAlt;
+
+  cout[i].alt = bestArrival;
   cout[i].ox = bestOx;
   cout[i].oy = bestOy;
   bool changed = bestOx != myOx || bestOy != myOy
-    || abs(newAlt - curAlt) > 0.001 || newGc;
-  cout[i].flags = packFlags(newGc, changed);
+    || abs(bestArrival - curAlt) > 0.001
+    || !isOptionCell(curFlags);
+  cout[i].flags = packFlags(true, changed);
 }
 )GLSL";
 
@@ -517,7 +519,7 @@ MaskFromArrivals(const std::vector<float> &arrival,
   for (std::size_t i = 0; i < arrival.size() && i < floors.size(); ++i) {
     if (!(floors[i] < max_alt))
       continue;
-    if (arrival[i] > floors[i])
+    if (arrival[i] > floors[i]) /* matches shader Option test */
       mask[i] = 1;
   }
 }
@@ -644,15 +646,13 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
     cells[i].flags = 0;
   }
   const float floor = pass.floors[start];
-  if (floor < max_alt && pass.start_alt < floor) {
-    cells[start].alt = floor;
-    cells[start].flags = FLAG_GROUND;
-  } else {
+  /* Seed is an Option only when arrival clears the cone floor. */
+  if (!(floor < max_alt) || pass.start_alt > floor) {
     cells[start].alt = pass.start_alt;
-    cells[start].flags = FLAG_CHANGED;
+    cells[start].ox = pass.gi;
+    cells[start].oy = pass.gj;
+    cells[start].flags = FLAG_OPTION | FLAG_CHANGED;
   }
-  cells[start].ox = pass.gi;
-  cells[start].oy = pass.gj;
 
   const auto t_upload = Clock::now();
   GLIDECONE_TIMING_ONLY(build_us = GT::SinceUs(tp_pass); tp = GT::NowUs();)

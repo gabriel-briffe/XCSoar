@@ -12,8 +12,8 @@
 #include <vector>
 
 /**
- * One downward optional-area pass (one L/D).  Floors are the cone
- * altitudes the shader treats as the ground it must not cross.
+ * One downward optional-area pass (one L/D).  Floors are the upward
+ * cone altitudes; cells that stay above them become Options.
  */
 struct GlideConeDownwardPass {
   double ratio = 1;
