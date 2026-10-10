@@ -6,6 +6,7 @@
 #include "GlideConeWorker.hpp"
 #include "GlideConeContourWorker.hpp"
 #include "GlideConeGpuWorker.hpp"
+#include "GlideConeOptionsWorker.hpp"
 #include "GlideConeDownward.hpp"
 #include "GlideConeGridBuilder.hpp"
 #include "GlideConeData.hpp"
@@ -34,6 +35,7 @@ class GlideConeJobController {
   GlideConeWorker worker;
   GlideConeContourWorker contour_worker;
   GlideConeGpuWorker gpu_worker;
+  GlideConeOptionsWorker options_cpu_worker;
 
   std::uint64_t job_generation = 0;
   std::uint64_t contour_generation = 0;
@@ -95,6 +97,11 @@ public:
   bool RequestDownward(std::unique_ptr<GlideConeDownwardJob> job) noexcept;
   std::unique_ptr<GlideConeDownwardReady> TakeDownward() noexcept;
   void CancelDownward() noexcept;
+
+  bool RequestOptionsCpu(
+    std::unique_ptr<GlideConeOptionsCpuJob> job) noexcept;
+  std::unique_ptr<GlideConeOptionsCpuReady> TakeOptionsCpu() noexcept;
+  void CancelOptionsCpu() noexcept;
 
   void ClearFieldClaim(bool field_valid) noexcept;
 

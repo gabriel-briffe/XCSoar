@@ -7,6 +7,7 @@
 #include "Geo/GeoPoint.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -14,6 +15,8 @@ struct GlideConeField;
 struct GlideConeSettings;
 struct GlideConeDownwardJob;
 struct GlideConeDownwardReady;
+struct GlideConeOptionsCpuJob;
+struct GlideConeOptionsCpuReady;
 struct MapLook;
 class Canvas;
 class WindowProjection;
@@ -39,10 +42,33 @@ std::optional<unsigned> LastComputeMs() noexcept;
 [[gnu::pure]]
 std::optional<double> QueryArrivalAltitude(GeoPoint location) noexcept;
 
+/**
+ * Schedule or prepare optional-area work.
+ *
+ * CPU: when @p cpu_job_out is non-null and a run is due, fills it with a
+ * field snapshot for #GlideConeOptionsWorker (does not compute on the
+ * caller thread).  GPU: fills @p gpu_job when non-null.
+ */
 void Update(const GlideConeField &field, double start_alt,
             GeoPoint start_location, int gi, int gj,
             const GlideConeSettings &settings,
-            GlideConeDownwardJob *gpu_job = nullptr) noexcept;
+            GlideConeDownwardJob *gpu_job = nullptr,
+            std::unique_ptr<GlideConeOptionsCpuJob> *cpu_job_out =
+              nullptr) noexcept;
+
+/**
+ * Run CPU optional-area downward on a worker thread.  Fills @p out
+ * (ok=false when there is no seed / empty area).
+ */
+void ComputeCpu(const GlideConeOptionsCpuJob &job,
+                GlideConeOptionsCpuReady &out) noexcept;
+
+/**
+ * Install a finished CPU downward result.  Ignores a stale generation.
+ */
+void ApplyCpu(const GlideConeField &field,
+              GlideConeOptionsCpuReady &&ready,
+              const GlideConeSettings &settings) noexcept;
 
 /**
  * Install a finished GPU downward result.  Ignores a stale generation.
@@ -54,11 +80,19 @@ void ApplyGpu(const GlideConeField &field,
 /** Mark the job just passed to the compute thread as the one in flight. */
 void NoteGpuQueued(GlideConeDownwardJob &job) noexcept;
 
+/** Mark the CPU job as in flight (generation already set on the job). */
+void NoteCpuQueued() noexcept;
+
 /**
  * Drop the in-flight GPU generation.  Keeps the routine cooldown so the
  * next map frame does not immediately start another GPU job.
  */
 void AbandonGpu() noexcept;
+
+/**
+ * Drop the in-flight CPU generation.  Keeps the routine cooldown.
+ */
+void AbandonCpu() noexcept;
 
 void Draw(Canvas &canvas, const WindowProjection &projection,
           const GlideConeSettings &settings) noexcept;

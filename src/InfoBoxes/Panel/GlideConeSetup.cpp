@@ -480,6 +480,7 @@ class GlideConeOptionsWidget final : public NullWidget {
     gc.options_engine = engine;
     Profile::Set(ProfileKeys::GlideConeOptionsEngine, int(engine));
     GlideConeOptions::AbandonGpu();
+    GlideConeOptions::AbandonCpu();
     if (gc.options_mode != GlideConeSettings::OptionsMode::OFF)
       GlideConeOptions::RequestOnce();
     UpdateButtons();

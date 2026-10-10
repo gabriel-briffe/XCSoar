@@ -2,6 +2,7 @@
 // Copyright The XCSoar Project
 
 #include "GlideConeOptions.hpp"
+#include "GlideConeOptionsWorker.hpp"
 #include "GlideConeField.hpp"
 #include "GlideConeDownward.hpp"
 #include "Settings.hpp"
@@ -66,6 +67,11 @@ struct State {
   std::uint64_t gpu_generation = 0;
   /** True while a GPU downward job is queued or running. */
   bool gpu_pending = false;
+
+  /** Bumped when a CPU job is queued or the mask is cleared. */
+  std::uint64_t cpu_generation = 0;
+  /** True while a CPU downward job is queued or running. */
+  bool cpu_pending = false;
 
   /** Pan-mode secondary downward from the probe option cell. */
   int pan_cell = -1;
@@ -612,6 +618,8 @@ GlideConeOptions::Clear() noexcept
   state.done = state.request;
   ++state.gpu_generation;
   state.gpu_pending = false;
+  ++state.cpu_generation;
+  state.cpu_pending = false;
 }
 
 std::optional<double>
@@ -643,7 +651,8 @@ void
 GlideConeOptions::Update(const GlideConeField &field, double start_alt,
                          GeoPoint start_location, int gi, int gj,
                          const GlideConeSettings &settings,
-                         GlideConeDownwardJob *gpu_job) noexcept
+                         GlideConeDownwardJob *gpu_job,
+                         std::unique_ptr<GlideConeOptionsCpuJob> *cpu_job_out) noexcept
 {
   if (settings.options_mode == GlideConeSettings::OptionsMode::OFF) {
     Clear();
@@ -655,14 +664,17 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   const auto now = std::chrono::steady_clock::now();
   const bool once = settings.options_mode == GlideConeSettings::OptionsMode::ONCE;
   const bool display_changed = settings.options_display != state.display;
-  /* Never queue a second GPU job while one is in flight — that cancels
-     the running pass and loops forever with empty masks. */
+  /* Never queue a second job while one is in flight — that cancels the
+     running pass and loops forever with empty masks. */
   if (state.gpu_pending && gpu_job != nullptr && !display_changed)
     return;
+  if (state.cpu_pending && cpu_job_out != nullptr && !display_changed)
+    return;
   if (once) {
-    /* Mask stays empty until ApplyGpu; treat pending/has_last as "started". */
+    /* Mask stays empty until Apply*; treat pending/has_last as "started". */
     if (state.request == state.done && !display_changed &&
-        (!state.mask.empty() || state.gpu_pending || state.has_last))
+        (!state.mask.empty() || state.gpu_pending || state.cpu_pending ||
+         state.has_last))
       return;
     if (state.request == 0)
       return;
@@ -676,7 +688,6 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
 
   const unsigned width = field.result.width;
   const unsigned height = field.result.height;
-  const std::size_t n = std::size_t(width) * height;
   if (gi < 0 || gj < 0 || gi >= int(width) || gj >= int(height))
     return;
 
@@ -692,11 +703,10 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
     return;
   }
 
-  const auto t0 = std::chrono::steady_clock::now();
+  /* Cheap seed check before copying the field to the worker. */
   const double ratio = field.glide_ratio > 0 ? field.glide_ratio : 1;
-  DownwardRun full;
-  if (!RunDownward(field, gi, gj, start_alt, ratio, full)) {
-    /* Below the cone with no escape seed, or no cone floor. */
+  if (field.ResolveOptionsSeed(gi, gj, start_alt, ratio).kind ==
+      GlideConeField::OptionsSeed::Kind::NONE) {
     LogFmt("GlideCone options: cpu no seed {},{} alt={:.0f}",
            gi, gj, start_alt);
     Clear();
@@ -706,25 +716,148 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
     return;
   }
 
-  std::vector<std::uint8_t> mask10, mask20;
-  if (settings.options_display ==
-      GlideConeSettings::OptionsDisplay::DEGRADED) {
-    DownwardRun ten, twenty;
-    if (RunDownward(field, gi, gj, start_alt, ratio * 0.9, ten))
-      mask10 = std::move(ten.mask);
-    if (RunDownward(field, gi, gj, start_alt, ratio * 0.8, twenty))
-      mask20 = std::move(twenty.mask);
+  if (cpu_job_out != nullptr) {
+    auto job = std::make_unique<GlideConeOptionsCpuJob>();
+    job->field = field;
+    job->field.contour_lines.clear();
+    job->start_alt = start_alt;
+    job->start_location = start_location;
+    job->gi = gi;
+    job->gj = gj;
+    job->display = settings.options_display;
+    ++state.cpu_generation;
+    job->generation = state.cpu_generation;
+    state.display = settings.options_display;
+    state.cpu_pending = true;
+    state.has_last = true;
+    state.last_at = now;
+    state.done = state.request;
+    *cpu_job_out = std::move(job);
+    return;
   }
 
-  PaintTone(full, mask10.empty() ? nullptr : &mask10,
-            mask20.empty() ? nullptr : &mask20,
-            settings.options_display, state.tone);
+  /* Sync fallback when no worker out-param (should not happen in UI). */
+  GlideConeOptionsCpuJob job;
+  job.generation = ++state.cpu_generation;
+  job.field = field;
+  job.start_alt = start_alt;
+  job.start_location = start_location;
+  job.gi = gi;
+  job.gj = gj;
+  job.display = settings.options_display;
+  state.cpu_pending = true;
+  GlideConeOptionsCpuReady ready;
+  ComputeCpu(job, ready);
+  ApplyCpu(field, std::move(ready), settings);
+}
+
+void
+GlideConeOptions::ComputeCpu(const GlideConeOptionsCpuJob &job,
+                             GlideConeOptionsCpuReady &out) noexcept
+{
+  out = {};
+  out.generation = job.generation;
+  out.display = job.display;
+  out.aircraft_gi = job.gi;
+  out.aircraft_gj = job.gj;
+  out.start_location = job.start_location;
+
+  const auto t0 = std::chrono::steady_clock::now();
+  const auto &field = job.field;
+  if (!field.IsValid())
+    return;
+
+  const double ratio = field.glide_ratio > 0 ? field.glide_ratio : 1;
+  DownwardRun full;
+  if (!RunDownward(field, job.gi, job.gj, job.start_alt, ratio, full)) {
+    LogFmt("GlideCone options: cpu no seed {},{} alt={:.0f}",
+           job.gi, job.gj, job.start_alt);
+    out.compute_ms = unsigned(std::chrono::duration_cast<
+      std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count());
+    return;
+  }
+
+  if (job.display == GlideConeSettings::OptionsDisplay::DEGRADED) {
+    DownwardRun ten, twenty;
+    if (RunDownward(field, job.gi, job.gj, job.start_alt, ratio * 0.9, ten))
+      out.mask10 = std::move(ten.mask);
+    if (RunDownward(field, job.gi, job.gj, job.start_alt, ratio * 0.8, twenty))
+      out.mask20 = std::move(twenty.mask);
+  }
+
+  out.ok = true;
+  out.width = field.result.width;
+  out.height = field.result.height;
+  out.bounds = field.bounds;
+  out.cell_x = field.cell_size_x_m > 0 ? field.cell_size_x_m
+                                       : field.cell_size_m;
+  out.cell_y = field.cell_size_y_m > 0 ? field.cell_size_y_m
+                                       : field.cell_size_m;
+  out.start_index = full.start_index;
+  out.mask = std::move(full.mask);
+  out.arrival = std::move(full.arrival);
+  out.origin = std::move(full.origin);
+  out.floors = std::move(full.floors);
+  out.compute_ms = unsigned(std::chrono::duration_cast<
+    std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - t0).count());
+  LogFmt("GlideCone options: cpu {}x{} mask={} {}ms",
+         out.width, out.height, MaskCount(out.mask), out.compute_ms);
+}
+
+void
+GlideConeOptions::ApplyCpu(const GlideConeField &field,
+                           GlideConeOptionsCpuReady &&ready,
+                           const GlideConeSettings &settings) noexcept
+{
+  if (ready.generation != state.cpu_generation) {
+    LogFmt("GlideCone options: cpu reject stale gen={}/{}",
+           ready.generation, state.cpu_generation);
+    return;
+  }
+
+  state.cpu_pending = false;
+  if (!ready.ok) {
+    const auto display = ready.display;
+    const unsigned ms = ready.compute_ms;
+    Clear();
+    state.display = display;
+    state.has_last = true;
+    state.last_at = std::chrono::steady_clock::now();
+    state.last_ms = ms;
+    state.has_duration = true;
+    return;
+  }
+
+  if (ready.width != field.result.width ||
+      ready.height != field.result.height ||
+      ready.arrival.size() != ready.mask.size()) {
+    LogFmt("GlideCone options: cpu reject grid={}/{} arrival={}",
+           ready.width, field.result.width, ready.arrival.size());
+    AbandonCpu();
+    return;
+  }
+
+  DownwardRun full;
+  full.mask = std::move(ready.mask);
+  full.arrival = std::move(ready.arrival);
+  full.origin = std::move(ready.origin);
+  full.floors = std::move(ready.floors);
+  full.start_index = ready.start_index;
+  full.ok = true;
+
+  const auto *mask10 = ready.mask10.empty() ? nullptr : &ready.mask10;
+  const auto *mask20 = ready.mask20.empty() ? nullptr : &ready.mask20;
+  PaintTone(full, mask10, mask20, ready.display, state.tone);
   state.mask = std::move(full.mask);
   state.arrival = std::move(full.arrival);
   state.origin = std::move(full.origin);
   state.floors = std::move(full.floors);
-  state.display = settings.options_display;
-  state.is_seed.assign(n, 0);
+  state.display = ready.display;
+  const unsigned width = ready.width;
+  const unsigned height = ready.height;
+  state.is_seed.assign(std::size_t(width) * height, 0);
   for (const auto &s : field.seeds) {
     if (s.x < 0 || s.y < 0 || s.x >= int(width) || s.y >= int(height))
       continue;
@@ -735,30 +868,26 @@ GlideConeOptions::Update(const GlideConeField &field, double start_alt,
   state.start_index = full.start_index;
   state.width = width;
   state.height = height;
-  state.bounds = field.bounds;
-  state.cell_x = field.cell_size_x_m > 0 ? field.cell_size_x_m
-                                         : field.cell_size_m;
-  state.cell_y = field.cell_size_y_m > 0 ? field.cell_size_y_m
-                                         : field.cell_size_m;
-  const int sx = full.start_index % int(width);
-  const int sy = full.start_index / int(width);
+  state.bounds = ready.bounds.IsValid() ? ready.bounds : field.bounds;
+  state.cell_x = ready.cell_x;
+  state.cell_y = ready.cell_y;
+  const int sx = full.start_index >= 0 ? full.start_index % int(width) : -1;
+  const int sy = full.start_index >= 0 ? full.start_index / int(width) : -1;
   state.start_location =
-    (sx == gi && sy == gj && start_location.IsValid())
-    ? start_location
+    (sx == ready.aircraft_gi && sy == ready.aircraft_gj &&
+     ready.start_location.IsValid())
+    ? ready.start_location
     : field.CellToGeo(sx, sy);
   state.pan_cell = -1;
   state.pan_origin.clear();
   state.pan_mask.clear();
   state.pan_best_airport = -1;
   state.pan_watch_cell = -1;
-  state.done = state.request;
+  state.last_ms = ready.compute_ms;
+  state.has_duration = true;
   state.has_last = true;
   state.last_at = std::chrono::steady_clock::now();
-  state.last_ms = unsigned(std::chrono::duration_cast<std::chrono::milliseconds>(
-    state.last_at - t0).count());
-  state.has_duration = true;
-  LogFmt("GlideCone options: cpu {}x{} mask={} {}ms",
-         width, height, MaskCount(state.mask), state.last_ms);
+  (void)settings;
 }
 
 void
@@ -844,6 +973,17 @@ GlideConeOptions::NoteGpuQueued(GlideConeDownwardJob &job) noexcept
   job.generation = state.gpu_generation;
   state.display = job.display;
   state.gpu_pending = true;
+  state.cpu_pending = false;
+  state.has_last = true;
+  state.last_at = std::chrono::steady_clock::now();
+  state.done = state.request;
+}
+
+void
+GlideConeOptions::NoteCpuQueued() noexcept
+{
+  state.cpu_pending = true;
+  state.gpu_pending = false;
   state.has_last = true;
   state.last_at = std::chrono::steady_clock::now();
   state.done = state.request;
@@ -856,6 +996,15 @@ GlideConeOptions::AbandonGpu() noexcept
   state.gpu_pending = false;
   /* Keep the routine cooldown so a failed/cancelled job does not
      re-queue on every map frame. */
+  state.has_last = true;
+  state.last_at = std::chrono::steady_clock::now();
+}
+
+void
+GlideConeOptions::AbandonCpu() noexcept
+{
+  ++state.cpu_generation;
+  state.cpu_pending = false;
   state.has_last = true;
   state.last_at = std::chrono::steady_clock::now();
 }

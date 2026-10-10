@@ -141,8 +141,10 @@ GlideConeRenderer::DrawField(Canvas &canvas,
   }
 
   const MoreData &basic = CommonInterface::Basic();
-  if (gc.options_mode == GlideConeSettings::OptionsMode::OFF)
+  if (gc.options_mode == GlideConeSettings::OptionsMode::OFF) {
     jobs.CancelDownward();
+    jobs.CancelOptionsCpu();
+  }
   if (auto ready = jobs.TakeDownward()) {
     if (ready->ok) {
       GlideConeOptions::ApplyGpu(field, *ready, gc);
@@ -154,24 +156,44 @@ GlideConeRenderer::DrawField(Canvas &canvas,
       GlideConeOptions::AbandonGpu();
     }
   }
+  if (auto cpu_ready = jobs.TakeOptionsCpu())
+    GlideConeOptions::ApplyCpu(field, std::move(*cpu_ready), gc);
   if (aircraft_valid) {
     int gi = -1, gj = -1;
     if (field.GeoToCell(aircraft, gi, gj) && basic.NavAltitudeAvailable()) {
       const bool gpu =
         gc.options_engine == GlideConeSettings::OptionsEngine::GPU;
       GlideConeDownwardJob gpu_job;
+      std::unique_ptr<GlideConeOptionsCpuJob> cpu_job;
       GlideConeOptions::Update(field, basic.nav_altitude, aircraft,
-                               gi, gj, gc, gpu ? &gpu_job : nullptr);
+                               gi, gj, gc,
+                               gpu ? &gpu_job : nullptr,
+                               gpu ? nullptr : &cpu_job);
       if (gpu && gpu_job.width != 0) {
         LogFmt("GlideCone options: queue gpu {}x{} passes={}",
                gpu_job.width, gpu_job.height, gpu_job.passes.size());
+        jobs.CancelOptionsCpu();
+        GlideConeOptions::AbandonCpu();
         GlideConeOptions::NoteGpuQueued(gpu_job);
         if (!jobs.RequestDownward(
               std::make_unique<GlideConeDownwardJob>(std::move(gpu_job)))) {
           LogFmt("GlideCone options: gpu queue failed, using cpu");
           GlideConeOptions::AbandonGpu();
+          std::unique_ptr<GlideConeOptionsCpuJob> fallback;
           GlideConeOptions::Update(field, basic.nav_altitude, aircraft,
-                                   gi, gj, gc, nullptr);
+                                   gi, gj, gc, nullptr, &fallback);
+          if (fallback != nullptr &&
+              !jobs.RequestOptionsCpu(std::move(fallback))) {
+            LogFmt("GlideCone options: cpu queue failed");
+            GlideConeOptions::AbandonCpu();
+          }
+        }
+      } else if (cpu_job != nullptr) {
+        jobs.CancelDownward();
+        GlideConeOptions::AbandonGpu();
+        if (!jobs.RequestOptionsCpu(std::move(cpu_job))) {
+          LogFmt("GlideCone options: cpu queue failed");
+          GlideConeOptions::AbandonCpu();
         }
       }
     }

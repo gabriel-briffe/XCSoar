@@ -63,6 +63,7 @@ GlideConeJobController::Abort(GlideConeOverlay &overlay) noexcept
   gpu_worker.Cancel();
   gpu_worker.CancelDownward();
   contour_worker.Cancel();
+  options_cpu_worker.Cancel();
   awaiting_grid = false;
   awaiting_gpu = false;
   awaiting_contours = false;
@@ -75,6 +76,7 @@ GlideConeJobController::Abort(GlideConeOverlay &overlay) noexcept
   (void)gpu_worker.TakeReady();
   (void)gpu_worker.TakeDownward();
   (void)contour_worker.TakeReady();
+  (void)options_cpu_worker.TakeReady();
 }
 
 bool
@@ -94,6 +96,25 @@ void
 GlideConeJobController::CancelDownward() noexcept
 {
   gpu_worker.CancelDownward();
+}
+
+bool
+GlideConeJobController::RequestOptionsCpu(
+  std::unique_ptr<GlideConeOptionsCpuJob> job) noexcept
+{
+  return options_cpu_worker.Request(std::move(job));
+}
+
+std::unique_ptr<GlideConeOptionsCpuReady>
+GlideConeJobController::TakeOptionsCpu() noexcept
+{
+  return options_cpu_worker.TakeReady();
+}
+
+void
+GlideConeJobController::CancelOptionsCpu() noexcept
+{
+  options_cpu_worker.Cancel();
 }
 
 void
@@ -172,6 +193,7 @@ GlideConeJobController::SetReadyCallback(std::function<void()> callback) noexcep
 {
   worker.SetReadyCallback(callback);
   gpu_worker.SetReadyCallback(callback);
+  options_cpu_worker.SetReadyCallback(callback);
   contour_worker.SetReadyCallback(std::move(callback));
 }
 
