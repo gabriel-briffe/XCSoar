@@ -284,7 +284,7 @@ GlideConeConfigPanel::LoadSettings() noexcept
 void
 GlideConeConfigPanel::Fill() noexcept
 {
-  AddGroup();
+  AddGroup(_("Glide cone"));
 
   AddEnumItem(_("Glide cone"),
               _("Terrain-aware glide cone mode.  This is a GPU "
@@ -323,6 +323,34 @@ GlideConeConfigPanel::Fill() noexcept
       .help = _("Upper bound on the number of GPU propagation "
                 "iterations.")});
 
+  AddToggleItem(_("Contours"),
+                _("Draw 100 m altitude contour lines of the reachable area."),
+                contours);
+
+  if (contours) {
+    const char *unit_name =
+      Units::GetUnitName(Units::GetUserDistanceUnit());
+    StaticString<32> scale;
+    scale.Format("%u %s", contours_min_scale_user, unit_name);
+    AddItem(_("Contours min scale"), [this](){ PickContoursScale(); },
+            {.value = scale.c_str(), .chevron = true,
+             .help = _("Only show contours and labels when the map scale "
+                       "bar is at most this distance (same meaning as "
+                       "topography label thresholds).")});
+
+    AddPercentItem(_("Label distance"),
+                   _("Minimum screen distance between labels of the same "
+                     "altitude, as a percentage of the shorter map side."),
+                   20, 100, 5, label_spacing);
+  }
+
+  AddToggleItem(_("Pan mode path"),
+                _("Draw the glide path and GlideCone altitude at the pan "
+                  "crosshair while panning the map."),
+                pan_mode_path);
+
+  AddGroup(_("Options"));
+
   StaticString<16> routine;
   routine.Format("%ds", options_routine_s);
   AddItem(_("Options routine"), [this](){
@@ -354,32 +382,6 @@ GlideConeConfigPanel::Fill() noexcept
   AddEnumItem(_("Options engine"),
               _("Compute the optional area on the CPU or on the GPU."),
               options_engine_list, options_engine);
-
-  AddToggleItem(_("Contours"),
-                _("Draw 100 m altitude contour lines of the reachable area."),
-                contours);
-
-  if (contours) {
-    const char *unit_name =
-      Units::GetUnitName(Units::GetUserDistanceUnit());
-    StaticString<32> scale;
-    scale.Format("%u %s", contours_min_scale_user, unit_name);
-    AddItem(_("Contours min scale"), [this](){ PickContoursScale(); },
-            {.value = scale.c_str(), .chevron = true,
-             .help = _("Only show contours and labels when the map scale "
-                       "bar is at most this distance (same meaning as "
-                       "topography label thresholds).")});
-
-    AddPercentItem(_("Label distance"),
-                   _("Minimum screen distance between labels of the same "
-                     "altitude, as a percentage of the shorter map side."),
-                   20, 100, 5, label_spacing);
-  }
-
-  AddToggleItem(_("Pan mode path"),
-                _("Draw the glide path and GlideCone altitude at the pan "
-                  "crosshair while panning the map."),
-                pan_mode_path);
 
   AddEnumItem(_("Worst case route"),
               _("When to draw the pink terrain-limited relay path.  Red "
