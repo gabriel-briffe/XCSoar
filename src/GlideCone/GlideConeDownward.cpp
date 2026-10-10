@@ -510,20 +510,6 @@ EnsurePool(std::size_t count) noexcept
   return true;
 }
 
-void
-MaskFromArrivals(const std::vector<float> &arrival,
-                 const std::vector<float> &floors, float max_alt,
-                 std::vector<std::uint8_t> &mask) noexcept
-{
-  mask.assign(arrival.size(), 0);
-  for (std::size_t i = 0; i < arrival.size() && i < floors.size(); ++i) {
-    if (!(floors[i] < max_alt))
-      continue;
-    if (arrival[i] > floors[i]) /* matches shader Option test */
-      mask[i] = 1;
-  }
-}
-
 /**
  * Read the change counter via a staging copy (gpu-MC changeReadBuffer).
  * Returns false if the map fails (caller should keep iterating).
@@ -826,10 +812,13 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   if (mapped == nullptr)
     return false;
 
+  mask.assign(count, 0);
   std::vector<float> arrival(count, -1.f);
   std::vector<int> origin(count, -1);
   for (std::size_t i = 0; i < count; ++i) {
     arrival[i] = mapped[i].alt;
+    if (mapped[i].flags & FLAG_OPTION)
+      mask[i] = 1;
     if (mapped[i].ox >= 0 && mapped[i].oy >= 0 &&
         unsigned(mapped[i].ox) < width && unsigned(mapped[i].oy) < height)
       origin[i] = mapped[i].oy * int(width) + mapped[i].ox;
@@ -838,18 +827,15 @@ RunPass(const GlideConeDownwardPass &pass, unsigned width, unsigned height,
   glUnmapBuffer(GL_COPY_WRITE_BUFFER);
   GLIDECONE_TIMING_ONLY(rb_unmap_us = GT::SinceUs(tp);)
   const unsigned read_ms = ElapsedMs(t_read);
+  /* Mask is the OPTION bit from readback — no separate pass. */
+  constexpr unsigned mask_ms = 0;
+  GLIDECONE_TIMING_ONLY(constexpr std::uint64_t mask_us = 0;)
 
 #if GLIDECONE_TIMING && GLIDECONE_TIMING_GPU
   /* The readback fence above already covered every query, so this does
      not stall (unready queries are reported as pending). */
   const auto gpu = gpu_timer.Collect();
 #endif
-
-  const auto t_mask = Clock::now();
-  GLIDECONE_TIMING_ONLY(tp = GT::NowUs();)
-  MaskFromArrivals(arrival, pass.floors, max_alt, mask);
-  GLIDECONE_TIMING_ONLY(const std::uint64_t mask_us = GT::SinceUs(tp);)
-  const unsigned mask_ms = ElapsedMs(t_mask);
 
   if (arrival_out != nullptr)
     *arrival_out = std::move(arrival);

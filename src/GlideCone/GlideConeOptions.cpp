@@ -178,10 +178,10 @@ struct Heap {
 
 /**
  * Downward optional area: the upward glide-cone altitudes are the floor
- * (not terrain).  FLAG-like "GC" cells mean the wavefront already hit
- * that cone — used to stop neighbour expansion / mask (not LOS).
+ * (not terrain).  OPTION marks cells whose arrival clears that floor;
+ * the wavefront grows only through those cells (same as the GPU).
  */
-constexpr std::uint8_t GC = 1;
+constexpr std::uint8_t OPTION = 1;
 
 [[gnu::pure]]
 bool
@@ -303,7 +303,7 @@ BuildFloors(const GlideConeField &field, double ratio,
 /**
  * Bresenham LOS from (@p x0,@p y0) to origin (@p ox,@p oy).  Blocked
  * when descent altitude from the origin would fall below the upward
- * glide-cone floor (GC flags alone do not block).
+ * glide-cone floor (Option flags alone do not block).
  */
 bool
 InView(const std::vector<float> &best,
@@ -342,7 +342,9 @@ InView(const std::vector<float> &best,
 
 /**
  * Downward options wavefront from (@p gi,@p gj) at @p start_alt.
- * Fills @p best / @p origin / @p flags (size width*height).
+ * Fills @p best / @p origin / @p flags (OPTION bit; size width*height).
+ * Only cells above the cone floor are written; below-floor arrivals
+ * stay empty so a better path can still fill them.
  * @return false if the start cell cannot begin an optional area.
  */
 bool
@@ -365,11 +367,12 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
 
   const std::size_t start = std::size_t(gj) * width + gi;
   if (ratio <= 0 || !HasConeFloor(floors, start, field.max_alt) ||
-      start_alt < floors[start])
+      start_alt <= floors[start])
     return false;
 
   best[start] = start_alt;
   origin[start] = int(start);
+  flags[start] = OPTION;
   Heap heap;
   heap.Push(int(start), start_alt);
 
@@ -381,7 +384,7 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
   while (!heap.Empty()) {
     const auto [index, arrival] = heap.Pop();
     const std::size_t ui = std::size_t(index);
-    if (flags[ui] & GC)
+    if (!(flags[ui] & OPTION))
       continue;
     if (arrival < best[ui] - 0.05f)
       continue;
@@ -396,8 +399,6 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
         if (nx < 0 || ny < 0 || nx >= int(width) || ny >= int(height))
           continue;
         const std::size_t nidx = std::size_t(ny) * width + nx;
-        if (flags[nidx] & GC)
-          continue;
 
         int elected = index;
         if (from_origin >= 0 &&
@@ -407,7 +408,7 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
                    cell_x, cell_y, ratio))
           elected = from_origin;
 
-        if (flags[std::size_t(elected)] & GC)
+        if (!(flags[std::size_t(elected)] & OPTION))
           continue;
 
         const int ox = elected % int(width);
@@ -415,22 +416,16 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
         const double dist = std::hypot((nx - ox) * cell_x, (ny - oy) * cell_y);
         const float next = best[std::size_t(elected)] - float(dist / ratio);
 
+        /* At/below the floor: leave empty (no GC freeze). */
         if (HasConeFloor(floors, nidx, field.max_alt) &&
-            next < floors[nidx]) {
-          if (best[nidx] >= floors[nidx])
-            continue;
-          if (!(flags[nidx] & GC)) {
-            best[nidx] = floors[nidx];
-            origin[nidx] = elected;
-            flags[nidx] = GC;
-          }
+            next <= floors[nidx])
           continue;
-        }
 
         if (next <= best[nidx])
           continue;
         best[nidx] = next;
         origin[nidx] = elected;
+        flags[nidx] = OPTION;
         heap.Push(int(nidx), next);
       }
     }
@@ -438,9 +433,9 @@ PropagateDownward(const GlideConeField &field, int gi, int gj,
   return true;
 }
 
+/** Mask and arrival from OPTION flags written by #PropagateDownward. */
 void
-BuildMask(const std::vector<float> &floors, float max_alt,
-          const std::vector<float> &best,
+BuildMask(const std::vector<float> &best,
           const std::vector<std::uint8_t> &flags,
           std::vector<std::uint8_t> &mask,
           std::vector<float> &arrival) noexcept
@@ -448,13 +443,12 @@ BuildMask(const std::vector<float> &floors, float max_alt,
   const std::size_t n = best.size();
   mask.assign(n, 0);
   arrival.assign(n, -1.f);
-  for (std::size_t i = 0; i < n; ++i)
-    if (!(flags[i] & GC) && best[i] >= 0 &&
-        HasConeFloor(floors, i, max_alt) &&
-        best[i] >= floors[i]) {
-      mask[i] = 1;
-      arrival[i] = best[i];
-    }
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!(flags[i] & OPTION))
+      continue;
+    mask[i] = 1;
+    arrival[i] = best[i];
+  }
 }
 
 struct DownwardRun {
@@ -482,7 +476,7 @@ RunDownward(const GlideConeField &field, int gi, int gj,
                          out.floors, best, out.origin, flags))
     return false;
 
-  BuildMask(out.floors, field.max_alt, best, flags, out.mask, out.arrival);
+  BuildMask(best, flags, out.mask, out.arrival);
   out.start_index = seed.y * int(field.result.width) + seed.x;
   out.ok = true;
   return true;
@@ -1084,8 +1078,7 @@ EnsurePanAirportPath(const GlideConeField &field, int pan_cell) noexcept
                          state.floors, best, state.pan_origin, flags))
     return false;
 
-  BuildMask(state.floors, field.max_alt, best, flags, state.pan_mask,
-            arrival);
+  BuildMask(best, flags, state.pan_mask, arrival);
   state.pan_best_airport =
     BestAirportIndex(state.pan_mask, arrival, state.is_seed);
   return state.pan_best_airport >= 0;
