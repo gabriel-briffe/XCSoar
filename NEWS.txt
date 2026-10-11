@@ -90,8 +90,8 @@ Version 7.46 - not yet released
   - Map Display → Waypoints: Label position (top/bottom × left/right)
   - Status → Times: Show timer draws a map stopwatch (tap start/stop;
     yellow press and InfoBox hold fill, lift to reset, slide off to
-    cancel); follows the InfoBox light/dark colours and shows a
-    border while running
+    cancel; Hide timer clears the elapsed time); follows the InfoBox
+    light/dark colours and shows a border while running
   - terrain overview is max-pooled at 4× and 16×; the map picks one
     level from DEM cells per screen pixel so mid zoom no longer loads
     full-resolution tiles
@@ -264,9 +264,10 @@ Version 7.46 - not yet released
     list, under the layer list
   - show the EDL weather page as the same list: the cached day,
     Auto update, and the time and level of the current page
-  - show the XC Therm weather page as the same list: the layer
-    to download, its status, and the time and altitude of the
-    current page
+  - show the XC Therm weather page like SkySight: a checklist of
+    altitude layers with Preload Selected (queued span downloads)
+    and Clear downloaded data, with the download span under the list
+    (map time/altitude stay on the weather controls)
   - show Edit device as the same list. The port still opens the
     scanner, and the other rows appear only when that port uses
     them

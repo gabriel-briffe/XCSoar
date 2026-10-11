@@ -91,8 +91,10 @@ XCThermAPI::ApplySessionSettings(const XCThermSettings &settings) noexcept
 void
 XCThermAPI::PrepareSession(const XCThermSettings &settings) noexcept
 {
-  EnableDiskCache();
+  /* Apply region before indexing disk so the first EnableDiskCache()
+     scan matches the configured model. */
   ApplySessionSettings(settings);
+  EnableDiskCache();
 }
 
 bool

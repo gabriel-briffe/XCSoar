@@ -46,6 +46,10 @@ SetVisible(bool v) noexcept
 {
   const std::lock_guard lock{mutex};
   visible = v;
+  if (!visible) {
+    running = false;
+    accumulated = std::chrono::milliseconds{0};
+  }
 }
 
 void
@@ -53,6 +57,10 @@ ToggleVisible() noexcept
 {
   const std::lock_guard lock{mutex};
   visible = !visible;
+  if (!visible) {
+    running = false;
+    accumulated = std::chrono::milliseconds{0};
+  }
 }
 
 void

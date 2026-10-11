@@ -18,9 +18,10 @@ bool IsVisible() noexcept;
 [[gnu::pure]]
 bool IsRunning() noexcept;
 
+/** Show or hide; hiding also stops and clears elapsed time. */
 void SetVisible(bool visible) noexcept;
 
-/** Toggle visibility; does not reset elapsed time. */
+/** Toggle visibility; hiding also stops and clears elapsed time. */
 void ToggleVisible() noexcept;
 
 /** Start if stopped, stop if running. */
