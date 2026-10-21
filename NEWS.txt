@@ -116,6 +116,8 @@ Version 7.46 - not yet released
 * documentation
   - document the Status → Times map stopwatch (show/hide, tap,
     hold to reset) in the English manual
+  - document the OAT alarm on Glide Computer → Safety Factors
+  - document outside air temperature on the Status Flight tab
   - document DEM 2 / DEM 3 scale thresholds on Map Display → Terrain
   - document the Route drawn setting on Glide Computer → Route
   - document waypoint Label position on Map Display → Waypoints
@@ -135,6 +137,11 @@ Version 7.46 - not yet released
     binary mode if the logger dropped it while the flight list was
     open #3049
 * glide computer
+  - add an OAT alarm on Glide Computer → Safety Factors: Off or a
+    temperature; a status message for 30 seconds (limit and current
+    OAT) and a beep when the outside air temperature is at or below
+    that value, again at once after it has risen above the limit.
+    GPS is not required
   - add Glide Cone settings for the pink worst-case route (If below /
     Always) and the green highest-arrival route (on/off); red discs mark
     air-to-ground steps that go below the cone altitude at 80% of the
@@ -174,6 +181,8 @@ Version 7.46 - not yet released
     protocol, so an S-series logger is not sent Colibri commands
     while it is still identifying
 * dialogs
+  - show outside air temperature on the Status Flight tab, below
+    altitude, when a connected device reports it
   - show the flight name, the device, and the driver on separate
     lines above a flight download, and the percent, amount complete,
     transfer speed, and estimated time remaining inside the progress

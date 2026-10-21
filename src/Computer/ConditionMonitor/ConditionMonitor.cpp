@@ -9,11 +9,11 @@ void
 ConditionMonitor::Update(const NMEAInfo &basic, const DerivedInfo &calculated,
                          const ComputerSettings &settings) noexcept
 {
-  if (!calculated.flight.flying)
+  if (require_flying && !calculated.flight.flying)
     return;
 
   bool restart = false;
-  const auto Time = basic.time;
+  const auto Time = GetCheckTime(basic);
   if (Ready_Time_Check(Time, &restart)) {
     LastTime_Check = Time;
     if (CheckCondition(basic, calculated, settings)) {
@@ -22,7 +22,8 @@ ConditionMonitor::Update(const NMEAInfo &basic, const DerivedInfo &calculated,
         Notify();
         SaveLast();
       }
-    }
+    } else if (RearmWhenClears())
+      LastTime_Notification = TimeStamp::Undefined();
 
     if (restart)
       SaveLast();
@@ -60,4 +61,10 @@ ConditionMonitor::Ready_Time_Check(TimeStamp T, bool *restart) noexcept
     return true;
 
   return false;
+}
+
+TimeStamp
+ConditionMonitor::GetCheckTime(const NMEAInfo &basic) const noexcept
+{
+  return basic.time;
 }

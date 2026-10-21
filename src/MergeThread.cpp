@@ -195,8 +195,10 @@ MergeThread::Tick() noexcept
     if (devices != nullptr)
       devices->NotifySensorUpdate(basic);
 
-    /* trigger update if gps has become available or dropped out */
-    gps_updated = last_any.location_available != basic.location_available;
+    /* run calculations on a new GPS fix, or on a temperature update
+       so the OAT alarm still works without a location */
+    gps_updated = last_any.location_available != basic.location_available ||
+      last_any.temperature_available != basic.temperature_available;
 
     /* trigger a redraw when the connection was just lost, to show the
        new state; when no GPS is connected, no other entity triggers

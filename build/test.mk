@@ -88,7 +88,7 @@ TEST_NAMES = \
 	TestAngle TestARange \
 	TestGrahamScan \
 	TestUnits TestEarth TestSunEphemeris \
-	TestValidity TestUTM \
+	TestValidity TestOatAlarm TestUTM \
 	TestWaypointReachability TestBackupPaths \
 	TestAllocatedGrid \
 	TestDemOverview \
@@ -1075,6 +1075,11 @@ TEST_VALIDITY_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestValidity.cpp
 $(eval $(call link-program,TestValidity,TEST_VALIDITY))
+
+TEST_OAT_ALARM_SOURCES = \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestOatAlarm.cpp
+$(eval $(call link-program,TestOatAlarm,TEST_OAT_ALARM))
 
 TEST_WAYPOINT_REACHABILITY_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \

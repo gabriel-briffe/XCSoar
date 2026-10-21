@@ -73,6 +73,11 @@ type=gce
 data=LANDABLE_UNREACHABLE
 event=Beep 1
 
+mode=default
+type=gce
+data=OAT_ALARM
+event=Beep 1
+
 # ------------
 # mode=default
 # ------------

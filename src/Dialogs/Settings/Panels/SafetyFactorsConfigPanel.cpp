@@ -5,6 +5,7 @@
 #include "ConfigListPanel.hpp"
 #include "BackendComponents.hpp"
 #include "Components.hpp"
+#include "Atmosphere/Temperature.hpp"
 #include "Form/DataField/Enum.hpp"
 #include "Interface.hpp"
 #include "Language/Language.hpp"
@@ -46,6 +47,9 @@ class SafetyFactorsConfigPanel final : public ConfigListPanel {
 
   bool turn_back_marker;
 
+  bool oat_alarm_enabled;
+  Temperature oat_alarm;
+
 protected:
   /* virtual methods from class ConfigListPanel */
   void LoadSettings() noexcept override;
@@ -72,6 +76,8 @@ SafetyFactorsConfigPanel::LoadSettings() noexcept
   safety_mc = task_behaviour.safety_mc;
   risk_gamma = iround(task_behaviour.risk_gamma * 10);
   turn_back_marker = task_behaviour.turn_back_marker_enabled;
+  oat_alarm_enabled = settings_computer.oat_alarm_enabled;
+  oat_alarm = settings_computer.oat_alarm;
 }
 
 void
@@ -133,6 +139,59 @@ SafetyFactorsConfigPanel::Fill() noexcept
                   "The triangle is only shown during cruise when the target "
                   "is reachable."),
                 turn_back_marker);
+
+  const char *oat_help =
+    _("Warn when the outside air temperature is at or below this value. "
+      "A GPS fix is not required. "
+      "Set it for water ballast antifreeze or coolant freeze limits. "
+      "Off disables the warning.");
+
+  StaticString<32> oat_text;
+  GroupedListWidget::ItemOptions oat_options{.chevron = true, .help = oat_help};
+  if (oat_alarm_enabled) {
+    FormatUserTemperature(oat_alarm.ToKelvin(), oat_text.data());
+    oat_options.value = oat_text.c_str();
+  } else
+    oat_options.badge = _("Off");
+
+  AddItem(_("OAT alarm"), [this, oat_help](){
+    const int min_user = iround(Temperature::FromCelsius(-50).ToUser());
+    const int max_user = iround(Temperature::FromCelsius(10).ToUser());
+    const unsigned n_temps = max_user - min_user + 1;
+    const unsigned n = n_temps + 1;
+
+    std::vector<StaticString<32>> captions(n);
+    std::vector<PickerChoice> choices(n);
+
+    captions[0] = _("Off");
+    choices[0] = {captions[0].c_str()};
+    for (unsigned i = 0; i < n_temps; ++i) {
+      const int user = min_user + (int)i;
+      FormatUserTemperature(Temperature::FromUser(user).ToKelvin(),
+                            captions[i + 1].data());
+      choices[i + 1] = {captions[i + 1].c_str()};
+    }
+
+    int current = 0;
+    if (oat_alarm_enabled) {
+      const int user = iround(oat_alarm.ToUser());
+      current = 1 + std::clamp(user - min_user, 0, (int)n_temps - 1);
+    }
+
+    const int picked = PickChoice(_("OAT alarm"), oat_help,
+                                 choices, current);
+    if (picked < 0 || picked == current)
+      return;
+
+    if (picked == 0)
+      oat_alarm_enabled = false;
+    else {
+      oat_alarm_enabled = true;
+      oat_alarm = Temperature::FromUser(min_user + picked - 1);
+    }
+
+    Refresh();
+  }, oat_options);
 }
 
 bool
@@ -181,6 +240,15 @@ SafetyFactorsConfigPanel::Save(bool &_changed) noexcept
   changed |= Profile::Update(ProfileKeys::TurnBackMarkerEnabled,
                              task_behaviour.turn_back_marker_enabled,
                              turn_back_marker);
+
+  changed |= Profile::Update(ProfileKeys::OATAlarmEnabled,
+                             settings_computer.oat_alarm_enabled,
+                             oat_alarm_enabled);
+  if (settings_computer.oat_alarm != oat_alarm) {
+    settings_computer.oat_alarm = oat_alarm;
+    Profile::Set(ProfileKeys::OATAlarm, oat_alarm.ToCelsius());
+    changed = true;
+  }
 
   _changed |= changed;
 

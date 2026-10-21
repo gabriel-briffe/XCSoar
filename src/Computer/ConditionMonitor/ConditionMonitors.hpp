@@ -7,6 +7,7 @@
 #include "ConditionMonitorFinalGlide.hpp"
 #include "ConditionMonitorGlideTerrain.hpp"
 #include "ConditionMonitorLandableReachable.hpp"
+#include "ConditionMonitorOatAlarm.hpp"
 #include "ConditionMonitorSunset.hpp"
 #include "ConditionMonitorWind.hpp"
 
@@ -17,6 +18,7 @@ class ConditionMonitors {
   ConditionMonitorAATTime aattime;
   ConditionMonitorGlideTerrain glideterrain;
   ConditionMonitorLandableReachable landablereachable;
+  ConditionMonitorOatAlarm oat_alarm;
 
 public:
   void Update(const NMEAInfo &basic, const DerivedInfo &calculated,

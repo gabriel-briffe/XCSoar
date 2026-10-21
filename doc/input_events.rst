@@ -881,6 +881,9 @@ change the zoom level when entering a thermal.
 ``LANDABLE_UNREACHABLE``
    A landable waypoint became unreachable.
 
+``OAT_ALARM``
+   Outside air temperature is at or below the configured OAT alarm.
+
 NMEA / hardware events
 ----------------------
 

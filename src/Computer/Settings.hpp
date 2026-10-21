@@ -272,6 +272,17 @@ struct ComputerSettings {
   Temperature forecast_temperature;
 
   /**
+   * Warn when outside air temperature is at or below #oat_alarm.
+   */
+  bool oat_alarm_enabled;
+
+  /**
+   * Outside air temperature threshold.  Used only when
+   * #oat_alarm_enabled.
+   */
+  Temperature oat_alarm;
+
+  /**
    * Troposhere atmosphere model for QNH correction
    */
   AtmosphericPressure pressure;

@@ -111,6 +111,9 @@ key=Battery low
 delay=5000
 sound=IDR_FAIL
 
+key=OAT below
+delay=30000
+
 key=Screen Mode Full
 delay=1000
 

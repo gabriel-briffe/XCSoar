@@ -211,6 +211,12 @@ Profile::Load(const ProfileMap &map, ComputerSettings &settings)
 
   settings.utc_offset = settings.GetCurrentUTCOffset();
 
+  map.Get(ProfileKeys::OATAlarmEnabled, settings.oat_alarm_enabled);
+
+  double oat_alarm_celsius;
+  if (map.Get(ProfileKeys::OATAlarm, oat_alarm_celsius))
+    settings.oat_alarm = Temperature::FromCelsius(oat_alarm_celsius);
+
   Load(map, settings.task);
   Load(map, settings.contest);
   Load(map, settings.logger);

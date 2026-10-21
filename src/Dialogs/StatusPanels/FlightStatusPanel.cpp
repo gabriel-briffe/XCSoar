@@ -9,12 +9,14 @@
 #include "Engine/Waypoint/Waypoint.hpp"
 #include "Language/Language.hpp"
 #include "system/OpenLink.hpp"
+#include "Units/Units.hpp"
 
 #include <fmt/format.h>
 
 enum Controls {
   Location,
   Altitude,
+  Temperature,
   MaxHeightGain,
   Near,
   Bearing,
@@ -38,6 +40,13 @@ FlightStatusPanel::Refresh() noexcept
     SetText(Altitude, FormatUserAltitude(basic.gps_altitude));
   else
     ClearText(Altitude);
+
+  if (basic.temperature_available)
+    SetText(Temperature,
+            fmt::format("{:2.1f} {}", basic.temperature.ToUser(),
+                        Units::GetTemperatureName()).c_str());
+  else
+    ClearText(Temperature);
 
   SetText(MaxHeightGain, FormatUserAltitude(calculated.max_height_gain));
 
@@ -63,6 +72,7 @@ FlightStatusPanel::Prepare([[maybe_unused]] ContainerWindow &parent,
 {
   AddReadOnly(_("Location"));
   AddReadOnly(_("Altitude"));
+  AddReadOnly(_("Outside air temperature"));
   AddReadOnly(_("Max. height gain"));
   AddReadOnly(_("Near"));
   AddReadOnly(_("Bearing"));

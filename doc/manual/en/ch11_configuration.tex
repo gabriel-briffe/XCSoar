@@ -488,6 +488,14 @@ This page allows the safety heights and behaviour for the alternates mode to be 
   the glider must clear during final glide. \\
 See Section~\ref{sec:safety-heights} for more details on the meanings
 of the safety heights. \\
+\item[OAT alarm]  When not Off, a status message
+  (`OAT below \ldots: currently \ldots') and a beep are issued if the
+  outside air temperature from a connected probe is at or below this
+  value.  A GPS fix is not required.  Use it for water ballast
+  antifreeze or coolant freeze limits.  The message stays for 30
+  seconds; tap it to dismiss it sooner.  While it stays at or below
+  the limit, the warning repeats after five minutes.  If it rises
+  above the limit, the next drop warns at once. \\
 \item[Alternates mode]  \label{conf:alternatesmode} Determines sorting of alternates 
   in the alternates dialogue. \\
   {\bf Simple}: The alternates will only be sorted by arrival height. 

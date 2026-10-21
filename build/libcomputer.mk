@@ -11,6 +11,7 @@ LIBCOMPUTER_SOURCES = \
 	$(SRC)/Computer/ConditionMonitor/ConditionMonitorFinalGlide.cpp \
 	$(SRC)/Computer/ConditionMonitor/ConditionMonitorGlideTerrain.cpp \
 	$(SRC)/Computer/ConditionMonitor/ConditionMonitorLandableReachable.cpp \
+	$(SRC)/Computer/ConditionMonitor/ConditionMonitorOatAlarm.cpp \
 	$(SRC)/Computer/ConditionMonitor/ConditionMonitorSunset.cpp \
 	$(SRC)/Computer/ConditionMonitor/ConditionMonitorWind.cpp \
 	$(SRC)/Computer/ConditionMonitor/ConditionMonitors.cpp \

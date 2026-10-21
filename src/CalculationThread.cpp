@@ -67,7 +67,11 @@ CalculationThread::Tick() noexcept
   {
     const std::lock_guard lock{device_blackboard.mutex};
 
-    gps_updated = device_blackboard.Basic().location_available.Modified(glide_computer.Basic().location_available);
+    const auto &basic = device_blackboard.Basic();
+    const auto &gc_basic = glide_computer.Basic();
+    gps_updated =
+      basic.location_available.Modified(gc_basic.location_available) ||
+      basic.temperature_available.Modified(gc_basic.temperature_available);
 
     // Copy data from DeviceBlackboard to GlideComputerBlackboard
     glide_computer.ReadBlackboard(device_blackboard.Basic());

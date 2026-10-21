@@ -20,6 +20,8 @@ Overview of features and UI mods on the `perso` branch that are not on `master`.
 - Route drawn toggle (obstacle-avoiding route on/off)
 - Waypoint label position (top/bottom × left/right)
 - Simulator remembers last glider position/altitude between relaunches
+- Status → Flight shows outside air temperature when a device reports it
+- OAT alarm on Safety Factors (Off or a temperature; status message + beep)
 
 ## Weather
 - Rainbow.ai weather overlay (layers, cache-first Auto, checklist UI)

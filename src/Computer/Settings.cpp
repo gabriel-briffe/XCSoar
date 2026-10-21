@@ -73,6 +73,8 @@ ComputerSettings::SetDefaults()
      so this does not read #utc_offset back */
   utc_offset = GetCurrentUTCOffset();
   forecast_temperature = Temperature::FromCelsius(25);
+  oat_alarm_enabled = false;
+  oat_alarm = Temperature::FromCelsius(0);
   pressure = AtmosphericPressure::Standard();
   pressure_available.Clear();
   airspace.SetDefaults();

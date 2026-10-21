@@ -13,4 +13,5 @@ ConditionMonitors::Update(const NMEAInfo &basic, const DerivedInfo &calculated,
   aattime.Update(basic, calculated, settings);
   glideterrain.Update(basic, calculated, settings);
   landablereachable.Update(basic, calculated, settings);
+  oat_alarm.Update(basic, calculated, settings);
 }

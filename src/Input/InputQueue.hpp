@@ -45,6 +45,7 @@ enum {
   GCE_POLAR_CHANGED,
   GCE_ALTERNATE_CHANGED,
   GCE_LANDABLE_UNREACHABLE,
+  GCE_OAT_ALARM,
   GCE_COUNT			// How many we have for arrays etc
 };
 
