@@ -39,6 +39,7 @@ void
 Profile::Load(const ProfileMap &map, MapSettings &settings)
 {
   map.Get(ProfileKeys::CircleZoom, settings.circle_zoom_enabled);
+  map.Get(ProfileKeys::AnimateZoom, settings.animate_zoom);
   map.Get(ProfileKeys::MaxAutoZoomDistance, settings.max_auto_zoom_distance);
   map.Get(ProfileKeys::DrawTopography, settings.topography_enabled);
 

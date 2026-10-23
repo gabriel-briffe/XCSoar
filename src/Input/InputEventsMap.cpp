@@ -185,11 +185,14 @@ InputEvents::sub_SetZoom(double value)
     DisableAutoZoomForManualScale();
 
   value = ClampUserMapScale(value);
-  if (HasEPaper() || IsSlowCPU()) {
+  const bool animate = !HasEPaper() && !IsSlowCPU() &&
+    CommonInterface::GetMapSettings().animate_zoom;
+  if (animate)
+    map_window->AnimateFreeMapScale(value);
+  else {
     map_window->SetMapScale(value);
     map_window->QuickRedraw();
-  } else
-    map_window->AnimateFreeMapScale(value);
+  }
 }
 
 void

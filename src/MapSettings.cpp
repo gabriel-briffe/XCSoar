@@ -24,6 +24,7 @@ void
 MapSettings::SetDefaults() noexcept
 {
   circle_zoom_enabled = true;
+  animate_zoom = true;
   max_auto_zoom_distance = 100000; /* 100 km */
   topography_enabled = true;
   terrain.SetDefaults();

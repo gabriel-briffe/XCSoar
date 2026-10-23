@@ -145,6 +145,12 @@ enum class WindArrowStyle: uint8_t {
 struct MapSettings {
   /** Map zooms in on circling */
   bool circle_zoom_enabled;
+
+  /**
+   * Glide the map scale after a zoom step.  E-paper and slow CPUs
+   * ignore this and change scale at once.
+   */
+  bool animate_zoom;
   /** Maximum distance limit for AutoZoom */
   double max_auto_zoom_distance;
   /** Map will show topography */

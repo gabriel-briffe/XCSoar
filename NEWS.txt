@@ -85,6 +85,8 @@ Version 7.46 - not yet released
   - fix RASP Auto update downloading again on every page switch
     because the file date stayed at the first download #3166
 * map
+  - Map Display → Orientation: Animate zoom glides to the new scale;
+    when off, the scale changes at once
   - Config → Route: Route drawn turns the planned obstacle-avoiding
     route on or off; the direct bearing and terrain warning stay
   - Map Display → Waypoints: Label position (top/bottom × left/right)
@@ -114,6 +116,7 @@ Version 7.46 - not yet released
   - keep the pan-mode map scale while panning, and restore the saved
     circling or cruise scale when leaving pan mode
 * documentation
+  - document Animate zoom on Map Display → Orientation
   - document the Status → Times map stopwatch (show/hide, tap,
     hold to reset) in the English manual
   - document that a repeated status message stays one line while it

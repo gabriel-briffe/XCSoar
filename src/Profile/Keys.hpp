@@ -25,6 +25,7 @@ constexpr std::string_view AltMode = "AltitudeMode";
 constexpr std::string_view AltitudeUnitsValue = "AltitudeUnit";
 constexpr std::string_view TemperatureUnitsValue = "TemperatureUnit";
 constexpr std::string_view CircleZoom = "CircleZoom";
+constexpr std::string_view AnimateZoom = "AnimateZoom";
 constexpr std::string_view MaxAutoZoomDistance = "MaxAutoZoomDistance";
 constexpr std::string_view ClipAlt = "ClipAlt";
 constexpr std::string_view DisplayText = "DisplayText";

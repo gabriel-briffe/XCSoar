@@ -88,6 +88,7 @@ PickAutoZoomDistance(const char *caption, const char *help,
 class MapDisplayConfigPanel final : public ConfigListPanel {
   MapOrientation cruise_orientation, circling_orientation;
   bool circle_zoom;
+  bool animate_zoom;
   MapShiftBias map_shift_bias;
   int glider_screen_position;
   double max_auto_zoom_distance;
@@ -112,6 +113,7 @@ MapDisplayConfigPanel::LoadSettings() noexcept
   cruise_orientation = settings_map.cruise_orientation;
   circling_orientation = settings_map.circling_orientation;
   circle_zoom = settings_map.circle_zoom_enabled;
+  animate_zoom = settings_map.animate_zoom;
   map_shift_bias = settings_map.map_shift_bias;
   glider_screen_position = settings_map.glider_screen_position;
   max_auto_zoom_distance = settings_map.max_auto_zoom_distance;
@@ -150,6 +152,12 @@ MapDisplayConfigPanel::Fill() noexcept
   AddToggleItem(_("Circling zoom"),
                 _("If enabled, then the map will zoom in automatically when entering circling mode and zoom out automatically when leaving circling mode."),
                 circle_zoom);
+
+  AddToggleItem(_("Animate zoom"),
+                _("Glide to the new map scale. When off, the scale "
+                  "changes at once. An e-paper or slow device always "
+                  "changes at once."),
+                animate_zoom);
 
   if (IsExpert()) {
     static constexpr const char *distance_help =
@@ -194,6 +202,9 @@ MapDisplayConfigPanel::Save(bool &_changed) noexcept
 
   changed |= Profile::Update(ProfileKeys::CircleZoom,
                              settings_map.circle_zoom_enabled, circle_zoom);
+
+  changed |= Profile::Update(ProfileKeys::AnimateZoom,
+                             settings_map.animate_zoom, animate_zoom);
 
   changed |= Profile::Update(ProfileKeys::MaxAutoZoomDistance,
                              settings_map.max_auto_zoom_distance,
