@@ -238,6 +238,32 @@ PopupMessage::Render() noexcept
   return true;
 }
 
+bool
+PopupMessage::RefreshDuplicate(std::chrono::steady_clock::duration tshow,
+                               const char *new_text) noexcept
+{
+  const auto now = std::chrono::steady_clock::now();
+
+  for (auto &message : messages) {
+    if (message.IsUnknown() || !message.text.equals(new_text))
+      continue;
+
+    /* Still waiting (a dialog is open, so Render() has not started
+       the timer) or still on screen.  Keep this slot so the same
+       text is not shown twice.  A waiting message stays new, so a
+       long dialog does not expire it before it is drawn. */
+    const bool waiting = message.IsNew();
+    if (waiting || message.texpiry > now) {
+      message.tshow = tshow;
+      message.tstart = now;
+      message.texpiry = waiting ? now : now + tshow;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 int
 PopupMessage::GetEmptySlot() noexcept
 {
@@ -334,18 +360,21 @@ PopupMessage::AddMessage(const char* text, const char *data) noexcept
 
   const auto &msg = FindStatusMessage(text);
 
+  StaticString<256> line;
+  if (msg.visible) {
+    line = text;
+    if (data != nullptr) {
+      line.push_back(' ');
+      line += data;
+    }
+
+    if (RefreshDuplicate(msg.delay, line.c_str()))
+      return;
+  }
+
   if (enable_sound && msg.sound != nullptr)
     PlayResource(msg.sound);
 
-  // TODO code: consider what is a sensible size?
-  if (msg.visible) {
-    char msgcache[1024];
-    strcpy(msgcache, text);
-    if (data != nullptr) {
-      strcat(msgcache, " ");
-      strcat(msgcache, data);
-    }
-
-    AddMessage(msg.delay, MSG_USERINTERFACE, msgcache, msg.sound);
-  }
+  if (msg.visible)
+    AddMessage(msg.delay, MSG_USERINTERFACE, line.c_str(), msg.sound);
 }

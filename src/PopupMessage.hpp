@@ -150,6 +150,17 @@ private:
   void UpdateTextAndLayout() noexcept;
   int GetEmptySlot() noexcept;
 
+  /**
+   * If the same text is still waiting to be shown, or is still on
+   * screen, restart its display time.
+   *
+   * Caller must hold the lock.
+   *
+   * @return true if an existing message was reused
+   */
+  bool RefreshDuplicate(std::chrono::steady_clock::duration tshow,
+                        const char *new_text) noexcept;
+
 protected:
   /* virtual methods from class Window */
   bool OnMouseDown(PixelPoint p) noexcept override;

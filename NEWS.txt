@@ -116,6 +116,8 @@ Version 7.46 - not yet released
 * documentation
   - document the Status → Times map stopwatch (show/hide, tap,
     hold to reset) in the English manual
+  - document that a repeated status message stays one line while it
+    is still waiting or on screen
   - document the OAT alarm on Glide Computer → Safety Factors
   - document outside air temperature on the Status Flight tab
   - document DEM 2 / DEM 3 scale thresholds on Map Display → Terrain
@@ -384,6 +386,9 @@ Version 7.46 - not yet released
     them, and keep the map overlay buttons clear of the info boxes
   - flatten the list scroll bar to a plain track with a rounded slider
     that darkens only while it is dragged
+  - fix repeated status messages stacking: the same text stays one
+    line while it is still waiting or on screen, and its display
+    time starts again
   - fix blurry icons on high-DPI screens, most visible on the large
     waypoint list icons, by rendering the icon set at a higher
     resolution
