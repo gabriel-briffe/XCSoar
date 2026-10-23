@@ -227,10 +227,40 @@ TestAddPageFromDraftCopiesCursors()
   ok1(settings.pages[new_page_index].skysight_time == 1785542400);
 }
 
+static void
+TestNextEnabledPage()
+{
+  PageSettings settings;
+  settings.SetDefaults();
+  settings.pages[2] = PageLayout::Default();
+  settings.n_pages = 3;
+
+  ok1(settings.pages[0].enabled);
+  ok1(settings.pages[1].enabled);
+  ok1(settings.pages[2].enabled);
+
+  ok1(settings.NextEnabled(0, 1) == 1);
+  ok1(settings.NextEnabled(2, 1) == 0);
+  ok1(settings.NextEnabled(0, -1) == 2);
+
+  settings.pages[1].enabled = false;
+  ok1(settings.NextEnabled(0, 1) == 2);
+  ok1(settings.NextEnabled(2, -1) == 0);
+  ok1(settings.NextEnabled(1, 1) == 2);
+  ok1(settings.NextEnabled(1, -1) == 0);
+
+  settings.pages[0].enabled = false;
+  settings.pages[2].enabled = false;
+  ok1(settings.NextEnabled(1, 1) == 1);
+
+  settings.pages[1].enabled = false;
+  ok1(settings.NextEnabled(0, 1) == 0);
+}
+
 int
 main()
 {
-  plan_tests(43 + 9 + 6 + 5 + 3);
+  plan_tests(43 + 9 + 6 + 5 + 3 + 12);
 
   TestApplyToCurrentPage();
   TestAddNewOverlayPageFromNonMapSource();
@@ -241,6 +271,7 @@ main()
   TestNormaliseCursorValues();
   TestXCThermManualCursorDefaultsOnAdd();
   TestAddPageFromDraftCopiesCursors();
+  TestNextEnabledPage();
 
   return exit_status();
 }

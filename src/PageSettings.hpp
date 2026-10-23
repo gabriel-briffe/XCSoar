@@ -183,6 +183,12 @@ struct PageLayout
    */
   bool airspace_enable;
 
+  /**
+   * Shown while turning pages.  A page which is off keeps its setup
+   * and stays in the list, and the next and previous page skip it.
+   */
+  bool enabled;
+
   PageLayout() = default;
 
   constexpr PageLayout(bool _valid, InfoBoxConfig _infobox_config)
@@ -202,7 +208,8 @@ struct PageLayout
      rainbow_satellite(true),
      rainbow_rain(false),
      terrain_ramp(-1),
-     airspace_enable(true) {}
+     airspace_enable(true),
+     enabled(true) {}
 
   constexpr PageLayout(InfoBoxConfig _infobox_config)
     :valid(true), main(Main::MAP),
@@ -221,7 +228,8 @@ struct PageLayout
      rainbow_satellite(true),
      rainbow_rain(false),
      terrain_ramp(-1),
-     airspace_enable(true) {}
+     airspace_enable(true),
+     enabled(true) {}
 
   /**
    * Return an "undefined" page.  Its IsDefined() method will return
@@ -438,6 +446,33 @@ struct PageSettings {
    * Eliminate empty pages to make the array contiguous.
    */
   void Compress() noexcept;
+
+  /**
+   * The next page in @p direction which is shown.  Positive walks
+   * forward and negative walks back, wrapping around the configured
+   * pages.  A page which is off is skipped.  When none is on,
+   * @p index is returned.
+   */
+  [[nodiscard]]
+  unsigned NextEnabled(unsigned index, int direction) const noexcept {
+    if (n_pages == 0)
+      return 0;
+
+    if (index >= n_pages)
+      index = 0;
+
+    for (unsigned n = 0; n < n_pages; ++n) {
+      if (direction >= 0)
+        index = (index + 1) % n_pages;
+      else
+        index = (index + n_pages - 1) % n_pages;
+
+      if (pages[index].enabled)
+        return index;
+    }
+
+    return index;
+  }
 };
 
 static_assert(std::is_trivial<PageSettings>::value, "type is not trivial");

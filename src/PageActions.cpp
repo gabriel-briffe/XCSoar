@@ -566,7 +566,7 @@ PageActions::NextIndex()
        the last configured page */
     return state.current_index;
 
-  return (state.current_index + 1) % settings.n_pages;
+  return settings.NextEnabled(state.current_index, 1);
 }
 
 
@@ -595,8 +595,7 @@ PageActions::PrevIndex()
        the last configured page */
     return state.current_index;
 
-  return (state.current_index + settings.n_pages - 1)
-    % settings.n_pages;
+  return settings.NextEnabled(state.current_index, -1);
 }
 
 

@@ -50,6 +50,10 @@ AppendOverlayTitle(BasicStringBuilder<char> &builder,
     }
     break;
 
+  case PageLayout::Overlay::RAINBOW:
+    builder.Append(", Rainbow");
+    break;
+
   case PageLayout::Overlay::MAX:
     gcc_unreachable();
   }

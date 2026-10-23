@@ -116,6 +116,7 @@ Version 7.46 - not yet released
   - keep the pan-mode map scale while panning, and restore the saved
     circling or cruise scale when leaving pan mode
 * documentation
+  - document holding a page on Config → Pages to show or hide it
   - document Animate zoom on Map Display → Orientation
   - document the Status → Times map stopwatch (show/hide, tap,
     hold to reset) in the English manual
@@ -186,6 +187,8 @@ Version 7.46 - not yet released
     protocol, so an S-series logger is not sent Colibri commands
     while it is still identifying
 * dialogs
+  - hold a page on Config → Pages to show or hide it; a hidden page
+    keeps its setup and is skipped while turning pages
   - show outside air temperature on the Status Flight tab, below
     altitude, when a connected device reports it
   - show the flight name, the device, and the driver on separate

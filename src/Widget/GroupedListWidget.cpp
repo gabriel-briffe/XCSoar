@@ -26,6 +26,7 @@
 #include "ui/window/ContainerWindow.hpp"
 #include "Form/ButtonPanel.hpp"
 #include "Form/Button.hpp"
+#include "InfoBoxes/InfoBoxArrange.hpp"
 #include "Dialogs/DialogSettings.hpp"
 #include "UIGlobals.hpp"
 #include "Renderer/ButtonRenderer.hpp"
@@ -423,6 +424,12 @@ private:
     /** only for Type::ITEM */
     Callback callback{};
 
+    /**
+     * only for Type::ITEM: committed when the finger lifts after a
+     * hold on this item has been armed
+     */
+    Callback hold_callback{};
+
     /** only for Type::ITEM: refreshes the value without rebuilding */
     GroupedListWidget::ValueCallback value_callback{};
 
@@ -672,6 +679,21 @@ private:
   int pressed_element = -1;
 
   /**
+   * The item whose hold is running, or -1.  The fill grows until the
+   * hold is armed; the lift then runs #Element::hold_callback.  A
+   * scroll cancels it, and a short tap still runs the item.
+   */
+  int hold_element = -1;
+
+  /** the finger is down and the hold has not been armed yet */
+  bool hold_pending = false;
+
+  /** the lift runs #Element::hold_callback */
+  bool hold_armed = false;
+
+  std::chrono::steady_clock::time_point hold_press_start{};
+
+  /**
    * Which button of a #Element::Type::BUTTONS row is armed, and which
    * one the finger is on.  Left and Right walk along a row the way
    * they walk along the action bar.
@@ -690,6 +712,10 @@ private:
   UI::PeriodicTimer kinetic_timer{[this]{ OnKineticTimer(); }};
 
   UI::PeriodicTimer help_timer{[this]{ OnHelpTimer(); }};
+
+  UI::Timer hold_arm_timer{[this]{ OnHoldArmed(); }};
+
+  UI::PeriodicTimer hold_fade_timer{[this]{ OnHoldFade(); }};
 
   /**
    * After a cursor key, the explanation stays shut until this time.
@@ -771,6 +797,7 @@ public:
 
     pressed_element = -1;
     pressed_column = -1;
+    StopHold();
 
     /* the views are windows: hide them before their #Widget goes */
     for (auto &element : elements)
@@ -1568,6 +1595,23 @@ private:
   void DrawElement(Canvas &canvas, std::size_t i,
                    PixelRect rc) const noexcept;
 
+  /**
+   * The growing fill of a hold, from the bottom of the row.  An
+   * e-paper or slow device draws it at full height once the hold is
+   * armed, and not while it is still a tap.
+   */
+  void DrawHoldFill(Canvas &canvas, std::size_t i,
+                    const PixelRect &rc) const noexcept;
+
+  /** Arm a hold on @p element when that item has one. */
+  void BeginHold(int element) noexcept;
+
+  /** Forget the hold and drop its fill. */
+  void StopHold() noexcept;
+
+  void OnHoldArmed() noexcept;
+  void OnHoldFade() noexcept;
+
   void DrawElements(Canvas &canvas) noexcept;
   void DrawScrollBar(Canvas &canvas) noexcept;
 
@@ -2021,6 +2065,7 @@ GroupedListControl::AddItem(const char *caption, Callback callback,
 
   Element &element = elements.back();
   element.value_callback = options.value_callback;
+  element.hold_callback = options.hold_callback;
   if (element.expert_only && !ExpertShown())
     element.hidden = true;
   element.badges[0] = {GetBadge(options), options.badge_style};
@@ -4169,6 +4214,7 @@ GroupedListControl::DrawElement(Canvas &canvas, std::size_t i,
       background_rc.top -= separator;
 
     canvas.DrawFilledRectangle(background_rc, background);
+    DrawHoldFill(canvas, i, background_rc);
 
     /* a child wears a bar at the left edge of the card instead of an
        indent; the bars of the children of one item stand below each
@@ -4894,8 +4940,94 @@ GroupedListControl::OnKineticTimer() noexcept
 }
 
 void
+GroupedListControl::DrawHoldFill(Canvas &canvas, std::size_t i,
+                                 const PixelRect &rc) const noexcept
+{
+  if ((int)i != hold_element || (!hold_pending && !hold_armed))
+    return;
+
+  /* an e-paper or slow device has no growing fill; the row stays as
+     it is until the hold is armed */
+  if (!hold_armed && (HasEPaper() || IsSlowCPU()))
+    return;
+
+  const bool fade = !hold_armed;
+  const unsigned t = fade
+    ? InfoBoxArrange::LongPressFade(hold_press_start)
+    : 256u;
+  const int height = (int)(rc.GetHeight() * t / 256);
+  if (height <= 0)
+    return;
+
+  PixelRect fill = rc;
+  fill.top = fill.bottom - height;
+
+  const Color color = HasColors()
+    ? LightColor(look.list.focused.background_color)
+    : look.list.text_color;
+  canvas.DrawFilledRectangle(fill, color);
+}
+
+void
+GroupedListControl::BeginHold(int element) noexcept
+{
+  StopHold();
+
+  if (element < 0 || (std::size_t)element >= elements.size() ||
+      !elements[element].hold_callback)
+    return;
+
+  hold_element = element;
+  hold_pending = true;
+  hold_press_start = std::chrono::steady_clock::now();
+  hold_arm_timer.Schedule(InfoBoxArrange::LONG_PRESS);
+
+  if (!HasEPaper() && !IsSlowCPU())
+    hold_fade_timer.Schedule(InfoBoxArrange::LONG_PRESS_FADE);
+}
+
+void
+GroupedListControl::StopHold() noexcept
+{
+  const bool active = hold_pending || hold_armed || hold_element >= 0;
+  hold_pending = false;
+  hold_armed = false;
+  hold_element = -1;
+  hold_arm_timer.Cancel();
+  hold_fade_timer.Cancel();
+  if (active)
+    Invalidate();
+}
+
+void
+GroupedListControl::OnHoldArmed() noexcept
+{
+  if (!hold_pending || hold_element < 0)
+    return;
+
+  hold_pending = false;
+  hold_armed = true;
+  hold_fade_timer.Cancel();
+  PlayHapticFeedback(HapticFeedbackType::LONG_PRESS);
+  Invalidate();
+}
+
+void
+GroupedListControl::OnHoldFade() noexcept
+{
+  if (hold_pending)
+    Invalidate();
+}
+
+void
 GroupedListControl::OnDestroy() noexcept
 {
+  hold_arm_timer.Cancel();
+  hold_fade_timer.Cancel();
+  hold_pending = false;
+  hold_armed = false;
+  hold_element = -1;
+
   kinetic_timer.Cancel();
   help_timer.Cancel();
 
@@ -4935,6 +5067,8 @@ void
 GroupedListControl::OnCancelMode() noexcept
 {
   kinetic_timer.Cancel();
+
+  StopHold();
 
   if (drag_mode != DragMode::NONE) {
     drag_mode = DragMode::NONE;
@@ -4997,6 +5131,7 @@ GroupedListControl::OnMouseDown(PixelPoint p) noexcept
     pressed_element = i;
     pressed_column = column;
     drag_mode = DragMode::CURSOR;
+    BeginHold(i);
     Invalidate();
   } else
     drag_mode = DragMode::SCROLL;
@@ -5029,6 +5164,7 @@ GroupedListControl::OnMouseMove(PixelPoint p, unsigned keys) noexcept
     drag_mode = DragMode::SCROLL;
     pressed_element = -1;
     pressed_column = -1;
+    StopHold();
     Invalidate();
   }
 
@@ -5071,7 +5207,18 @@ GroupedListControl::OnMouseUp(PixelPoint p) noexcept
   pressed_element = -1;
   pressed_column = -1;
 
-  bool activate = drag_mode == DragMode::CURSOR && tapped && press >= 0;
+  /* a hold which has been armed wins over the tap: the lift shows or
+     hides the page, and does not open it */
+  Callback committed_hold;
+  if (hold_armed && tapped && press >= 0 && press == hold_element &&
+      (std::size_t)press < elements.size() &&
+      elements[press].hold_callback)
+    committed_hold = elements[press].hold_callback;
+
+  StopHold();
+
+  bool activate = !committed_hold &&
+    drag_mode == DragMode::CURSOR && tapped && press >= 0;
 
   /* a tap on a link in an explanation opens it, including the
      explanation under a row, which is part of that item */
@@ -5156,7 +5303,10 @@ GroupedListControl::OnMouseUp(PixelPoint p) noexcept
     kinetic_timer.Schedule(std::chrono::milliseconds(30));
   }
 
-  if (link != nullptr)
+  if (committed_hold) {
+    SetCursor(press);
+    committed_hold();
+  } else if (link != nullptr)
     OpenLink(link->url.c_str());
   else if (activate) {
     /* the cursor follows the finger only now: a press which became a
@@ -5173,6 +5323,7 @@ bool
 GroupedListControl::OnMouseWheel([[maybe_unused]] PixelPoint p,
                                  int delta) noexcept
 {
+  StopHold();
   kinetic_timer.Cancel();
 
   SetOrigin(origin - delta * (int)GetItemHeight());

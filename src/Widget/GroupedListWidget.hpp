@@ -400,6 +400,13 @@ public:
     const char *help = nullptr;
 
     /**
+     * Committed when the finger lifts after a hold on this item has
+     * been armed.  A short tap still runs the item.  Sliding away
+     * before the hold is armed cancels it.
+     */
+    Callback hold_callback;
+
+    /**
      * Called by UpdateValues() to refresh the value, the badges and
      * whether the row is hidden.  The row stays put.
      */

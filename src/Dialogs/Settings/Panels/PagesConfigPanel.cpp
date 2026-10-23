@@ -13,6 +13,7 @@
 #include "Profile/PageProfile.hpp"
 #include "Profile/Current.hpp"
 #include "Interface.hpp"
+#include "UIState.hpp"
 #include "DataGlobals.hpp"
 #include "Weather/Features.hpp"
 #include "Weather/Rasp/FieldControls.hpp"
@@ -713,6 +714,8 @@ PageLayoutEditWidget::DeletePage() noexcept
  * what each of them shows.  The buttons below the list act on the
  * page the cursor is on: a tap on a page only selects it, the second
  * tap or Enter opens it, and Left and Right lead to the buttons.
+ * A hold on a page shows or hides it.  A hidden page stays in the
+ * list and is skipped while turning pages.  Show and Hide do the same.
  */
 class PagesConfigPanel final : public ConfigListPanel {
   PageSettings settings;
@@ -721,7 +724,7 @@ class PagesConfigPanel final : public ConfigListPanel {
   ButtonPanelWidget *button_panel = nullptr;
 
   Button *move_up_button = nullptr, *move_down_button = nullptr,
-    *add_button = nullptr;
+    *hide_button = nullptr, *add_button = nullptr;
 
 public:
   PagesConfigPanel() noexcept {
@@ -745,6 +748,12 @@ private:
    */
   void MovePage(int delta) noexcept;
 
+  /**
+   * Show or hide page @p index.  A hidden page keeps its setup.
+   * The last page which is on stays on.
+   */
+  void TogglePage(unsigned index) noexcept;
+
   /** Enable the buttons which make sense for the page under the cursor. */
   void UpdateButtons() noexcept;
 
@@ -767,6 +776,11 @@ PagesConfigPanel::Prepare(ContainerWindow &parent,
 
   move_up_button = buttons.Add(_("Move up"), [this](){ MovePage(-1); });
   move_down_button = buttons.Add(_("Move down"), [this](){ MovePage(1); });
+  hide_button = buttons.Add(_("Hide"), [this](){
+    const int cursor = GetCursorIndex();
+    if (cursor >= 0)
+      TogglePage((unsigned)cursor);
+  });
   add_button = buttons.Add(C_("Button", "Add"), [this](){ AddPage(); });
 
   ConfigListPanel::Prepare(parent, rc);
@@ -822,6 +836,9 @@ PagesConfigPanel::Fill() noexcept
 
     const bool overlay = page.IsMapMain() &&
       page.overlay != PageLayout::Overlay::NONE;
+    const char *overlay_badge = overlay
+      ? GetEnumCaption(overlay_list, (unsigned)page.overlay)
+      : nullptr;
 
     AddItem(GetEnumCaption(main_list, (unsigned)page.main),
             [this, i](){ EditPage(i); },
@@ -831,10 +848,14 @@ PagesConfigPanel::Fill() noexcept
              ? nullptr
              : description.c_str(),
              .description_size = TextSize::SMALL,
-             .badge = overlay
-             ? GetEnumCaption(overlay_list, (unsigned)page.overlay)
-             : nullptr,
-             .chevron = true});
+             .badge = page.enabled ? overlay_badge : _("Off"),
+             .badge_style = page.enabled
+             ? BadgeStyle::PRIMARY
+             : BadgeStyle::WARNING,
+             .badge2 = page.enabled ? nullptr : overlay_badge,
+             .chevron = true,
+             .help = _("Hold to show or hide this page."),
+             .hold_callback = [this, i](){ TogglePage(i); }});
   }
 }
 
@@ -852,6 +873,10 @@ PagesConfigPanel::UpdateButtons() noexcept
   move_up_button->SetEnabled(on_page && cursor > 0);
   move_down_button->SetEnabled(on_page &&
                                unsigned(cursor) + 1 < settings.n_pages);
+  hide_button->SetEnabled(on_page);
+  if (on_page)
+    hide_button->SetCaption(settings.pages[cursor].enabled
+                             ? _("Hide") : _("Show"));
   add_button->SetEnabled(settings.n_pages < PageSettings::MAX_PAGES);
 }
 
@@ -881,6 +906,32 @@ PagesConfigPanel::MovePage(int delta) noexcept
   std::swap(settings.pages[cursor], settings.pages[other]);
   Refresh();
   SetCursorIndex(other);
+  UpdateButtons();
+}
+
+void
+PagesConfigPanel::TogglePage(unsigned index) noexcept
+{
+  if (index >= settings.n_pages)
+    return;
+
+  PageLayout &page = settings.pages[index];
+  if (page.enabled) {
+    unsigned enabled = 0;
+    for (unsigned i = 0; i < settings.n_pages; ++i)
+      if (settings.pages[i].enabled)
+        ++enabled;
+
+    if (enabled < 2) {
+      ShowMessageBox(_("At least one page must stay on"),
+                     _("Pages"), MB_OK);
+      return;
+    }
+  }
+
+  page.enabled = !page.enabled;
+  Refresh();
+  SetCursorIndex(index);
   UpdateButtons();
 }
 
@@ -925,6 +976,15 @@ PagesConfigPanel::Save(bool &_changed) noexcept
 
   if (changed) {
     _settings = settings;
+
+    /* the page on screen may have just been hidden */
+    auto &state = CommonInterface::SetUIState().pages;
+    if (!state.special_page.IsDefined() &&
+        state.current_index < settings.n_pages &&
+        !settings.pages[state.current_index].enabled)
+      state.current_index =
+        settings.NextEnabled(state.current_index, 1);
+
     PageActions::Update();
   }
 

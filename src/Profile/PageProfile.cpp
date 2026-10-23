@@ -138,6 +138,10 @@ Load(const ProfileMap &map, PageLayout &_pl, const unsigned page)
   if (!map.Get(profileKey, pl.airspace_enable))
     pl.airspace_enable = true;
 
+  strcpy(profileKey + prefixLen, "Enabled");
+  if (!map.Get(profileKey, pl.enabled))
+    pl.enabled = true;
+
   if (pl.overlay == PageLayout::Overlay::NONE &&
       pl.bottom == PageLayout::Bottom::WEATHER_CONTROLS &&
       pl.skysight_overlay.empty())
@@ -230,6 +234,9 @@ Profile::Save(ProfileMap &map, const PageLayout &page, const unsigned i)
 
   strcpy(profileKey + prefixLen, "AirspaceEnable");
   map.Set(profileKey, page.airspace_enable);
+
+  strcpy(profileKey + prefixLen, "Enabled");
+  map.Set(profileKey, page.enabled);
 }
 
 
