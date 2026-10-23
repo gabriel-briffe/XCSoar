@@ -22,6 +22,7 @@ Overview of features and UI mods on the `perso` branch that are not on `master`.
 - Simulator remembers last glider position/altitude between relaunches
 - Status → Flight shows outside air temperature when a device reports it
 - OAT alarm on Safety Factors (Off or a temperature; status message + beep)
+- Animate zoom on Map Display → Orientation, under Circling zoom (default on). Off changes the scale at once. E-paper and slow CPUs always change at once. Stops a fast swipe series looking one zoom late while the short glide is still running
 
 ## Weather
 - Rainbow.ai weather overlay (layers, cache-first Auto, checklist UI)
@@ -35,8 +36,11 @@ Overview of features and UI mods on the `perso` branch that are not on `master`.
 - Tiled Configuration menu (icon grid) with optional On setting; Close short=parent / long=map
 - Quick Menu as button grid; Sounds On/Off tile; extra tile icons
 - Flat button look, dialog/title/list polish (explanations under row, Off badge, list font for paths)
+- GroupedListWidget hold: arm on the long-press timer, growing fill, commit on lift, slide-off cancels; e-paper/slow CPU show the fill only once armed
+- Config → Pages: long press, or the Show/Hide button, hides a page without deleting it. Marked Off, saved as `PageNEnabled` (missing key stays on), skipped while turning pages. The last page that is on cannot be hidden. Keyboard/remote use the same button
 - Android: InfoBox arrange / Sets content below the status-bar shade
 
 ## Other
 - Mapbox earcut for OpenGL polygon tessellation (weather fills, etc.)
+- Identical status text is one line while a copy is still waiting or on screen; its display time starts again. After it has gone, the next copy is a new message. Distinct messages still queue while a dialog is open
 - English manual + NEWS coverage for the items above
