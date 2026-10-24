@@ -12,6 +12,7 @@ interface DetectDeviceListener {
   static final int TYPE_BLUETOOTH_CLASSIC = 2;
   static final int TYPE_BLUETOOTH_LE = 3;
   static final int TYPE_USB_SERIAL = 4;
+  static final int TYPE_USB_HID = 5;
 
   static final long FEATURE_BLE_SERIAL = 0x1;
   static final long FEATURE_HEART_RATE = 0x2;

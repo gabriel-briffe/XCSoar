@@ -231,9 +231,10 @@ FillAndroidUsbSerialPorts([[maybe_unused]] DataFieldEnum &df,
                           [[maybe_unused]] const DeviceConfig &config) noexcept
 {
 #ifdef ANDROID
-  if (config.port_type == DeviceConfig::PortType::ANDROID_USB_SERIAL &&
+  if ((config.port_type == DeviceConfig::PortType::ANDROID_USB_SERIAL ||
+       config.port_type == DeviceConfig::PortType::ANDROID_USB_HID) &&
       !config.path.empty())
-    SetPort(df, DeviceConfig::PortType::ANDROID_USB_SERIAL, config.path);
+    SetPort(df, config.port_type, config.path);
 #endif
 }
 
@@ -306,6 +307,7 @@ SetPort(DataFieldEnum &df, const DeviceConfig &config) noexcept
 
   case DeviceConfig::PortType::SERIAL:
   case DeviceConfig::PortType::ANDROID_USB_SERIAL:
+  case DeviceConfig::PortType::ANDROID_USB_HID:
     SetPort(df, config.port_type, config.path);
     return;
 

@@ -34,6 +34,7 @@ DeviceConfigOverlaps(const DeviceConfig &a, const DeviceConfig &b)
   case DeviceConfig::PortType::SERIAL:
   case DeviceConfig::PortType::PTY:
   case DeviceConfig::PortType::ANDROID_USB_SERIAL:
+  case DeviceConfig::PortType::ANDROID_USB_HID:
   case DeviceConfig::PortType::SPECTATE_FILE:
     return a.path.equals(b.path);
 

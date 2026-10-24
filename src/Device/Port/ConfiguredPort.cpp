@@ -187,6 +187,7 @@ OpenPortInternal(EventLoop &event_loop, Cares::Channel &cares,
   }
 
   case DeviceConfig::PortType::ANDROID_USB_SERIAL:
+  case DeviceConfig::PortType::ANDROID_USB_HID:
 #ifdef ANDROID
     if (config.path.empty())
       throw std::runtime_error("No name configured");

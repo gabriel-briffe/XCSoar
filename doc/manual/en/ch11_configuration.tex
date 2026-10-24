@@ -1196,6 +1196,15 @@ lists.
   (heart-rate monitors, pulse oximeters, SensBox, and engine sensors).
   A BlueFly Vario must be selected as {\it BLE port} with the BlueFly
   driver; {\it BLE sensor} cannot carry its serial protocol.
+  An outside-air-temperature probe that speaks OpenVario
+  \texttt{\$POV,T} over USB serial uses the OpenVario driver.
+  The same probe in HID mode (USB \texttt{2E8A:0A01}) appears as
+  {\it USB HID}; choose the OAT HID driver.  It has no baud rate.
+  On a computer, that driver also reads the same four-byte report from
+  a TCP client.  For the desk emulator use IP address \texttt{127.0.0.1}
+  and TCP port \texttt{4354 (OAT HID)}.
+  A sensor fault is ignored.  The Outside air temperature InfoBox,
+  Status $\rightarrow$ Flight, and the OAT alarm all use that reading.
   {\it Engine Type} appears only for an engine-sensor BLE device
   (ignition scaling); heart-rate bands do not show it.
   A Xiaomi Smart Band talks GATT on a random LE address; XCSoar

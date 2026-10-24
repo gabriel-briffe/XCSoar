@@ -17,7 +17,7 @@ import java.util.Arrays;
 
 @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR1)
 public final class UsbSerialPort
-  implements AndroidPort, UsbSerialInterface.UsbReadCallback
+  implements ClaimedUsbPort, UsbSerialInterface.UsbReadCallback
 {
   private final UsbSerialHelper.UsbDeviceInterface parent;
   private UsbDeviceConnection connection;

@@ -32,6 +32,7 @@ DeviceConfig::IsAvailable() const noexcept
   case PortType::RFCOMM_SERVER:
   case PortType::GLIDER_LINK:
   case PortType::ANDROID_USB_SERIAL:
+  case PortType::ANDROID_USB_HID:
     return IsAndroid();
 
   case PortType::IOIOUART:
@@ -79,6 +80,7 @@ DeviceConfig::ShouldReopenOnTimeout() const noexcept
   case PortType::BLE_SERIAL:
   case PortType::RFCOMM_SERVER:
   case PortType::ANDROID_USB_SERIAL:
+  case PortType::ANDROID_USB_HID:
   case PortType::IOIOUART:
   case PortType::DROIDSOAR_V2:
   case PortType::NUNCHUCK:
@@ -295,6 +297,11 @@ DeviceConfig::GetPortName(char *buffer, size_t max_size) const noexcept
   case PortType::ANDROID_USB_SERIAL:
     StringFormat(buffer, max_size, "%s: %s",
                  _("USB serial"), path.c_str());
+    return buffer;
+
+  case PortType::ANDROID_USB_HID:
+    StringFormat(buffer, max_size, "%s: %s",
+                 _("USB HID"), path.c_str());
     return buffer;
 
   case PortType::SPECTATE_FILE:

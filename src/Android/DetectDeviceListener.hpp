@@ -16,6 +16,7 @@ public:
     BLUETOOTH_CLASSIC = 2,
     BLUETOOTH_LE = 3,
     USB_SERIAL = 4,
+    USB_HID = 5,
   };
 
   static constexpr uint64_t FEATURE_BLE_SERIAL = 0x1;

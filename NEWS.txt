@@ -116,6 +116,7 @@ Version 7.46 - not yet released
   - keep the pan-mode map scale while panning, and restore the saved
     circling or cruise scale when leaving pan mode
 * documentation
+  - document the OAT HID driver and the OpenVario USB serial probe
   - document holding a page on Config → Pages to show or hide it
   - document Animate zoom on Map Display → Orientation
   - document the Status → Times map stopwatch (show/hide, tap,
@@ -166,6 +167,10 @@ Version 7.46 - not yet released
   - skip estimated TAS from ground speed and wind when GPS track is
     missing
 * devices
+  - read outside air temperature from a USB HID probe (2E8A:0A01)
+    with the OAT HID driver; a sensor fault is ignored. The same
+    driver reads that report from TCP port 4354. USB serial
+    probes that send OpenVario $POV,T are unchanged
   - fix Condor 3 Spectate showing altitude about 40 m (136 ft) too low #3055
   - ignore Condor 3 UDP electronic vario, altimeter, airspeed,
     heading, and ground speed so they cannot override NMEA GPS and

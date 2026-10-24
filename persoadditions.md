@@ -22,6 +22,7 @@ Overview of features and UI mods on the `perso` branch that are not on `master`.
 - Simulator remembers last glider position/altitude between relaunches
 - Status → Flight shows outside air temperature when a device reports it
 - OAT alarm on Safety Factors (Off or a temperature; status message + beep)
+- OAT probe, either way: USB serial `$POV,T` stays driver OpenVario (Pico CDC `2E8A:000A` already allowlisted). USB HID `2E8A:0A01` is port USB HID and driver OAT HID, no baud, not on the serial allowlist. Report is 4 bytes (id 1, int16 LE hundredths of °C, status). Status 1 ignores the number. Same temperature fields, InfoBox, Status Flight, and alarm. Mac desk test: TCP client `127.0.0.1` port `4354 (OAT HID)`, same driver (`emulate_oat_hid.py --tcp`)
 - Animate zoom on Map Display → Orientation, under Circling zoom (default on). Off changes the scale at once. E-paper and slow CPUs always change at once. Stops a fast swipe series looking one zoom late while the short glide is still running
 
 ## Weather

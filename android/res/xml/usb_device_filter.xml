@@ -13,7 +13,7 @@
   <usb-device vendor-id="9025" product-id="32845"/> <!-- SoftRF Academy -->
   <usb-device vendor-id="9114" product-id="51966"/> <!-- SoftRF Academy -->
   <usb-device vendor-id="7504" product-id="24713"/> <!-- SoftRF ES -->
-  <usb-device vendor-id="11914" product-id="10"/> <!-- SoftRF Lego -->
+  <usb-device vendor-id="11914" product-id="10"/> <!-- SoftRF Lego / Pico CDC -->
   <usb-device vendor-id="11914" product-id="61450"/> <!-- SoftRF Lego -->
   <usb-device vendor-id="5562" product-id="68"/> <!-- SoftRF Balkan -->
   <usb-device vendor-id="12346" product-id="4097"/> <!-- SoftRF Eco -->
@@ -38,4 +38,7 @@
   <usb-device vendor-id="1659" product-id="8963"/> <!-- PL2303 -->
 
   <usb-device vendor-id="5446" product-id="423"/> <!-- U-BLOX 7 USB GPS -->
+
+  <!-- OAT HID probe.  Not a serial id: do not add 0x0A01 to UsbSerialHelper.supported_ids. -->
+  <usb-device vendor-id="11914" product-id="2561"/> <!-- 2E8A:0A01 -->
 </resources>

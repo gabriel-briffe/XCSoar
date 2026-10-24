@@ -38,6 +38,7 @@
 #include "Device/Driver/LevilAHRS_G.hpp"
 #include "Device/Driver/BlueFlyVario.hpp"
 #include "Device/Driver/OpenVario.hpp"
+#include "Device/Driver/OatHid.hpp"
 #include "Device/Driver/Larus.hpp"
 #include "Device/Driver/Vaulter.hpp"
 #include "Device/Driver/ATR833/Register.hpp"
@@ -100,6 +101,7 @@ static const struct DeviceRegister *const driver_list[] = {
   &loe_fgren_driver,
   &lx160_driver,
   &gdl90_driver,
+  &oat_hid_driver,
   nullptr
 };
 

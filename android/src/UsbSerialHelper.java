@@ -139,7 +139,7 @@ public final class UsbSerialHelper extends BroadcastReceiver {
      * native code.  It may be waiting for permission from the
      * UsbManager, or it may already be open.
      */
-    public UsbSerialPort port;
+    public ClaimedUsbPort port;
 
     public UsbDeviceInterface(UsbDevice dev_, int iface_) {
       device = dev_;
@@ -186,7 +186,9 @@ public final class UsbSerialHelper extends BroadcastReceiver {
       if (port != null)
         throw new IOException("Port already occupied");
 
-      port = new UsbSerialPort(this, baud);
+      port = isOatHid(device)
+        ? new OatHidPort(this)
+        : new UsbSerialPort(this, baud);
       if (usbmanager.hasPermission(device)) {
         port.open(usbmanager, device, iface);
       } else {
@@ -204,7 +206,7 @@ public final class UsbSerialHelper extends BroadcastReceiver {
     /**
      * Called by UsbSerialPort::close().
      */
-    public synchronized void portClosed(UsbSerialPort _port) {
+    public synchronized void portClosed(ClaimedUsbPort _port) {
       if (_port == port)
         port = null;
     }
@@ -234,7 +236,18 @@ public final class UsbSerialHelper extends BroadcastReceiver {
     return Arrays.binarySearch(devices, createDevice(vendorId, productId)) >= 0;
   }
 
+  /**
+   * The OAT probe's HID identity.  It is not in #supported_ids: the
+   * serial opener must not claim it.
+   */
+  private static boolean isOatHid(UsbDevice device) {
+    return device.getVendorId() == 0x2e8a && device.getProductId() == 0x0a01;
+  }
+
   private static boolean isSupported(UsbDevice device) {
+    if (isOatHid(device))
+      return true;
+
     return UsbSerialDevice.isSupported(device) &&
       exists(supported_ids, device.getVendorId(), device.getProductId());
   }
@@ -336,7 +349,11 @@ public final class UsbSerialHelper extends BroadcastReceiver {
         continue;
 
       int iclass = device.getInterface(iface).getInterfaceClass();
-      if (iclass == UsbConstants.USB_CLASS_VENDOR_SPEC || iclass == UsbConstants.USB_CLASS_CDC_DATA) {
+      final boolean take = isOatHid(device)
+        ? iclass == UsbConstants.USB_CLASS_HID
+        : (iclass == UsbConstants.USB_CLASS_VENDOR_SPEC ||
+           iclass == UsbConstants.USB_CLASS_CDC_DATA);
+      if (take) {
         UsbDeviceInterface deviface = new UsbDeviceInterface(device, iface);
         interfaces.add(deviface);
         broadcastDetectedDeviceInterface(deviface);
@@ -422,16 +439,23 @@ public final class UsbSerialHelper extends BroadcastReceiver {
 
     final String name = deviface.getDisplayName();
 
+    final int type = isOatHid(deviface.device)
+      ? DetectDeviceListener.TYPE_USB_HID
+      : DetectDeviceListener.TYPE_USB_SERIAL;
+
     for (DetectDeviceListener l : detectListeners)
-      l.onDeviceDetected(DetectDeviceListener.TYPE_USB_SERIAL, deviface.id, name, 0);
+      l.onDeviceDetected(type, deviface.id, name, 0);
   }
 
   public synchronized void addDetectDeviceListener(DetectDeviceListener l) {
     detectListeners.add(l);
 
-    for (UsbDeviceInterface iface : interfaces)
-      l.onDeviceDetected(DetectDeviceListener.TYPE_USB_SERIAL, iface.id,
-                         iface.getDisplayName(), 0);
+    for (UsbDeviceInterface iface : interfaces) {
+      final int type = isOatHid(iface.device)
+        ? DetectDeviceListener.TYPE_USB_HID
+        : DetectDeviceListener.TYPE_USB_SERIAL;
+      l.onDeviceDetected(type, iface.id, iface.getDisplayName(), 0);
+    }
   }
 
   public synchronized void removeDetectDeviceListener(DetectDeviceListener l) {

@@ -101,6 +101,12 @@ struct DeviceConfig {
      * Poll a Condor 3 Spectate.json file for multiplayer traffic.
      */
     SPECTATE_FILE,
+
+    /**
+     * USB HID outside-air-temperature probe on Android (2E8A:0A01).
+     * Not a serial port: no baud rate.
+     */
+    ANDROID_USB_HID,
   };
 
   /**
@@ -347,6 +353,7 @@ struct DeviceConfig {
     case PortType::PTY:
     case PortType::UDP_LISTENER:
     case PortType::ANDROID_USB_SERIAL:
+    case PortType::ANDROID_USB_HID:
     case PortType::SPECTATE_FILE:
       break;
     }
@@ -402,6 +409,7 @@ struct DeviceConfig {
     case PortType::PTY:
     case PortType::UDP_LISTENER:
     case PortType::ANDROID_USB_SERIAL:
+    case PortType::ANDROID_USB_HID:
     case PortType::SPECTATE_FILE:
       return true;
     }

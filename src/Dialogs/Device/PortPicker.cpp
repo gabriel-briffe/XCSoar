@@ -58,6 +58,9 @@ private:
     case DeviceConfig::PortType::ANDROID_USB_SERIAL:
       return _("USB serial");
 
+    case DeviceConfig::PortType::ANDROID_USB_HID:
+      return _("USB HID");
+
     default:
       return nullptr;
     }
@@ -246,6 +249,10 @@ PortPickerWidget::OnDeviceDetected(Type type, const char *address,
 
   case Type::USB_SERIAL:
     port_type = DeviceConfig::PortType::ANDROID_USB_SERIAL;
+    break;
+
+  case Type::USB_HID:
+    port_type = DeviceConfig::PortType::ANDROID_USB_HID;
     break;
   }
 

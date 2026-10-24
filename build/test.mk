@@ -88,7 +88,7 @@ TEST_NAMES = \
 	TestAngle TestARange \
 	TestGrahamScan \
 	TestUnits TestEarth TestSunEphemeris \
-	TestValidity TestOatAlarm TestUTM \
+	TestValidity TestOatAlarm TestOatHid TestUTM \
 	TestWaypointReachability TestBackupPaths \
 	TestAllocatedGrid \
 	TestDemOverview \
@@ -1080,6 +1080,12 @@ TEST_OAT_ALARM_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \
 	$(TEST_SRC_DIR)/TestOatAlarm.cpp
 $(eval $(call link-program,TestOatAlarm,TEST_OAT_ALARM))
+
+TEST_OAT_HID_SOURCES = \
+	$(SRC)/Device/Driver/OatHid/Parser.cpp \
+	$(TEST_SRC_DIR)/tap.c \
+	$(TEST_SRC_DIR)/TestOatHid.cpp
+$(eval $(call link-program,TestOatHid,TEST_OAT_HID))
 
 TEST_WAYPOINT_REACHABILITY_SOURCES = \
 	$(TEST_SRC_DIR)/tap.c \

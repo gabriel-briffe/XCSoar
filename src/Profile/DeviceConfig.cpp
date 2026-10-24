@@ -37,6 +37,7 @@ static const char *const port_type_strings[] = {
   "glider_link",
   "android_usb_serial",
   "spectate_file",
+  "android_usb_hid",
   NULL
 };
 
@@ -153,6 +154,7 @@ Profile::GetDeviceConfig(const ProfileMap &map, unsigned n,
     LoadPath(map, config, n);
   } else if ((!have_port_type ||
               config.port_type == DeviceConfig::PortType::ANDROID_USB_SERIAL ||
+              config.port_type == DeviceConfig::PortType::ANDROID_USB_HID ||
               config.port_type == DeviceConfig::PortType::SERIAL) &&
              !LoadPath(map, config, n) && LoadPortIndex(map, config, n))
     config.port_type = DeviceConfig::PortType::SERIAL;

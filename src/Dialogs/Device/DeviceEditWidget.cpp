@@ -70,6 +70,7 @@ static constexpr IdChoice bulk_rates[] = {
 static constexpr IdChoice tcp_ports[] = {
   {55278, "55278 (Condor UDP)"},
   {4353, "4353"},
+  {4354, "4354 (OAT HID)"},
   {10110, "10110"},
   {4352, "4352"},
   {2000, "2000"},
@@ -330,6 +331,7 @@ FinishPortField(DeviceConfig &config, const DataFieldEnum &df) noexcept
   case DeviceConfig::PortType::SERIAL:
   case DeviceConfig::PortType::PTY:
   case DeviceConfig::PortType::ANDROID_USB_SERIAL:
+  case DeviceConfig::PortType::ANDROID_USB_HID:
     if (new_type == config.port_type &&
         StringIsEqual(config.path, df.GetAsString()))
       return false;
